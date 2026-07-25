@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Voylo — Destination Picker</title>
+<style>
+/* =====================================================================
+   GOVERNING SPINE SECTIONS — Destination Picker
+   DESIGN.md:
+     - Components: "Destination Picker" row — "Continues the same
+       surface-midnight canvas as Voyage Intro (no jarring surface
+       change), with a headline-sized prompt, a single unobtrusive
+       destination text field (free-text in v1, no autocomplete/
+       validation), and a button-ignition labeled 'Start the Voyage' ...
+       The button stays visually disabled (reduced opacity,
+       non-interactive) until the field is non-empty. Deliberately no
+       map preview here ... Destination Picker stays quiet and
+       typographic, relatively simple/functional."
+     - Typography — "Clash Display never appears in a list, a form, or
+       a settings row; it is rationed to moments that deserve it."
+       headline (General Sans, 20px/600) is the correct token for this
+       screen's prompt, not display-hero — Destination Picker is
+       deliberately NOT one of the two PRD-named "wow" screens.
+     - Colors — surface-midnight base canvas continuity from Voyage
+       Intro; Ignition Coral reserved for the one primary action.
+     - Shapes — `sm` (10px) radius on the destination input (inputs/
+       chips); `full` radius on the button-ignition.
+     - Elevation & Depth — no shadow on the static input (tonal
+       dusk-high elevation only); glow appears only once the button is
+       "alive" (non-empty field), never as decoration on disabled chrome.
+     - Components token block: button-ignition (gradient, textScrim,
+       glow, disabled treatment implied by "reduced opacity").
+   EXPERIENCE.md:
+     - Information Architecture — "Destination Picker | Voyage Intro →
+       'Choose Your Destination' tap | Organizer names a destination and
+       confirms — confirming is the actual 'start' action: creates the
+       Voyage, begins live tracking, cuts into Live Map."
+     - Component Patterns — "Destination field" row: "Free-text in v1,
+       [no address autocomplete/validation for v1]. button-ignition
+       stays disabled until non-empty; its label reads 'Start the
+       Voyage' — confirming both creates the Voyage and cuts to Live
+       Map. No map preview before confirming — the reveal is the point."
+     - Voice and Tone — locked button copy: "Start the Voyage" (not
+       "Submit").
+     - Key Flows UJ-1, steps 6-8 — "Destination Picker: types a
+       destination ('Lake Tahoe'). The confirm button — now labeled
+       'Start the Voyage' — lights up. Taps 'Start the Voyage.' This is
+       the real start trigger... confirming here is what creates the
+       Voyage and begins live tracking."
+     - Interaction Primitives — "a light haptic confirms ... the
+       Destination Picker confirm / Join ignition taps."
+     - .memlog.md flow-restructure decision (2026-07-25): Destination
+       Picker (renamed from Voyage Setup) now sits AFTER Voyage Intro
+       and holds the real "Start the Voyage" trigger — reflected here
+       and cross-checked against the sibling Voyage Intro / Join
+       Invitation mocks for frame and token consistency.
+   Two states rendered side by side (both load-bearing, both named
+   explicitly in DESIGN.md/EXPERIENCE.md): field empty → button
+   disabled; field filled ("Lake Tahoe", matching the destination
+   already established in the sibling Join Invitation mock) → button
+   enabled with its coral glow.
+   ===================================================================== */
+:root{
+  --surface-midnight:#0A0D1C;
+  --surface-dusk:#141A33;
+  --surface-dusk-high:#1E2547;
+  --ink-primary:#F7F6FF;
+  --ink-secondary:#A6ADD1;
+  --ink-disabled:#545C82;
+  --border-hairline:#2A3156;
+  --accent-ignition:#FF5677;
+  --accent-violet:#9B6BFF;
+  --r-full:9999px;
+  --r-sm:10px;
+  --margin-mobile:20px;
+  --font-display:'Clash Display','Poppins','Segoe UI Semibold',system-ui,sans-serif;
+  --font-body:'General Sans','Segoe UI',system-ui,-apple-system,sans-serif;
+  --font-mono:'Space Mono','Consolas',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{
+  background:#05060c;
+  font-family:var(--font-body);
+  display:flex;align-items:flex-start;justify-content:center;
+  padding:48px 24px;color:var(--ink-primary);
+}
+.row{display:flex;gap:40px;flex-wrap:wrap;justify-content:center;}
+.column{display:flex;flex-direction:column;align-items:center;gap:16px;}
+.state-label{font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-secondary);}
+.caption{margin-top:4px;font-size:13px;color:var(--ink-secondary);max-width:390px;text-align:center;}
+
+.phone{
+  width:390px;padding:12px;border-radius:54px;
+  background:linear-gradient(160deg,#22263a,#08090f);
+  box-shadow:0 40px 80px -30px rgba(0,0,0,.7), inset 0 0 0 1px rgba(255,255,255,.05);
+}
+.screen{
+  position:relative;width:100%;height:844px;border-radius:44px;overflow:hidden;
+  background:var(--surface-midnight);
+}
+.notch{position:absolute;top:0;left:50%;transform:translateX(-50%);width:130px;height:30px;background:#08090f;border-radius:0 0 20px 20px;z-index:10;}
+.statusbar{position:absolute;top:14px;left:0;right:0;z-index:8;display:flex;justify-content:space-between;padding:0 30px;font-family:var(--font-mono);font-size:13px;font-weight:700;}
+
+/* Same canvas as Voyage Intro, deliberately quieted: no animated wash,
+   just a faint residual glow to signal "same world" without competing
+   with the functional form on top of it. */
+.wash{
+  position:absolute;inset:0;
+  background:
+    radial-gradient(ellipse 480px 520px at 50% 115%, rgba(155,107,255,.14) 0%, transparent 60%),
+    var(--surface-midnight);
+}
+
+.mark{
+  position:absolute;top:96px;left:var(--margin-mobile);
+  width:34px;height:34px;
+}
+.mark svg{width:100%;height:100%;}
+
+.content{
+  position:absolute;left:0;right:0;bottom:0;top:0;
+  display:flex;flex-direction:column;justify-content:center;
+  padding:0 var(--margin-mobile);
+  gap:36px;
+}
+
+.eyebrow{
+  font-size:13px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--accent-violet);
+}
+.prompt{
+  font-family:var(--font-body);
+  font-weight:600;font-size:20px;line-height:1.2;
+  margin-top:14px;
+  color:var(--ink-primary);
+}
+
+.field-wrap{display:flex;flex-direction:column;gap:10px;}
+.field-label{font-size:13px;font-weight:600;letter-spacing:.04em;color:var(--ink-secondary);}
+.field{
+  min-height:56px;
+  border-radius:var(--r-sm);
+  border:1px solid var(--border-hairline);
+  background:var(--surface-dusk-high);
+  display:flex;align-items:center;
+  padding:0 18px;
+  font-size:16px;
+}
+.field.focused{border-color:var(--accent-violet);}
+.field .placeholder{color:var(--ink-disabled);}
+.field .value{color:var(--ink-primary);font-weight:500;}
+.cursor{
+  display:inline-block;width:2px;height:19px;margin-left:2px;
+  background:var(--accent-violet);
+  animation:blink 1.1s step-end infinite;
+}
+@keyframes blink{0%,49%{opacity:1;}50%,100%{opacity:0;}}
+
+.cta-wrap{display:flex;flex-direction:column;gap:14px;align-items:flex-start;}
+.btn-ignition{
+  min-height:56px;padding:0 34px;border-radius:var(--r-full);
+  background:linear-gradient(135deg, var(--accent-ignition), var(--accent-violet));
+  display:inline-flex;align-items:center;justify-content:center;
+  position:relative;
+}
+.btn-ignition.enabled{
+  box-shadow:0 0 24px rgba(255,86,119,.4);
+}
+.btn-ignition.disabled{
+  opacity:.38;
+  box-shadow:none;
+}
+.btn-ignition .scrim{
+  position:absolute;inset:6px 14px;border-radius:20px;
+  background:rgba(10,13,28,.5);
+  filter:blur(1px);
+}
+.btn-ignition span{
+  position:relative;z-index:2;font-family:var(--font-body);font-weight:700;font-size:16px;
+  color:var(--ink-primary);letter-spacing:.01em;
+}
+.hint{font-size:13px;color:var(--ink-secondary);}
+</style>
+</head>
+<body>
+<div class="row">
+
+  <!-- STATE 1: empty field, button disabled -->
+  <div class="column">
+    <div class="state-label">Field empty — confirm disabled</div>
+    <div class="phone">
+      <div class="screen">
+        <div class="notch"></div>
+        <div class="statusbar"><span>9:41</span><span>●●●●  LTE</span></div>
+        <div class="wash"></div>
+
+        <div class="mark">
+          <svg viewBox="0 0 34 34"><polyline points="6,26 17,8 28,26" fill="none" stroke="#F7F6FF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"/></svg>
+        </div>
+
+        <div class="content">
+          <div>
+            <div class="eyebrow">Destination</div>
+            <div class="prompt">Where are you headed?</div>
+          </div>
+
+          <div class="field-wrap">
+            <div class="field-label">DESTINATION</div>
+            <div class="field"><span class="placeholder">Enter a destination</span></div>
+          </div>
+
+          <div class="cta-wrap">
+            <div class="btn-ignition disabled"><div class="scrim"></div><span>Start the Voyage</span></div>
+            <div class="hint">Type a destination to begin.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="caption">Resting state, right after "Choose Your Destination" on Voyage Intro. Same surface-midnight canvas, no map preview, no Clash Display — quiet and functional.</div>
+  </div>
+
+  <!-- STATE 2: destination entered, button enabled -->
+  <div class="column">
+    <div class="state-label">Destination entered — confirm enabled</div>
+    <div class="phone">
+      <div class="screen">
+        <div class="notch"></div>
+        <div class="statusbar"><span>9:41</span><span>●●●●  LTE</span></div>
+        <div class="wash"></div>
+
+        <div class="mark">
+          <svg viewBox="0 0 34 34"><polyline points="6,26 17,8 28,26" fill="none" stroke="#F7F6FF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"/></svg>
+        </div>
+
+        <div class="content">
+          <div>
+            <div class="eyebrow">Destination</div>
+            <div class="prompt">Where are you headed?</div>
+          </div>
+
+          <div class="field-wrap">
+            <div class="field-label">DESTINATION</div>
+            <div class="field focused"><span class="value">Lake Tahoe</span><span class="cursor"></span></div>
+          </div>
+
+          <div class="cta-wrap">
+            <div class="btn-ignition enabled"><div class="scrim"></div><span>Start the Voyage</span></div>
+            <div class="hint">This creates the Voyage and starts live tracking.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="caption">Confirm lights up the instant the field is non-empty. Tapping "Start the Voyage" is the real start trigger — it creates the Voyage and cuts straight to Live Map.</div>
+  </div>
+
+</div>
+</body>
+</html>

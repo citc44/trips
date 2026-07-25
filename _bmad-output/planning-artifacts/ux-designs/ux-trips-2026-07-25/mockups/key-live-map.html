@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Voylo — Live Map (Voyage View)</title>
+<style>
+/* =====================================================================
+   GOVERNING SPINE SECTIONS — Live Map (Voyage View)
+   DESIGN.md:
+     - Colors ("Electric Teal means live and moving", player-color palette,
+       Midnight base canvas, Glass HUD tokens)
+     - Typography (stat-numeral for driver-glanceable elapsed time; the
+       "never caption-sized on ambient surfaces" driver-safety rule)
+     - Layout & Spacing (map runs full-bleed; HUD cards stack top/bottom,
+       thumb-reachable, never side-by-side)
+     - Elevation & Depth (glassmorphic hud-card: tonal glass + hairline,
+       no shadow — map provides the depth cue)
+     - Shapes (map markers are always circles + heading chevron, never pins)
+     - Components: map-marker, hud-card, status-pill token blocks
+   EXPERIENCE.md:
+     - Information Architecture (Live Map row — "home surface for the
+       entire duration of an active Voyage"; Organizer Action Sheet as
+       HUD-docked entry point)
+     - Component Patterns: "Map marker" row (tap → peek card), "HUD card"
+       row (read-only glance, push-live, no manual refresh)
+     - Driver-Safety Interaction Model (status-pill Riding/Driving states;
+       Driving role's HUD reduces to map + glance-tier stat cards only)
+     - Interaction Primitives ("recenter on the group" as the map's one
+       reset action; pinch/pan as the only continuous gestures)
+     - Accessibility Floor ("live/active state is never color-only" —
+       pulse + heading chevron pair with the player-color ring)
+     - Key Flows UJ-3 ("The drive itself" — ambient, game-like, markers
+       moving in player color with comet-trails)
+   NOTE: v1 base map only — the manual Fun Fact log control and
+   fun-fact-badge are DESIGN.md-tagged "Ships: v1.1" and are intentionally
+   absent here. The Voyager peek card (Component Patterns) is rendered
+   without a Fun Fact count for the same reason — see summary notes.
+   ===================================================================== */
+:root{
+  --surface-midnight:#0A0D1C;
+  --surface-dusk:#141A33;
+  --surface-dusk-high:#1E2547;
+  --surface-glass:#1E2547CC;
+  --ink-primary:#F7F6FF;
+  --ink-secondary:#A6ADD1;
+  --ink-disabled:#545C82;
+  --border-hairline:#2A3156;
+  --accent-ignition:#FF5677;
+  --accent-electric:#2FE6C0;
+  --accent-gold:#FFC247;
+  --accent-violet:#9B6BFF;
+  --player-coral:#FF6B6B;
+  --player-teal:#2FE6C0;
+  --player-violet:#9B6BFF;
+  --player-gold:#FFC247;
+  --r-sm:10px; --r-md:18px; --r-lg:28px; --r-xl:36px; --r-full:9999px;
+  --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:24px; --sp-6:32px; --sp-7:48px;
+  --margin-mobile:20px;
+  --font-display:'Clash Display','Poppins','Segoe UI Semibold',system-ui,sans-serif;
+  --font-body:'General Sans','Segoe UI',system-ui,-apple-system,sans-serif;
+  --font-mono:'Space Mono','Consolas','SFMono-Regular',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{
+  background:#05060c;
+  font-family:var(--font-body);
+  display:flex;
+  gap:40px;
+  align-items:flex-start;
+  justify-content:center;
+  flex-wrap:wrap;
+  padding:48px 24px;
+  color:var(--ink-primary);
+}
+.column{display:flex;flex-direction:column;align-items:center;gap:16px;}
+.column h2{font-family:var(--font-body);font-weight:600;font-size:14px;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-secondary);}
+
+/* ---- device frame ---- */
+.phone{
+  width:390px;
+  padding:12px;
+  border-radius:54px;
+  background:linear-gradient(160deg,#22263a,#08090f);
+  box-shadow:0 40px 80px -30px rgba(0,0,0,.7), inset 0 0 0 1px rgba(255,255,255,.05);
+}
+.screen{
+  position:relative;
+  width:100%;
+  height:844px;
+  border-radius:44px;
+  overflow:hidden;
+  background:var(--surface-midnight);
+  isolation:isolate;
+}
+.notch{
+  position:absolute;top:0;left:50%;transform:translateX(-50%);
+  width:130px;height:30px;background:#08090f;border-radius:0 0 20px 20px;z-index:60;
+}
+.statusbar{
+  position:absolute;top:14px;left:0;right:0;z-index:55;
+  display:flex;justify-content:space-between;
+  padding:0 30px;
+  font-family:var(--font-mono);font-size:13px;font-weight:700;color:var(--ink-primary);
+}
+
+/* ---- day/night ambient sky strip ---- */
+.sky-strip{
+  position:absolute;top:0;left:0;right:0;height:54px;z-index:5;
+  background:linear-gradient(90deg,#141A33 0%, #2A2E6B 35%, #6B4FD6 60%, #C97F3B 88%, #FFC247 100%);
+  opacity:.55;
+  filter:blur(2px);
+}
+
+/* ---- map canvas ---- */
+.map-canvas{position:absolute;inset:0;}
+.map-base{
+  position:absolute;inset:0;
+  background:
+    radial-gradient(ellipse 420px 320px at 20% 15%, #1B2350 0%, transparent 60%),
+    radial-gradient(ellipse 380px 300px at 85% 30%, #17204a 0%, transparent 55%),
+    var(--surface-midnight);
+}
+.terrain{position:absolute;border-radius:50%;filter:blur(18px);}
+.terrain.t1{width:260px;height:200px;top:60px;left:-60px;background:var(--surface-dusk-high);opacity:.55;}
+.terrain.t2{width:300px;height:220px;top:260px;right:-90px;background:var(--surface-dusk);opacity:.7;}
+.terrain.t3{width:220px;height:180px;bottom:120px;left:-40px;background:#182150;opacity:.6;}
+.terrain.t4{width:180px;height:160px;bottom:260px;right:20px;background:var(--surface-dusk-high);opacity:.4;}
+
+/* ---- markers ---- */
+.marker{
+  position:absolute;width:48px;height:48px;display:flex;align-items:center;justify-content:center;
+}
+.marker .dot{
+  width:40px;height:40px;border-radius:var(--r-full);
+  background:var(--surface-dusk-high);
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--font-body);font-weight:700;font-size:15px;color:var(--ink-primary);
+  position:relative;z-index:2;
+}
+.marker .ring{
+  position:absolute;inset:0;border-radius:var(--r-full);
+  border:3px solid var(--ring,var(--player-coral));
+  z-index:2;
+}
+.marker .pulse{
+  position:absolute;inset:-4px;border-radius:var(--r-full);
+  border:2px solid var(--ring,var(--player-coral));
+  animation:pulse 2.4s ease-out infinite;
+  z-index:1;
+}
+@keyframes pulse{
+  0%{transform:scale(.85);opacity:.9;}
+  100%{transform:scale(1.9);opacity:0;}
+}
+.marker .chevron{
+  position:absolute;width:0;height:0;
+  border-left:6px solid transparent;border-right:6px solid transparent;
+  border-bottom:10px solid var(--ring,var(--player-coral));
+  z-index:3;
+}
+.marker .trail{
+  position:absolute;height:4px;border-radius:4px;
+  background:linear-gradient(90deg, transparent, var(--ring,var(--player-coral)));
+  opacity:.45;filter:blur(1px);z-index:1;
+}
+.marker .label{
+  position:absolute;top:52px;left:50%;transform:translateX(-50%);
+  font-size:11px;font-weight:600;color:var(--ink-secondary);white-space:nowrap;
+}
+
+/* ---- HUD cards ---- */
+.hud-card{
+  position:absolute;left:var(--margin-mobile);right:var(--margin-mobile);
+  background:var(--surface-glass);
+  backdrop-filter:blur(20px);
+  -webkit-backdrop-filter:blur(20px);
+  border:1px solid var(--border-hairline);
+  border-radius:var(--r-lg);
+  z-index:40;
+}
+.hud-top{top:66px;padding:14px 18px;}
+.hud-top-row{display:flex;justify-content:space-between;align-items:flex-start;}
+.voyage-name{font-family:var(--font-display);font-weight:600;font-size:20px;letter-spacing:-0.01em;}
+.voyage-sub{font-size:13px;color:var(--ink-secondary);margin-top:2px;}
+.elapsed{
+  font-family:var(--font-mono);font-weight:700;font-size:28px;letter-spacing:-0.01em;
+  margin-top:10px;color:var(--ink-primary);
+}
+.elapsed-label{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-secondary);margin-top:2px;}
+.org-btn{
+  width:40px;height:40px;border-radius:var(--r-full);
+  border:1px solid var(--border-hairline);background:rgba(255,255,255,.04);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+.org-btn .dots{display:flex;flex-direction:column;gap:3px;align-items:center;}
+.org-btn .dots span{width:4px;height:4px;border-radius:50%;background:var(--ink-primary);}
+
+/* status pill */
+.status-pill{
+  position:absolute;top:14px;right:20px;z-index:56;
+  min-height:34px;min-width:48px;padding:0 16px;
+  border-radius:var(--r-full);
+  display:flex;align-items:center;justify-content:center;
+  font-size:13px;font-weight:600;letter-spacing:.04em;
+  background:var(--surface-dusk-high);color:var(--ink-primary);
+  border:1px solid var(--border-hairline);
+}
+.status-pill.driving{
+  background:var(--accent-electric);color:var(--surface-midnight);border:none;
+  box-shadow:0 0 16px rgba(47,230,192,.55);
+}
+
+.hud-bottom{bottom:88px;padding:16px 16px;}
+.roster-row{
+  display:flex;align-items:center;gap:12px;padding:8px 4px;
+}
+.roster-row + .roster-row{border-top:1px solid var(--border-hairline);}
+.roster-avatar{
+  width:32px;height:32px;border-radius:var(--r-full);
+  border:2.5px solid var(--ring,var(--player-coral));
+  background:var(--surface-dusk-high);
+  flex-shrink:0;
+}
+.roster-name{font-size:14px;font-weight:600;color:var(--ink-primary);}
+.roster-role{font-size:12px;color:var(--ink-secondary);margin-top:1px;}
+.roster-role.driving{color:var(--accent-electric);font-weight:600;}
+
+.recenter{
+  position:absolute;right:20px;bottom:184px;z-index:45;
+  width:48px;height:48px;border-radius:var(--r-full);
+  background:var(--surface-dusk-high);border:1px solid var(--border-hairline);
+  display:flex;align-items:center;justify-content:center;
+}
+.recenter .ring1{width:16px;height:16px;border:2px solid var(--ink-primary);border-radius:50%;position:relative;}
+.recenter .ring1::before,.recenter .ring1::after{content:'';position:absolute;background:var(--ink-primary);}
+.recenter .ring1::before{width:2px;height:6px;top:-9px;left:5px;}
+.recenter .ring1::after{width:2px;height:6px;bottom:-9px;left:5px;}
+
+/* peek card overlay */
+.scrim{position:absolute;inset:0;background:rgba(6,8,18,.55);z-index:70;}
+.peek-card{
+  position:absolute;left:20px;right:20px;bottom:120px;z-index:80;
+  background:var(--surface-dusk);border:1px solid var(--border-hairline);
+  border-radius:var(--r-xl);padding:22px;
+}
+.peek-top{display:flex;justify-content:space-between;align-items:flex-start;}
+.peek-avatar-row{display:flex;align-items:center;gap:14px;}
+.peek-avatar{
+  width:56px;height:56px;border-radius:50%;border:3px solid var(--player-teal);
+  background:var(--surface-dusk-high);
+}
+.peek-name{font-family:var(--font-display);font-weight:600;font-size:22px;}
+.peek-close{
+  width:28px;height:28px;border-radius:50%;border:1px solid var(--border-hairline);
+  display:flex;align-items:center;justify-content:center;color:var(--ink-secondary);font-size:14px;
+}
+.peek-status{
+  margin-top:16px;display:inline-flex;align-items:center;gap:8px;
+  background:var(--surface-dusk-high);border:1px solid var(--border-hairline);
+  border-radius:var(--r-full);padding:6px 14px;font-size:13px;font-weight:600;
+}
+.peek-status .dot{width:8px;height:8px;border-radius:50%;background:var(--player-teal);}
+.peek-caption{margin-top:14px;font-size:14px;color:var(--ink-secondary);line-height:1.5;}
+.caption{margin-top:16px;font-size:13px;color:var(--ink-secondary);max-width:390px;text-align:center;}
+</style>
+</head>
+<body>
+
+<div class="column">
+<h2>Default — Riding view</h2>
+<div class="phone">
+  <div class="screen">
+    <div class="notch"></div>
+    <div class="statusbar"><span>9:41</span><span>●●●●  LTE</span></div>
+    <div class="sky-strip"></div>
+
+    <div class="map-canvas">
+      <div class="map-base"></div>
+      <div class="terrain t1"></div>
+      <div class="terrain t2"></div>
+      <div class="terrain t3"></div>
+      <div class="terrain t4"></div>
+
+      <svg viewBox="0 0 390 844" style="position:absolute;inset:0;width:100%;height:100%;">
+        <path d="M -20 720 C 90 660, 40 520, 170 470 S 330 340, 430 210" stroke="#2FE6C0" stroke-opacity="0.14" stroke-width="16" fill="none" stroke-linecap="round"/>
+        <path d="M -20 720 C 90 660, 40 520, 170 470 S 330 340, 430 210" stroke="#2FE6C0" stroke-opacity="0.55" stroke-width="3" fill="none" stroke-linecap="round"/>
+        <path d="M 170 470 C 220 500, 260 560, 240 660" stroke="#2FE6C0" stroke-opacity="0.35" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+      </svg>
+
+      <!-- Chintan — player-coral, driving -->
+      <div class="marker" style="--ring:#FF6B6B; top:520px; left:130px;">
+        <div class="trail" style="width:60px; transform:rotate(35deg) translate(-46px,10px);"></div>
+        <div class="pulse"></div>
+        <div class="dot">C</div>
+        <div class="ring"></div>
+        <div class="chevron" style="top:-9px; transform:rotate(-30deg);"></div>
+        <div class="label">Chintan</div>
+      </div>
+
+      <!-- Meera — player-teal, riding, "you" -->
+      <div class="marker" style="--ring:#2FE6C0; top:430px; left:200px;">
+        <div class="trail" style="width:50px; transform:rotate(20deg) translate(-40px,6px);"></div>
+        <div class="pulse"></div>
+        <div class="dot">M</div>
+        <div class="ring"></div>
+        <div class="chevron" style="top:-9px; transform:rotate(-10deg);"></div>
+        <div class="label">You</div>
+      </div>
+
+      <!-- Sam — player-violet, riding -->
+      <div class="marker" style="--ring:#9B6BFF; top:300px; left:290px;">
+        <div class="trail" style="width:46px; transform:rotate(10deg) translate(-38px,4px);"></div>
+        <div class="pulse"></div>
+        <div class="dot">S</div>
+        <div class="ring"></div>
+        <div class="chevron" style="top:-9px; transform:rotate(5deg);"></div>
+        <div class="label">Sam</div>
+      </div>
+    </div>
+
+    <div class="status-pill">Riding</div>
+
+    <div class="hud-card hud-top">
+      <div class="hud-top-row">
+        <div>
+          <div class="voyage-name">Lake Tahoe</div>
+          <div class="voyage-sub">3 Voyagers riding with you</div>
+        </div>
+        <div class="org-btn"><div class="dots"><span></span><span></span><span></span></div></div>
+      </div>
+      <div class="elapsed">03:42:18</div>
+      <div class="elapsed-label">On the road</div>
+    </div>
+
+    <div class="recenter"><div class="ring1"></div></div>
+
+    <div class="hud-card hud-bottom">
+      <div class="roster-row">
+        <div class="roster-avatar" style="--ring:#FF6B6B;"></div>
+        <div><div class="roster-name">Chintan</div><div class="roster-role driving">Driving</div></div>
+      </div>
+      <div class="roster-row">
+        <div class="roster-avatar" style="--ring:#2FE6C0;"></div>
+        <div><div class="roster-name">Meera (you)</div><div class="roster-role">Riding</div></div>
+      </div>
+      <div class="roster-row">
+        <div class="roster-avatar" style="--ring:#9B6BFF;"></div>
+        <div><div class="roster-name">Sam</div><div class="roster-role">Riding</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="caption">Meera's own device — Riding role, quiet neutral status-pill, thumb-reachable bottom roster, top-dock elapsed time in Space Mono.</div>
+</div>
+
+<div class="column">
+<h2>Marker tapped — Voyager peek card</h2>
+<div class="phone">
+  <div class="screen">
+    <div class="notch"></div>
+    <div class="statusbar"><span>9:41</span><span>●●●●  LTE</span></div>
+    <div class="sky-strip"></div>
+    <div class="map-canvas">
+      <div class="map-base"></div>
+      <div class="terrain t1"></div>
+      <div class="terrain t2"></div>
+      <div class="terrain t3"></div>
+      <div class="terrain t4"></div>
+      <svg viewBox="0 0 390 844" style="position:absolute;inset:0;width:100%;height:100%;">
+        <path d="M -20 720 C 90 660, 40 520, 170 470 S 330 340, 430 210" stroke="#2FE6C0" stroke-opacity="0.14" stroke-width="16" fill="none" stroke-linecap="round"/>
+        <path d="M -20 720 C 90 660, 40 520, 170 470 S 330 340, 430 210" stroke="#2FE6C0" stroke-opacity="0.55" stroke-width="3" fill="none" stroke-linecap="round"/>
+      </svg>
+      <div class="marker" style="--ring:#FF6B6B; top:520px; left:130px;">
+        <div class="pulse"></div><div class="dot">C</div><div class="ring"></div>
+        <div class="chevron" style="top:-9px; transform:rotate(-30deg);"></div>
+        <div class="label">Chintan</div>
+      </div>
+      <div class="marker" style="--ring:#2FE6C0; top:430px; left:200px;">
+        <div class="pulse"></div><div class="dot">M</div><div class="ring"></div>
+        <div class="chevron" style="top:-9px; transform:rotate(-10deg);"></div>
+        <div class="label">You</div>
+      </div>
+      <div class="marker" style="--ring:#9B6BFF; top:300px; left:290px;">
+        <div class="pulse"></div><div class="dot">S</div><div class="ring"></div>
+        <div class="chevron" style="top:-9px; transform:rotate(5deg);"></div>
+        <div class="label">Sam</div>
+      </div>
+    </div>
+
+    <div class="status-pill">Riding</div>
+    <div class="hud-card hud-top">
+      <div class="hud-top-row">
+        <div>
+          <div class="voyage-name">Lake Tahoe</div>
+          <div class="voyage-sub">3 Voyagers riding with you</div>
+        </div>
+        <div class="org-btn"><div class="dots"><span></span><span></span><span></span></div></div>
+      </div>
+      <div class="elapsed">03:42:18</div>
+      <div class="elapsed-label">On the road</div>
+    </div>
+
+    <div class="scrim"></div>
+    <div class="peek-card">
+      <div class="peek-top">
+        <div class="peek-avatar-row">
+          <div class="peek-avatar"></div>
+          <div class="peek-name">Sam</div>
+        </div>
+        <div class="peek-close">✕</div>
+      </div>
+      <div class="peek-status"><span class="dot"></span>Riding</div>
+      <div class="peek-caption">Joined 6h 12m after Voyage start. Fashionably late — welcome aboard.</div>
+    </div>
+  </div>
+</div>
+<div class="caption">Tap-to-open peek card (Component Patterns → "Map marker"). Fun Fact count is a v1.1-dependent field — see summary; omitted here since no Fun Fact system exists in the v1 build this map represents.</div>
+</div>
+
+</body>
+</html>
