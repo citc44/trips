@@ -51,4 +51,15 @@ async function markTrustMomentSeen(): Promise<ProfileResult> {
   return { data: toProfile(data as ProfileRow), error: null };
 }
 
-export const profileRepository = { getProfile, markTrustMomentSeen };
+async function markDriverConsentSeen(): Promise<ProfileResult> {
+  // Server-stamped, same rationale as markTrustMomentSeen -- see its migration.
+  const { data, error } = await supabase.rpc('mark_driver_consent_seen');
+
+  if (error) {
+    return { data: null, error: toRepositoryError(error) };
+  }
+
+  return { data: toProfile(data as ProfileRow), error: null };
+}
+
+export const profileRepository = { getProfile, markTrustMomentSeen, markDriverConsentSeen };

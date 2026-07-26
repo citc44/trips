@@ -1,6 +1,10 @@
+---
+baseline_commit: e815f47
+---
+
 # Story 1.5: Driver Attention Consent
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -21,8 +25,8 @@ so that Voylo's driver-safety approach is grounded in real consent, not a silent
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: `mark_driver_consent_seen()` RPC (AC: #2) — mirrors Story 1.4's `mark_trust_moment_seen()` function exactly
-  - [ ] New migration `supabase/migrations/<timestamp>_mark_driver_consent_seen_function.sql`:
+- [x] Task 1: `mark_driver_consent_seen()` RPC (AC: #2) — mirrors Story 1.4's `mark_trust_moment_seen()` function exactly
+  - [x] New migration `supabase/migrations/<timestamp>_mark_driver_consent_seen_function.sql`:
     ```sql
     create or replace function public.mark_driver_consent_seen()
     returns public.profiles
@@ -39,43 +43,39 @@ so that Voylo's driver-safety approach is grounded in real consent, not a silent
 
     grant execute on function public.mark_driver_consent_seen() to authenticated;
     ```
-  - [ ] **This is server-stamped from the start, even though this story's AC text (unlike Story 1.4's AC2) doesn't literally say "(server timestamp)".** Story 1.4's code review established, for the whole `profiles` table's one-time-onboarding-flag columns, that a client-supplied `new Date().toISOString()` is a real spec/security gap (a skewed or spoofed device clock could persist an arbitrary value) — applying the same fix proactively here, to the sibling column on the same row, rather than waiting for review to flag the inconsistency a second time. Flagged plainly as a proactive-consistency choice, not a literal AC requirement, in case a reviewer wants to weigh in.
-  - [ ] Apply locally via `supabase db push` against `voylo-dev` before relying on CI.
-  - [ ] No new RLS policies needed — `profiles`' existing `profiles_select_own`/`profiles_insert_own`/`profiles_update_own` (Story 1.4's migration) already cover this column; `security invoker` means the RPC still goes through them.
+  - [x] **This is server-stamped from the start, even though this story's AC text (unlike Story 1.4's AC2) doesn't literally say "(server timestamp)".** Story 1.4's code review established, for the whole `profiles` table's one-time-onboarding-flag columns, that a client-supplied `new Date().toISOString()` is a real spec/security gap (a skewed or spoofed device clock could persist an arbitrary value) — applying the same fix proactively here, to the sibling column on the same row, rather than waiting for review to flag the inconsistency a second time. Flagged plainly as a proactive-consistency choice, not a literal AC requirement, in case a reviewer wants to weigh in.
+  - [x] Apply locally via `supabase db push` against `voylo-dev` before relying on CI.
+  - [x] No new RLS policies needed — `profiles`' existing `profiles_select_own`/`profiles_insert_own`/`profiles_update_own` (Story 1.4's migration) already cover this column; `security invoker` means the RPC still goes through them.
 
-- [ ] Task 2: `profileRepository.markDriverConsentSeen()` (AC: #2)
-  - [ ] Add `markDriverConsentSeen(): Promise<ProfileResult>` to `src/repositories/profile-repository.ts`, calling `supabase.rpc('mark_driver_consent_seen')` — same shape as `markTrustMomentSeen`, same `toProfile`/`toRepositoryError` mapping, no new types needed.
-  - [ ] Export it from `profileRepository = { getProfile, markTrustMomentSeen, markDriverConsentSeen }`.
-  - [ ] Unit tests mirroring `markTrustMomentSeen`'s existing three tests exactly (calls the RPC with the right name, returns the mapped profile, returns a typed error on failure).
+- [x] Task 2: `profileRepository.markDriverConsentSeen()` (AC: #2)
+  - [x] Add `markDriverConsentSeen(): Promise<ProfileResult>` to `src/repositories/profile-repository.ts`, calling `supabase.rpc('mark_driver_consent_seen')` — same shape as `markTrustMomentSeen`, same `toProfile`/`toRepositoryError` mapping, no new types needed.
+  - [x] Export it from `profileRepository = { getProfile, markTrustMomentSeen, markDriverConsentSeen }`.
+  - [x] Unit tests mirroring `markTrustMomentSeen`'s existing three tests exactly (calls the RPC with the right name, returns the mapped profile, returns a typed error on failure).
 
-- [ ] Task 3: `useProfile`'s `markDriverConsentSeen` action (AC: #2, #3) — **extract the shared staleness-guard logic instead of copy-pasting a second near-identical function**
-  - [ ] `markTrustMomentSeen`'s current body (in `src/shared/hooks/use-profile.tsx`) has three parts: (a) bail out if there's no session, (b) call its repository function, (c) apply the result only if `latestUserIdRef.current` still matches the request (the staleness guard this story's own predecessor's code review added after a first, buggy attempt read a stale closure instead). Part (a) and (c) are identical for any "mark a one-time onboarding flag" action. Extract a private helper (e.g. `applyMarkResult(requestedUserId, result)` or `runMarkAction(repositoryCall)`) that both `markTrustMomentSeen` and the new `markDriverConsentSeen` call, so the staleness guard exists in exactly one place. Copy-pasting it a second time risks silently dropping the guard on one of the two copies — a real, already-demonstrated risk this story should not repeat, not a hypothetical one.
-  - [ ] Add `markDriverConsentSeen: () => Promise<{ error: RepositoryError | null }>` to `ProfileContextValue` and the provider's return value.
-  - [ ] Unit tests mirroring `markTrustMomentSeen`'s existing coverage (updates local state on success, returns an error without updating state on failure, discards a stale response if the session changed mid-request — reuse the exact test structure/technique from `use-profile.test.tsx`'s existing `markTrustMomentSeen` tests).
-  - [ ] No changes needed to the `getProfile` effect, `isLoading` derivation, or `hasError` fail-open logic — those already cover the whole `profile` object (both flags load together in one fetch), not per-field. Do not duplicate that machinery per-field.
+- [x] Task 3: `useProfile`'s `markDriverConsentSeen` action (AC: #2, #3) — **extract the shared staleness-guard logic instead of copy-pasting a second near-identical function**
+  - [x] `markTrustMomentSeen`'s current body (in `src/shared/hooks/use-profile.tsx`) has three parts: (a) bail out if there's no session, (b) call its repository function, (c) apply the result only if `latestUserIdRef.current` still matches the request (the staleness guard this story's own predecessor's code review added after a first, buggy attempt read a stale closure instead). Part (a) and (c) are identical for any "mark a one-time onboarding flag" action. Extract a private helper (e.g. `applyMarkResult(requestedUserId, result)` or `runMarkAction(repositoryCall)`) that both `markTrustMomentSeen` and the new `markDriverConsentSeen` call, so the staleness guard exists in exactly one place. Copy-pasting it a second time risks silently dropping the guard on one of the two copies — a real, already-demonstrated risk this story should not repeat, not a hypothetical one.
+  - [x] Add `markDriverConsentSeen: () => Promise<{ error: RepositoryError | null }>` to `ProfileContextValue` and the provider's return value.
+  - [x] Unit tests mirroring `markTrustMomentSeen`'s existing coverage (updates local state on success, returns an error without updating state on failure, discards a stale response if the session changed mid-request — reuse the exact test structure/technique from `use-profile.test.tsx`'s existing `markTrustMomentSeen` tests).
+  - [x] No changes needed to the `getProfile` effect, `isLoading` derivation, or `hasError` fail-open logic — those already cover the whole `profile` object (both flags load together in one fetch), not per-field. Do not duplicate that machinery per-field.
 
-- [ ] Task 4: Shared `OnboardingAcknowledgment` component + Driver Attention Consent screen (AC: #1, #2) — **extract before duplicating, not after**
-  - [ ] `src/app/trust-moment.tsx` and the new Driver Attention Consent screen are structurally identical: full-bleed headline + supporting copy + one `IgnitionButton` (secondary, "Got it") + `isMounted`/`finally`-guarded async handler + inline error message. Building the second screen by copy-pasting the first would recreate the exact kind of duplication Story 1.3's code review already found and fixed once (`IgnitionButton`/`screenStyles` extraction) — for the same reason, extract now, before the second copy exists, not after.
-  - [ ] Create `src/shared/components/onboarding-acknowledgment.tsx` exporting `OnboardingAcknowledgment`, taking props: `headline: string`, `supportingCopy: string`, `onAcknowledge: () => Promise<{ error: RepositoryError | null }>`, `testIdPrefix: string` (or similar — dev agent's call on exact prop shape, but it must parameterize copy, the action, and test IDs so both screens' existing tests can still target stable `testID`s). Encapsulates: the headline/supporting `Text`, the `IgnitionButton`, the `isMounted` ref + `finally` pattern, and the inline error message — everything currently in `trust-moment.tsx` except the two copy strings and which action to call.
-  - [ ] Refactor `src/app/trust-moment.tsx` to a thin wrapper: import `OnboardingAcknowledgment`, pass its existing locked copy and `useProfile().markTrustMomentSeen`. Its existing tests (`trust-moment.test.tsx`) must still pass unmodified in intent (same `testID`s, same rendered copy, same behavior) — update only what the refactor requires (e.g. import paths), not the assertions themselves.
-  - [ ] Create `src/app/driver-attention-consent.tsx` using `OnboardingAcknowledgment` with this story's locked copy and `useProfile().markDriverConsentSeen`.
-  - [ ] New tests (`src/app/__tests__/driver-attention-consent.test.tsx`) mirroring `trust-moment.test.tsx`'s exact structure (renders locked copy, tap calls the mark action, resolved-error and rejected-promise paths).
-  - [ ] Typography: reuse `Typography.display` for the headline exactly as Story 1.4 did (same "real moment, not a settings line" register per EXPERIENCE.md) — this is no longer a fresh interpretive call since Story 1.4's code review already had the opportunity to weigh in on that choice and didn't dispute it; treat it as settled precedent here, not a new decision to re-litigate.
+- [x] Task 4: Shared `OnboardingAcknowledgment` component + Driver Attention Consent screen (AC: #1, #2) — **extract before duplicating, not after**
+  - [x] `src/app/trust-moment.tsx` and the new Driver Attention Consent screen are structurally identical: full-bleed headline + supporting copy + one `IgnitionButton` (secondary, "Got it") + `isMounted`/`finally`-guarded async handler + inline error message. Building the second screen by copy-pasting the first would recreate the exact kind of duplication Story 1.3's code review already found and fixed once (`IgnitionButton`/`screenStyles` extraction) — for the same reason, extract now, before the second copy exists, not after.
+  - [x] Create `src/shared/components/onboarding-acknowledgment.tsx` exporting `OnboardingAcknowledgment`, taking props: `headline: string`, `supportingCopy: string`, `onAcknowledge: () => Promise<{ error: RepositoryError | null }>`. **No `testIdPrefix` prop added** — kept fixed `testID`s (`got-it-button`/`error-message`) inside the shared component instead, since the two screens never coexist in the same render tree (each is tested independently) and both literally use the same "Got it" affordance per EXPERIENCE.md; a prefix prop would have added surface area with no real test-isolation benefit. Encapsulates everything `trust-moment.tsx` had except the two copy strings and which action to call.
+  - [x] Refactor `src/app/trust-moment.tsx` to a thin wrapper: imports `OnboardingAcknowledgment`, passes its existing locked copy and `useProfile().markTrustMomentSeen`. Its existing tests (`trust-moment.test.tsx`) pass **completely unmodified** — not even import paths needed changing, since the test only imports the default-exported screen component itself.
+  - [x] Created `src/app/driver-attention-consent.tsx` using `OnboardingAcknowledgment` with this story's locked copy and `useProfile().markDriverConsentSeen`.
+  - [x] New tests (`src/app/__tests__/driver-attention-consent.test.tsx`) mirroring `trust-moment.test.tsx`'s exact structure (renders locked copy, tap calls the mark action, resolved-error and rejected-promise paths). 4/4 passing, plus `trust-moment.test.tsx`'s original 4/4 still passing post-refactor.
+  - [x] Typography: reused `Typography.display` for the headline exactly as Story 1.4 did.
 
-- [ ] Task 5: Extend `_layout.tsx`'s guard from three-way to four-way (AC: #1, #3, #4)
-  - [ ] Add `hasSeenDriverConsent = !!profile?.driverConsentSeenAt || hasError` alongside the existing `hasSeenTrustMoment`, same fail-open-on-error reasoning Story 1.4 established (a transient fetch error must not force either onboarding step to re-fire for an already-onboarded user).
-  - [ ] Four `Stack.Protected` blocks, evaluated in this order so a mid-onboarding account (Trust Moment seen, Driver Consent not yet seen — AC #4) lands correctly:
-    - `guard={!session}` → `sign-in` (unchanged)
-    - `guard={!!session && !hasSeenTrustMoment}` → `trust-moment` (unchanged)
-    - `guard={!!session && hasSeenTrustMoment && !hasSeenDriverConsent}` → new `driver-attention-consent` screen
-    - `guard={!!session && hasSeenTrustMoment && hasSeenDriverConsent}` → `index` + `settings` (was the old `hasSeenTrustMoment`-only condition)
-  - [ ] No changes needed to the loading-gate logic (`isAuthLoading || (!!session && isProfileLoading)`) — Story 1.4's code review already fixed the race in that logic at the `useProfile` level (a single `isLoading`/`resolvedForUserId` pair covering the whole profile fetch, both flags included), so no new per-field loading state is needed here.
+- [x] Task 5: Extend `_layout.tsx`'s guard from three-way to four-way (AC: #1, #3, #4)
+  - [x] Added `hasSeenDriverConsent = !!profile?.driverConsentSeenAt || profileHasError` alongside the existing `hasSeenTrustMoment`, same fail-open-on-error reasoning Story 1.4 established.
+  - [x] Four `Stack.Protected` blocks, evaluated so a mid-onboarding account (Trust Moment seen, Driver Consent not yet seen — AC #4) lands correctly: `sign-in` (unauthenticated) → `trust-moment` (`!hasSeenTrustMoment`) → `driver-attention-consent` (`hasSeenTrustMoment && !hasSeenDriverConsent`) → `index`+`settings` (both seen).
+  - [x] No changes needed to the loading-gate logic — confirmed: `useProfile`'s single `isLoading`/`resolvedForUserId` pair already covers the whole profile fetch (both flags load together), so no new per-field loading state was needed. Full 52-test regression suite green, `tsc --noEmit` clean.
 
-- [ ] Task 6: Live verification (AC: #1–#4) — same real-signal standard as every prior auth/profile story, same fallback as Stories 1.3/1.4 (no device build available; EAS Android quota resets 2026-08-01)
-  - [ ] Sign in as a real test account, capture its access token (OTP round-trip, same technique as Stories 1.3/1.4's Task 5/6 — reuse an existing session if still within its 1-hour token lifetime rather than requesting a fresh OTP unnecessarily, since Resend's shared test domain and Supabase's OTP rate limit both make repeated requests costly — Story 1.4's review round hit `429 over_email_send_rate_limit` from requesting too many in one session).
-  - [ ] Call the `mark_driver_consent_seen` RPC directly (`POST /rest/v1/rpc/mark_driver_consent_seen`) and confirm it succeeds and sets `driver_consent_seen_at` without disturbing `trust_moment_seen_at` on the same row.
-  - [ ] Call it again and confirm idempotency (`coalesce` preserves the original timestamp, doesn't overwrite with a new `now()`) — same proof technique Story 1.4 used for `mark_trust_moment_seen`.
-  - [ ] Document the request/response sequence in the Dev Agent Record. Delete any temp files holding real tokens immediately after.
+- [x] Task 6: Live verification (AC: #1–#4) — same real-signal standard as every prior auth/profile story, same fallback as Stories 1.3/1.4 (no device build available; EAS Android quota resets 2026-08-01)
+  - [x] Reused the still-valid access token from Story 1.4's Task 6 session (checked its expiry against wall-clock time before use — still ~11 minutes left in its 1-hour lifetime) rather than requesting a fresh OTP, avoiding the `429 over_email_send_rate_limit` Story 1.4's review round hit from over-requesting.
+  - [x] Called the `mark_driver_consent_seen` RPC directly (`POST /rest/v1/rpc/mark_driver_consent_seen`) — succeeded, set `driver_consent_seen_at` to a fresh server timestamp (`2026-07-26T21:42:08.71...Z`) while `trust_moment_seen_at` (set by Story 1.4's testing) stayed untouched on the same row.
+  - [x] Called it again immediately after — returned the identical `driver_consent_seen_at`, confirming `coalesce` idempotency (doesn't overwrite with a new `now()` on a repeat call).
+  - [x] Both calls used inline shell variables, no token ever written to a temp file this time (no cleanup needed).
 
 ## Dev Notes
 
@@ -108,8 +108,36 @@ so that Voylo's driver-safety approach is grounded in real consent, not a silent
 
 ### Agent Model Used
 
+Claude Sonnet 5
+
 ### Debug Log References
+
+- **Migration applied locally before relying on CI**, same discipline as every prior story: `supabase db push --yes` against `voylo-dev` with `SUPABASE_ACCESS_TOKEN`/`SUPABASE_DB_PASSWORD`/`SEND_EMAIL_HOOK_SECRET` set. Applied cleanly.
+- **Extracted the staleness-guard helper (`runMarkAction`) into `use-profile.tsx` rather than copy-pasting `markTrustMomentSeen`'s body a second time**, exactly as the story's Dev Notes required. `markTrustMomentSeen` and `markDriverConsentSeen` are now both one-line wrappers around `runMarkAction(profileRepository.<fn>, <message>)`. No behavior change to `markTrustMomentSeen` — its existing 3 tests (including the stale-response regression test) still pass unmodified, proving the refactor preserved the fix.
+- **Extracted `OnboardingAcknowledgment` (`src/shared/components/onboarding-acknowledgment.tsx`) before writing the Driver Attention Consent screen**, per the story's explicit instruction to avoid recreating Story 1.3's button/style duplication a second time. `trust-moment.tsx` is now a 12-line wrapper; its existing test file needed zero changes (it only imports the default-exported screen component, which kept its public shape). Deliberately did not add a `testIdPrefix` prop — both screens use the same fixed `got-it-button`/`error-message` testIDs since they never render simultaneously in any test, and a prefix would have added prop surface with no real benefit; noted as a judgment call in the Task 4 checklist in case review disagrees.
+- **Live verification (Task 6) reused a still-valid access token from Story 1.4's own Task 6 session** instead of requesting a fresh OTP — checked its JWT `exp` claim against wall-clock time first (had ~11 minutes left of its 1-hour lifetime) before using it, avoiding the `429 over_email_send_rate_limit` Story 1.4's code-review round hit. Both RPC calls (initial + idempotency re-check) used inline shell variables, never written to a temp file, so no cleanup step was needed this time.
+- **No new lint or type errors introduced** — confirmed via `npm run lint` and `tsc --noEmit` after every task, not just at the end. The two pre-existing lint errors (`sign-in.tsx`, `use-color-scheme.web.ts`) remain, both in files this story doesn't touch.
 
 ### Completion Notes List
 
+- Task 1 complete: `mark_driver_consent_seen()` RPC, mirroring Story 1.4's `mark_trust_moment_seen()` exactly, applied to `voylo-dev`.
+- Task 2 complete: `profileRepository.markDriverConsentSeen()`. 10/10 repository tests passing (7 pre-existing + 3 new).
+- Task 3 complete: `useProfile`'s staleness-guard logic extracted into a shared `runMarkAction` helper; `markDriverConsentSeen` added using it. 14/14 hook tests passing (11 pre-existing + 3 new).
+- Task 4 complete: `OnboardingAcknowledgment` extracted; `trust-moment.tsx` refactored to use it (existing tests unmodified, still passing); `driver-attention-consent.tsx` built on it. 8/8 screen tests passing across both files.
+- Task 5 complete: `_layout.tsx`'s guard extended to four-way, `hasSeenDriverConsent` added with the same fail-open reasoning as `hasSeenTrustMoment`.
+- Task 6 complete: `mark_driver_consent_seen` RPC live-verified against `voylo-dev` — sets the sibling column without disturbing `trust_moment_seen_at`, idempotent on repeat calls.
+- Full regression suite: 52/52 tests passing, up from Story 1.4's 42 (10 new: 3 repository, 3 hook, 4 `driver-attention-consent` screen). `tsc --noEmit` clean. `npm run lint` clean (2 pre-existing errors in untouched files only).
+- **Story 1.5 is functionally complete.** All 4 ACs satisfied, all 6 tasks done. Both onboarding screens now share one component; both mark-actions share one staleness-guard helper — no duplication carried forward from Story 1.4's pattern.
+
 ### File List
+
+- `supabase/migrations/20260726170000_mark_driver_consent_seen_function.sql` (new) — server-stamping RPC for the sibling column
+- `src/repositories/profile-repository.ts` — `markDriverConsentSeen()` added (modified)
+- `src/repositories/__tests__/profile-repository.test.ts` — 3 new tests mirroring `markTrustMomentSeen`'s (modified)
+- `src/shared/hooks/use-profile.tsx` — `markDriverConsentSeen` action added; `markTrustMomentSeen`'s staleness-guard logic extracted into a shared `runMarkAction` helper (modified)
+- `src/shared/hooks/__tests__/use-profile.test.tsx` — 3 new tests mirroring `markTrustMomentSeen`'s (update, stale-discard, error-without-update) (modified)
+- `src/shared/components/onboarding-acknowledgment.tsx` (new) — shared screen shell extracted from `trust-moment.tsx`
+- `src/app/trust-moment.tsx` — refactored to a thin wrapper around `OnboardingAcknowledgment` (modified)
+- `src/app/driver-attention-consent.tsx` (new) — Driver Attention Consent screen, built on `OnboardingAcknowledgment`
+- `src/app/__tests__/driver-attention-consent.test.tsx` (new) — mirrors `trust-moment.test.tsx`'s structure
+- `src/app/_layout.tsx` — three-way guard extended to four-way (`hasSeenDriverConsent` added) (modified)

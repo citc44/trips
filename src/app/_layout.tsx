@@ -30,15 +30,19 @@ function AppNavigator() {
   }
 
   // Fail open on a profile-fetch error: treat "unknown" as "already seen" rather
-  // than "never seen," so a transient network failure doesn't re-show Trust Moment
-  // to an already-onboarded user (see use-profile.tsx).
+  // than "never seen," so a transient network failure doesn't re-show either
+  // onboarding step to an already-onboarded user (see use-profile.tsx).
   const hasSeenTrustMoment = !!profile?.trustMomentSeenAt || profileHasError;
+  const hasSeenDriverConsent = !!profile?.driverConsentSeenAt || profileHasError;
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Protected guard={!!session && hasSeenTrustMoment}>
+      <Stack.Protected guard={!!session && hasSeenTrustMoment && hasSeenDriverConsent}>
         <Stack.Screen name="index" />
         <Stack.Screen name="settings" />
+      </Stack.Protected>
+      <Stack.Protected guard={!!session && hasSeenTrustMoment && !hasSeenDriverConsent}>
+        <Stack.Screen name="driver-attention-consent" />
       </Stack.Protected>
       <Stack.Protected guard={!!session && !hasSeenTrustMoment}>
         <Stack.Screen name="trust-moment" />

@@ -95,3 +95,36 @@ test('markTrustMomentSeen returns a typed { code, message } error on failure', a
 
   expect(result).toEqual({ data: null, error: { code: '23505', message: 'conflict' } });
 });
+
+test('markDriverConsentSeen calls the server-stamping RPC with no client-supplied timestamp or user id', async () => {
+  mockRpc.mockResolvedValue({
+    data: { user_id: 'user-1', trust_moment_seen_at: null, driver_consent_seen_at: '2026-07-26T00:00:00Z' },
+    error: null,
+  });
+
+  await profileRepository.markDriverConsentSeen();
+
+  expect(mockRpc).toHaveBeenCalledWith('mark_driver_consent_seen');
+});
+
+test('markDriverConsentSeen returns the mapped, updated profile', async () => {
+  mockRpc.mockResolvedValue({
+    data: { user_id: 'user-1', trust_moment_seen_at: null, driver_consent_seen_at: '2026-07-26T00:00:00Z' },
+    error: null,
+  });
+
+  const result = await profileRepository.markDriverConsentSeen();
+
+  expect(result).toEqual({
+    data: { userId: 'user-1', trustMomentSeenAt: null, driverConsentSeenAt: '2026-07-26T00:00:00Z' },
+    error: null,
+  });
+});
+
+test('markDriverConsentSeen returns a typed { code, message } error on failure', async () => {
+  mockRpc.mockResolvedValue({ data: null, error: { code: '23505', message: 'conflict' } });
+
+  const result = await profileRepository.markDriverConsentSeen();
+
+  expect(result).toEqual({ data: null, error: { code: '23505', message: 'conflict' } });
+});

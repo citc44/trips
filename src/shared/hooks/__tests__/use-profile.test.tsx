@@ -11,10 +11,12 @@ jest.mock('@/shared/hooks/use-auth', () => ({
 
 const mockGetProfile = jest.fn<(...args: any[]) => Promise<any>>();
 const mockMarkTrustMomentSeen = jest.fn<(...args: any[]) => Promise<any>>();
+const mockMarkDriverConsentSeen = jest.fn<(...args: any[]) => Promise<any>>();
 jest.mock('@/repositories/profile-repository', () => ({
   profileRepository: {
     getProfile: (...args: unknown[]) => mockGetProfile(...args),
     markTrustMomentSeen: (...args: unknown[]) => mockMarkTrustMomentSeen(...args),
+    markDriverConsentSeen: (...args: unknown[]) => mockMarkDriverConsentSeen(...args),
   },
 }));
 
@@ -30,6 +32,16 @@ function Probe() {
 function ActionsProbe() {
   const { markTrustMomentSeen } = useProfile();
   return <Text testID="mark" onPress={() => markTrustMomentSeen()} />;
+}
+
+function DriverConsentProbe() {
+  const { profile } = useProfile();
+  return <Text testID="driver-probe">{profile ? (profile.driverConsentSeenAt ? 'seen' : 'unseen') : 'no-profile'}</Text>;
+}
+
+function DriverConsentActionsProbe() {
+  const { markDriverConsentSeen } = useProfile();
+  return <Text testID="mark-driver" onPress={() => markDriverConsentSeen()} />;
 }
 
 beforeEach(() => {
@@ -284,6 +296,113 @@ test('markTrustMomentSeen returns an error without updating state when the repos
 
   expect(result).toEqual({ error: { code: '42501', message: 'permission denied' } });
   expect(getByTestId('probe').props.children).toBe('unseen');
+});
+
+test('markDriverConsentSeen calls the repository and updates local state', async () => {
+  mockUseAuth.mockReturnValue({ session: { user: { id: 'user-1' } } });
+  mockGetProfile.mockResolvedValue({
+    data: { userId: 'user-1', trustMomentSeenAt: '2026-07-26T00:00:00Z', driverConsentSeenAt: null },
+    error: null,
+  });
+  mockMarkDriverConsentSeen.mockResolvedValue({
+    data: { userId: 'user-1', trustMomentSeenAt: '2026-07-26T00:00:00Z', driverConsentSeenAt: '2026-07-26T00:05:00Z' },
+    error: null,
+  });
+
+  const { getByTestId } = await render(
+    <ProfileProvider>
+      <DriverConsentActionsProbe />
+      <DriverConsentProbe />
+    </ProfileProvider>,
+  );
+
+  await waitFor(() => expect(getByTestId('driver-probe').props.children).toBe('unseen'));
+
+  await act(async () => {
+    await getByTestId('mark-driver').props.onPress();
+  });
+
+  expect(mockMarkDriverConsentSeen).toHaveBeenCalledWith();
+  await waitFor(() => expect(getByTestId('driver-probe').props.children).toBe('seen'));
+});
+
+test('discards a stale markDriverConsentSeen response if the session changed while it was in flight', async () => {
+  mockUseAuth.mockReturnValue({ session: { user: { id: 'user-1' } } });
+  mockGetProfile.mockResolvedValue({
+    data: { userId: 'user-1', trustMomentSeenAt: '2026-07-26T00:00:00Z', driverConsentSeenAt: null },
+    error: null,
+  });
+
+  let resolveMark: (value: any) => void;
+  mockMarkDriverConsentSeen.mockReturnValue(
+    new Promise((resolve) => {
+      resolveMark = resolve;
+    }),
+  );
+
+  const { getByTestId, rerender } = await render(
+    <ProfileProvider>
+      <DriverConsentActionsProbe />
+      <DriverConsentProbe />
+    </ProfileProvider>,
+  );
+
+  await waitFor(() => expect(getByTestId('driver-probe').props.children).toBe('unseen'));
+
+  let pressPromise: Promise<any>;
+  await act(async () => {
+    pressPromise = getByTestId('mark-driver').props.onPress();
+  });
+
+  mockUseAuth.mockReturnValue({ session: null });
+  await act(async () => {
+    await rerender(
+      <ProfileProvider>
+        <DriverConsentActionsProbe />
+        <DriverConsentProbe />
+      </ProfileProvider>,
+    );
+  });
+  await waitFor(() => expect(getByTestId('driver-probe').props.children).toBe('no-profile'));
+
+  await act(async () => {
+    resolveMark({
+      data: { userId: 'user-1', trustMomentSeenAt: '2026-07-26T00:00:00Z', driverConsentSeenAt: '2026-07-26T00:05:00Z' },
+      error: null,
+    });
+    await pressPromise;
+  });
+
+  expect(getByTestId('driver-probe').props.children).toBe('no-profile');
+});
+
+test('markDriverConsentSeen returns an error without updating state when the repository call fails', async () => {
+  mockUseAuth.mockReturnValue({ session: { user: { id: 'user-1' } } });
+  mockGetProfile.mockResolvedValue({
+    data: { userId: 'user-1', trustMomentSeenAt: '2026-07-26T00:00:00Z', driverConsentSeenAt: null },
+    error: null,
+  });
+  mockMarkDriverConsentSeen.mockResolvedValue({
+    data: null,
+    error: { code: '42501', message: 'permission denied' },
+  });
+
+  const { getByTestId } = await render(
+    <ProfileProvider>
+      <DriverConsentActionsProbe />
+      <DriverConsentProbe />
+    </ProfileProvider>,
+  );
+
+  await waitFor(() => expect(getByTestId('driver-probe').props.children).toBe('unseen'));
+
+  let result: any;
+  await act(async () => {
+    result = await getByTestId('mark-driver').props.onPress();
+  });
+
+  expect(result).toEqual({ error: { code: '42501', message: 'permission denied' } });
+  expect(getByTestId('driver-probe').props.children).toBe('unseen');
 });
 
 test('resets profile to null when the session goes away (e.g. sign-out)', async () => {

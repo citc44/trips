@@ -8,7 +8,10 @@ type ProfileContextValue = {
   isLoading: boolean;
   hasError: boolean;
   markTrustMomentSeen: () => Promise<{ error: RepositoryError | null }>;
+  markDriverConsentSeen: () => Promise<{ error: RepositoryError | null }>;
 };
+
+type MarkResult = { data: Profile | null; error: RepositoryError | null };
 
 const ProfileContext = createContext<ProfileContextValue | undefined>(undefined);
 
@@ -96,18 +99,26 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     // would needlessly flip isLoading back to true for an already-loaded screen.
   }, [userId]);
 
-  const markTrustMomentSeen = async (): Promise<{ error: RepositoryError | null }> => {
+  // Shared by every "mark a one-time onboarding flag" action: bail out with no
+  // session, then apply the result only if the session hasn't changed since the
+  // request started. Extracted (Story 1.5) rather than copy-pasted a second time --
+  // the first, closure-based version of this exact guard shipped broken (it read a
+  // stale `session` and never actually blocked a stale write) until a test proved
+  // it, and copy-pasting it again would have risked reintroducing that same bug on
+  // one of the two copies instead of fixing it once.
+  const runMarkAction = async (
+    repositoryCall: () => Promise<MarkResult>,
+    noSessionMessage: string,
+  ): Promise<{ error: RepositoryError | null }> => {
     if (!userId) {
-      return { error: { code: 'no_session', message: 'Cannot mark trust moment seen without a session.' } };
+      return { error: { code: 'no_session', message: noSessionMessage } };
     }
 
     const requestedUserId = userId;
-    const { data, error } = await profileRepository.markTrustMomentSeen();
-    // Guard against a stale response landing after the session has since changed
-    // (e.g. sign-out mid-request) -- applying it would resurrect profile data for
-    // an account that's no longer signed in. Reads the ref, not a closed-over
-    // variable, so it sees the *current* userId even if this function instance
-    // was captured by a caller before a later render changed it.
+    const { data, error } = await repositoryCall();
+    // Reads the ref, not a closed-over variable, so it sees the *current* userId
+    // even if this function instance was captured by a caller before a later
+    // render changed it (e.g. sign-out mid-request).
     if (!error && data && latestUserIdRef.current === requestedUserId) {
       setProfile(data);
       setHasError(false);
@@ -115,8 +126,14 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     return { error };
   };
 
+  const markTrustMomentSeen = () =>
+    runMarkAction(profileRepository.markTrustMomentSeen, 'Cannot mark trust moment seen without a session.');
+
+  const markDriverConsentSeen = () =>
+    runMarkAction(profileRepository.markDriverConsentSeen, 'Cannot mark driver consent seen without a session.');
+
   return (
-    <ProfileContext.Provider value={{ profile, isLoading, hasError, markTrustMomentSeen }}>
+    <ProfileContext.Provider value={{ profile, isLoading, hasError, markTrustMomentSeen, markDriverConsentSeen }}>
       {children}
     </ProfileContext.Provider>
   );
