@@ -1,3 +1,4 @@
+import { Link } from 'expo-router';
 import { StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -11,6 +12,9 @@ export default function HomeScreen() {
       <SafeAreaView style={styles.safeArea}>
         <ThemedText type="title">Voylo</ThemedText>
         <ThemedText type="small">Project foundation scaffold — Story 1.1</ThemedText>
+        <Link testID="settings-link" href="/settings">
+          <ThemedText type="link">Settings</ThemedText>
+        </Link>
       </SafeAreaView>
     </ThemedView>
   );

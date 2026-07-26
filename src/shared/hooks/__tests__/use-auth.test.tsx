@@ -9,6 +9,7 @@ const mockOnAuthStateChange = jest.fn<(...args: any[]) => any>();
 const mockUnsubscribe = jest.fn();
 const mockSignInWithOtp = jest.fn<(...args: any[]) => Promise<any>>();
 const mockVerifyOtp = jest.fn<(...args: any[]) => Promise<any>>();
+const mockSignOut = jest.fn<(...args: any[]) => Promise<any>>();
 
 jest.mock('@/lib/supabase', () => ({
   supabase: {
@@ -17,6 +18,7 @@ jest.mock('@/lib/supabase', () => ({
       onAuthStateChange: (...args: unknown[]) => mockOnAuthStateChange(...args),
       signInWithOtp: (...args: unknown[]) => mockSignInWithOtp(...args),
       verifyOtp: (...args: unknown[]) => mockVerifyOtp(...args),
+      signOut: (...args: unknown[]) => mockSignOut(...args),
     },
   },
 }));
@@ -103,11 +105,12 @@ test('unsubscribes from onAuthStateChange on unmount', async () => {
 });
 
 function ActionsProbe() {
-  const { signInWithEmail, verifyCode } = useAuth();
+  const { signInWithEmail, verifyCode, signOut } = useAuth();
   return (
     <>
       <Text testID="signin" onPress={() => signInWithEmail('a@b.com')} />
       <Text testID="verify" onPress={() => verifyCode('a@b.com', '123456')} />
+      <Text testID="signout" onPress={() => signOut()} />
     </>
   );
 }
@@ -147,5 +150,24 @@ test('verifyCode delegates to supabase.auth.verifyOtp with type email and return
   });
 
   expect(mockVerifyOtp).toHaveBeenCalledWith({ email: 'a@b.com', token: '123456', type: 'email' });
+  expect(result).toEqual({ error: null });
+});
+
+test('signOut delegates to supabase.auth.signOut with global scope and returns its error', async () => {
+  mockGetSession.mockResolvedValue({ data: { session: null } });
+  mockSignOut.mockResolvedValue({ error: null });
+
+  const { getByTestId } = await render(
+    <AuthProvider>
+      <ActionsProbe />
+    </AuthProvider>,
+  );
+
+  let result;
+  await act(async () => {
+    result = await getByTestId('signout').props.onPress();
+  });
+
+  expect(mockSignOut).toHaveBeenCalledWith({ scope: 'global' });
   expect(result).toEqual({ error: null });
 });

@@ -27,6 +27,7 @@ jobs:
       - name: Typecheck
         run: |
           echo '/// <reference types="expo/types" />' > expo-env.d.ts
+          npx expo customize tsconfig.json
           npx tsc --noEmit
 
       - name: Test

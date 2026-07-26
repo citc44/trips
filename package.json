@@ -46,6 +46,9 @@
   },
   "private": true,
   "jest": {
-    "preset": "jest-expo"
+    "preset": "jest-expo",
+    "moduleNameMapper": {
+      "\\.css$": "<rootDir>/src/shared/test-mocks/style-mock.js"
+    }
   }
 }

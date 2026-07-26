@@ -8,6 +8,7 @@ type AuthContextValue = {
   isLoading: boolean;
   signInWithEmail: (email: string) => Promise<{ error: AuthError | null }>;
   verifyCode: (email: string, token: string) => Promise<{ error: AuthError | null }>;
+  signOut: () => Promise<{ error: AuthError | null }>;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -55,8 +56,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error };
   };
 
+  const signOut = async () => {
+    // AD-4: explicit 'global' scope revokes refresh tokens on every device.
+    const { error } = await supabase.auth.signOut({ scope: 'global' });
+    return { error };
+  };
+
   return (
-    <AuthContext.Provider value={{ session, isLoading, signInWithEmail, verifyCode }}>{children}</AuthContext.Provider>
+    <AuthContext.Provider value={{ session, isLoading, signInWithEmail, verifyCode, signOut }}>
+      {children}
+    </AuthContext.Provider>
   );
 }
 
