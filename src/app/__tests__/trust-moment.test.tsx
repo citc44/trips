@@ -30,10 +30,31 @@ test('tapping "Got it" calls markTrustMomentSeen', async () => {
   const { getByTestId } = await render(<TrustMomentScreen />);
 
   await act(async () => {
-    fireEvent.press(getByTestId('got-it-button'));
+    fireEvent.press(getByTestId('trust-moment-got-it-button'));
   });
 
   expect(mockMarkTrustMomentSeen).toHaveBeenCalledTimes(1);
+});
+
+test('"Got it" button is disabled while the request is in flight', async () => {
+  let resolveMark: (value: any) => void;
+  mockMarkTrustMomentSeen.mockReturnValue(
+    new Promise((resolve) => {
+      resolveMark = resolve;
+    }),
+  );
+
+  const { getByTestId } = await render(<TrustMomentScreen />);
+
+  await act(async () => {
+    fireEvent.press(getByTestId('trust-moment-got-it-button'));
+  });
+
+  expect(getByTestId('trust-moment-got-it-button').props.accessibilityState?.disabled).toBe(true);
+
+  await act(async () => {
+    resolveMark({ error: null });
+  });
 });
 
 test('shows an inline error and re-enables the button when markTrustMomentSeen resolves with an error', async () => {
@@ -42,12 +63,12 @@ test('shows an inline error and re-enables the button when markTrustMomentSeen r
   const { getByTestId, queryByTestId } = await render(<TrustMomentScreen />);
 
   await act(async () => {
-    fireEvent.press(getByTestId('got-it-button'));
+    fireEvent.press(getByTestId('trust-moment-got-it-button'));
   });
 
-  expect(queryByTestId('error-message')).toBeTruthy();
-  expect(getByTestId('error-message').props.children).toBe('permission denied');
-  expect(getByTestId('got-it-button').props.accessibilityState?.disabled).toBe(false);
+  expect(queryByTestId('trust-moment-error-message')).toBeTruthy();
+  expect(getByTestId('trust-moment-error-message').props.children).toBe('permission denied');
+  expect(getByTestId('trust-moment-got-it-button').props.accessibilityState?.disabled).toBe(false);
 });
 
 test('shows a generic error and re-enables the button when markTrustMomentSeen rejects', async () => {
@@ -56,9 +77,9 @@ test('shows a generic error and re-enables the button when markTrustMomentSeen r
   const { getByTestId, queryByTestId } = await render(<TrustMomentScreen />);
 
   await act(async () => {
-    fireEvent.press(getByTestId('got-it-button'));
+    fireEvent.press(getByTestId('trust-moment-got-it-button'));
   });
 
-  expect(queryByTestId('error-message')).toBeTruthy();
-  expect(getByTestId('got-it-button').props.accessibilityState?.disabled).toBe(false);
+  expect(queryByTestId('trust-moment-error-message')).toBeTruthy();
+  expect(getByTestId('trust-moment-got-it-button').props.accessibilityState?.disabled).toBe(false);
 });

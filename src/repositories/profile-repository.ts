@@ -14,7 +14,7 @@ type ProfileRow = {
   driver_consent_seen_at: string | null;
 };
 
-type ProfileResult = { data: Profile | null; error: RepositoryError | null };
+export type ProfileResult = { data: Profile | null; error: RepositoryError | null };
 
 function toProfile(row: ProfileRow): Profile {
   return {

@@ -6,6 +6,7 @@ export default function TrustMomentScreen() {
 
   return (
     <OnboardingAcknowledgment
+      testIdPrefix="trust-moment"
       headline="Your location stays in this Voyage."
       supportingCopy="We never sell your location data. It's visible only to people in your Voyage, and only while it's active."
       onAcknowledge={markTrustMomentSeen}

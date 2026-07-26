@@ -6,6 +6,7 @@ import { useColorScheme } from 'react-native';
 import { initSentry, Sentry } from '@/lib/sentry';
 import { AuthProvider, useAuth } from '@/shared/hooks/use-auth';
 import { ProfileProvider, useProfile } from '@/shared/hooks/use-profile';
+import { resolveRoute } from '@/shared/navigation/resolve-route';
 
 initSentry();
 SplashScreen.preventAutoHideAsync();
@@ -35,19 +36,21 @@ function AppNavigator() {
   const hasSeenTrustMoment = !!profile?.trustMomentSeenAt || profileHasError;
   const hasSeenDriverConsent = !!profile?.driverConsentSeenAt || profileHasError;
 
+  const route = resolveRoute({ hasSession: !!session, hasSeenTrustMoment, hasSeenDriverConsent });
+
   return (
     <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Protected guard={!!session && hasSeenTrustMoment && hasSeenDriverConsent}>
+      <Stack.Protected guard={route === 'home'}>
         <Stack.Screen name="index" />
         <Stack.Screen name="settings" />
       </Stack.Protected>
-      <Stack.Protected guard={!!session && hasSeenTrustMoment && !hasSeenDriverConsent}>
+      <Stack.Protected guard={route === 'driver-attention-consent'}>
         <Stack.Screen name="driver-attention-consent" />
       </Stack.Protected>
-      <Stack.Protected guard={!!session && !hasSeenTrustMoment}>
+      <Stack.Protected guard={route === 'trust-moment'}>
         <Stack.Screen name="trust-moment" />
       </Stack.Protected>
-      <Stack.Protected guard={!session}>
+      <Stack.Protected guard={route === 'sign-in'}>
         <Stack.Screen name="sign-in" />
       </Stack.Protected>
     </Stack>

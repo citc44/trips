@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 
-import { profileRepository, type Profile, type RepositoryError } from '@/repositories/profile-repository';
+import { profileRepository, type Profile, type ProfileResult, type RepositoryError } from '@/repositories/profile-repository';
 import { useAuth } from '@/shared/hooks/use-auth';
 
 type ProfileContextValue = {
@@ -10,8 +10,6 @@ type ProfileContextValue = {
   markTrustMomentSeen: () => Promise<{ error: RepositoryError | null }>;
   markDriverConsentSeen: () => Promise<{ error: RepositoryError | null }>;
 };
-
-type MarkResult = { data: Profile | null; error: RepositoryError | null };
 
 const ProfileContext = createContext<ProfileContextValue | undefined>(undefined);
 
@@ -107,7 +105,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   // it, and copy-pasting it again would have risked reintroducing that same bug on
   // one of the two copies instead of fixing it once.
   const runMarkAction = async (
-    repositoryCall: () => Promise<MarkResult>,
+    repositoryCall: () => Promise<ProfileResult>,
     noSessionMessage: string,
   ): Promise<{ error: RepositoryError | null }> => {
     if (!userId) {

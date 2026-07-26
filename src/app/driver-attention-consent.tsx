@@ -6,6 +6,7 @@ export default function DriverAttentionConsentScreen() {
 
   return (
     <OnboardingAcknowledgment
+      testIdPrefix="driver-consent"
       headline="If you're behind the wheel, stay focused on the road — Voylo can't do that for you."
       supportingCopy="Voylo isn't responsible for distracted driving."
       onAcknowledge={markDriverConsentSeen}

@@ -28,10 +28,31 @@ test('tapping "Got it" calls markDriverConsentSeen', async () => {
   const { getByTestId } = await render(<DriverAttentionConsentScreen />);
 
   await act(async () => {
-    fireEvent.press(getByTestId('got-it-button'));
+    fireEvent.press(getByTestId('driver-consent-got-it-button'));
   });
 
   expect(mockMarkDriverConsentSeen).toHaveBeenCalledTimes(1);
+});
+
+test('"Got it" button is disabled while the request is in flight', async () => {
+  let resolveMark: (value: any) => void;
+  mockMarkDriverConsentSeen.mockReturnValue(
+    new Promise((resolve) => {
+      resolveMark = resolve;
+    }),
+  );
+
+  const { getByTestId } = await render(<DriverAttentionConsentScreen />);
+
+  await act(async () => {
+    fireEvent.press(getByTestId('driver-consent-got-it-button'));
+  });
+
+  expect(getByTestId('driver-consent-got-it-button').props.accessibilityState?.disabled).toBe(true);
+
+  await act(async () => {
+    resolveMark({ error: null });
+  });
 });
 
 test('shows an inline error and re-enables the button when markDriverConsentSeen resolves with an error', async () => {
@@ -40,12 +61,12 @@ test('shows an inline error and re-enables the button when markDriverConsentSeen
   const { getByTestId, queryByTestId } = await render(<DriverAttentionConsentScreen />);
 
   await act(async () => {
-    fireEvent.press(getByTestId('got-it-button'));
+    fireEvent.press(getByTestId('driver-consent-got-it-button'));
   });
 
-  expect(queryByTestId('error-message')).toBeTruthy();
-  expect(getByTestId('error-message').props.children).toBe('permission denied');
-  expect(getByTestId('got-it-button').props.accessibilityState?.disabled).toBe(false);
+  expect(queryByTestId('driver-consent-error-message')).toBeTruthy();
+  expect(getByTestId('driver-consent-error-message').props.children).toBe('permission denied');
+  expect(getByTestId('driver-consent-got-it-button').props.accessibilityState?.disabled).toBe(false);
 });
 
 test('shows a generic error and re-enables the button when markDriverConsentSeen rejects', async () => {
@@ -54,9 +75,9 @@ test('shows a generic error and re-enables the button when markDriverConsentSeen
   const { getByTestId, queryByTestId } = await render(<DriverAttentionConsentScreen />);
 
   await act(async () => {
-    fireEvent.press(getByTestId('got-it-button'));
+    fireEvent.press(getByTestId('driver-consent-got-it-button'));
   });
 
-  expect(queryByTestId('error-message')).toBeTruthy();
-  expect(getByTestId('got-it-button').props.accessibilityState?.disabled).toBe(false);
+  expect(queryByTestId('driver-consent-error-message')).toBeTruthy();
+  expect(getByTestId('driver-consent-got-it-button').props.accessibilityState?.disabled).toBe(false);
 });
