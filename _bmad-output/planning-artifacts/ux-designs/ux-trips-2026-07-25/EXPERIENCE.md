@@ -1,5 +1,5 @@
 ---
-status: draft
+status: final
 created: 2026-07-25
 updated: 2026-07-25
 sources:
@@ -18,7 +18,7 @@ Night Drive (dark) is the default surface *in-app*, independent of the device's 
 
 Three structural constraints shape the entire IA, not just individual screens:
 
-- **No messaging, ever.** There is no reply affordance, no thread, no DM, anywhere in the product. Every notification is one-way and system-generated. This is a foundation-level exclusion, not a missing feature — it rules out an entire category of IA (inbox, unread state, conversation surfaces) before component design even starts.
+- **No messaging, ever.** No reply, no thread, no DM — every notification is one-way and system-generated. This is a foundation-level exclusion, not a missing feature — it rules out an entire category of IA (inbox, unread state, conversation surfaces) before component design even starts. See Interaction Primitives for the complete banned-pattern list.
 - **One active Voyage at a time.** `[ASSUMPTION: the PRD's family/friend-group road-trip framing implies a Voyager is part of at most one Voyage concurrently; this collapses the IA into a single-mode state machine — see Information Architecture — rather than a multi-workspace switcher.]`
 - **Continuous location access is a hard requirement**, not an optional permission, for the duration of an active Voyage. Its trust framing is load-bearing enough to get its own section (see Trust, Privacy & Consent) rather than living in a permissions dialog.
 
@@ -26,39 +26,39 @@ No tablet layout is specified for v1 — phone-first, often one-handed, often pa
 
 ## Information Architecture
 
-| Surface | Reached from | Purpose | Ships |
-|---|---|---|---|
-| OTP Entry (email) | App open, unauthenticated, no invite link · or "Join" tap on Join Invitation | Passwordless sign-in, step 1 | v1 |
-| OTP Verify (code) | OTP Entry submit | Confirms identity, opens/resumes session | v1 |
-| Trust Moment | First-ever successful OTP verify on an account (once, ever) | The "we never sell your location" screen, as a real moment, not a settings line | v1 |
-| Driver Attention Consent | Immediately after the Trust Moment, same first-ever onboarding pass (once, ever) | One-time acknowledgment that the driver must stay attentive while driving and that Voylo isn't responsible for distracted driving — a consent/liability gate, not a technical safeguard; see Driver-Safety Interaction Model | v1 |
-| Home (no active Voyage) | App open, authenticated, no active Voyage | "Start a Voyage" entry point; (v1.1) Past Voyages list for Memory Lane revisits | v1 (base) / v1.1 (Past Voyages) |
-| Settings | Home · Live Map HUD | Sign out; manual Daylight/Night Drive toggle (see Foundation); time-sensitive notification permission status and re-request; full privacy policy | v1 |
-| Voyage Intro | Home → "Start a Voyage" tap | The first emotional payoff — the "Every journey tells a story" hook, shown before any destination is chosen; forward action moves to Destination Picker ([mockup](mockups/key-start-voyage.html)) | v1 |
-| Destination Picker | Voyage Intro → "Choose Your Destination" tap | Organizer names a destination and confirms — confirming is the actual "start" action: creates the Voyage, begins live tracking, cuts into Live Map ([mockup](mockups/key-destination-picker.html)) | v1 |
-| Join-code / Share Card | Auto-shown after Destination Picker confirm · reachable anytime via Organizer Sheet | Shareable code/link, OS share sheet | v1 |
-| Join Invitation | Join link/code opened (deep link), any auth state | The "luring" second aha — sells the trip before any auth is requested ([mockup](mockups/key-join-invitation.html)) | v1 |
-| Live Map (Voyage View) | Destination Picker confirm (Organizer) · Join + OTP completion (Voyager) · app relaunch mid-Voyage | The home surface for the entire duration of an active Voyage ([mockup](mockups/key-live-map.html)) | v1 |
-| Organizer Action Sheet | Organizer-only control docked on Live Map HUD | Entry point to End Voyage / Grant Organizer / Remove Voyager ([mockup](mockups/key-organizer-action-sheet.html)) | v1 |
-| Grant Organizer confirm | Organizer Sheet row tap | Low-drama role handoff | v1 |
-| Remove Voyager confirm | Organizer Sheet row tap | Low-drama removal | v1 |
-| End Voyage confirm | Organizer Sheet row tap | Ceremonial checkpoint; triggers wrap-up, which leads to Voyage Ended (v1) or Memory Lane (v1.1) — see below | v1 |
-| Voyage Ended (wrap-up summary) | End Voyage confirm → wrap-up completion | **v1's actual terminal state.** A calm confirmation/summary screen ("Voyage ended. 5h 30m · 3 Voyagers · Lake Tahoe."), not a highlight reel — Memory Lane doesn't exist yet in a v1 build. Same trigger point as Memory Lane below; superseded by it once v1.1 ships. | v1 (superseded by Memory Lane in v1.1) |
-| Fun Fact log sheet | Manual log control tap on Live Map HUD (Riding role only) | Single-tap category + optional photo | v1.1 |
-| Photo capture | Fun Fact log sheet · long-stop detected state | Bank a photo memory | v1.1 |
-| Onboarding nudge toast | Fires contextually, once per Voyager ever, per tip | Just-in-time tips, no upfront tutorial | v1.1 |
-| Memory Lane | End-Voyage wrap-up completion (v1.1 onward — replaces the v1 Voyage Ended state above at the same trigger point) · Past Voyages list entry | The shareable highlight-reel payoff, revisitable | v1.1 |
-| Share & Consent review | Memory Lane → external share action | Per-person consent gate before content leaves the app | v1.1 |
+| Surface | Reached from | Purpose | Mockup | Ships |
+|---|---|---|---|---|
+| OTP Entry (email) | App open, unauthenticated, no invite link · or "Join" tap on Join Invitation | Passwordless sign-in, step 1 | — | v1 |
+| OTP Verify (code) | OTP Entry submit | Confirms identity, opens/resumes session | — | v1 |
+| Trust Moment | First-ever successful OTP verify on an account (once, ever) | The "we never sell your location" screen, as a real moment, not a settings line | — | v1 |
+| Driver Attention Consent | Immediately after the Trust Moment, same first-ever onboarding pass (once, ever) | One-time acknowledgment that the driver must stay attentive while driving and that Voylo isn't responsible for distracted driving — a consent/liability gate, not a technical safeguard; see Driver-Safety Interaction Model | — | v1 |
+| Home (no active Voyage) | App open, authenticated, no active Voyage | "Start a Voyage" entry point; (v1.1) Past Voyages list for Memory Lane revisits | — | v1 (base) / v1.1 (Past Voyages) |
+| Settings | Home · Live Map HUD | Sign out; manual Daylight/Night Drive toggle (see Foundation); time-sensitive notification permission status and re-request; full privacy policy | — | v1 |
+| Voyage Intro | Home → "Start a Voyage" tap | The first emotional payoff — the "Every journey tells a story" hook, shown before any destination is chosen; forward action moves to Destination Picker | [mockup](mockups/key-start-voyage.html) | v1 |
+| Destination Picker | Voyage Intro → "Choose Your Destination" tap | Organizer names a destination and confirms — confirming is the actual "start" action: creates the Voyage, begins live tracking, cuts into Live Map | [mockup](mockups/key-destination-picker.html) | v1 |
+| Join-code / Share Card | Auto-shown after Destination Picker confirm · reachable anytime via Organizer Sheet | Shareable code/link, OS share sheet | — | v1 |
+| Join Invitation | Join link/code opened (deep link), any auth state | The "luring" second aha — sells the trip before any auth is requested | [mockup](mockups/key-join-invitation.html) | v1 |
+| Live Map (Voyage View) | Destination Picker confirm (Organizer) · Join + OTP completion (Voyager) · app relaunch mid-Voyage | The home surface for the entire duration of an active Voyage | [mockup](mockups/key-live-map.html) | v1 |
+| Organizer Action Sheet | Organizer-only control docked on Live Map HUD | Entry point to End Voyage / Grant Organizer / Remove Voyager | [mockup](mockups/key-organizer-action-sheet.html) | v1 |
+| Grant Organizer confirm | Organizer Sheet row tap | Low-drama role handoff | — | v1 |
+| Remove Voyager confirm | Organizer Sheet row tap | Low-drama removal | — | v1 |
+| End Voyage confirm | Organizer Sheet row tap | Ceremonial checkpoint; triggers wrap-up, which leads to Voyage Ended (v1) or Memory Lane (v1.1) — see below | — | v1 |
+| Voyage Ended (wrap-up summary) | End Voyage confirm → wrap-up completion | **v1's actual terminal state.** A calm confirmation/summary screen ("Voyage ended. 5h 30m · 3 Voyagers · Lake Tahoe."), not a highlight reel — Memory Lane doesn't exist yet in a v1 build. Same trigger point as Memory Lane below; superseded by it once v1.1 ships. | — | v1 (superseded by Memory Lane in v1.1) |
+| Fun Fact log sheet | Manual log control tap on Live Map HUD (Riding role only) | Single-tap category + optional photo | — | v1.1 |
+| Photo capture | Fun Fact log sheet · long-stop detected state | Bank a photo memory | — | v1.1 |
+| Onboarding nudge toast | Fires contextually, once per Voyager ever, per tip | Just-in-time tips, no upfront tutorial | — | v1.1 |
+| Memory Lane | End-Voyage wrap-up completion (v1.1 onward — replaces the v1 Voyage Ended state above at the same trigger point) · Past Voyages list entry | The shareable highlight-reel payoff, revisitable | — | v1.1 |
+| Share & Consent review | Memory Lane → external share action | Per-person consent gate before content leaves the app | — | v1.1 |
 
 Voylo has **no persistent tab bar and no drawer**. Navigation is a state machine, not a multi-section app: `Home ↔ Intro/Picker/Join → Live Map → Wrap-up → Voyage Ended (v1) / Memory Lane (v1.1+)`. The last hop is a version seam, not a typo: End Voyage always triggers the same Wrap-up beat, but what it lands on differs by build — see the IA table's Voyage Ended / Memory Lane rows and State Patterns. This is a deliberate IA call, not an omission — DESIGN.md describes the Destination Picker confirm → Live Map transition as a "cut to gameplay," and a bottom tab bar sitting under a full-bleed cinematic hero screen would undercut that immediately. The Live Map is the entire screen for the duration of a Voyage; everything else (Voyager peeks, Organizer controls, Fun Fact logging) surfaces as a sheet or toast over it, never a new tab.
 
 Modal stacking is capped at one level. The Organizer Sheet is level 1; tapping End Voyage, Grant Organizer, or Remove Voyager swaps the *same sheet's* content to a confirm step rather than stacking a second sheet on top — there is never a dialog on top of a dialog anywhere in the product.
 
-→ Composition reference: five key-screen mockups now exist in `mockups/` — Voyage Intro, Destination Picker, Join Invitation, Live Map, and Organizer Action Sheet (linked inline in the table above). This spine document is the authoritative contract; where a mockup and this document ever disagree, this document wins.
+This spine document is the authoritative contract; where a mockup and this document ever disagree, this document wins.
 
 ## Voice and Tone
 
-Microcopy only. Brand voice and aesthetic posture live in `DESIGN.md.Brand & Style` — not duplicated here. Share-moment and Memory Lane copy specifically should carry the spirit of the brand tagline documented there ("Every journey tells a story. We make sure you never miss it.") — see `DESIGN.md.Brand & Style` for the full brand line, not repeated here.
+Microcopy only. Brand voice and aesthetic posture live in `DESIGN.md.Brand & Style` — not duplicated here. Share-moment and Memory Lane copy specifically should carry the spirit of the brand tagline — see `DESIGN.md.Brand & Style` for the full brand line, not repeated here.
 
 | Do | Don't |
 |---|---|
@@ -85,11 +85,11 @@ Behavioral. Visual specs live in `DESIGN.md.Components`.
 |---|---|---|
 | OTP field (`{typography.body}` input, `{components.button-ignition}` submit) | OTP Entry / Verify | Auto-advances per digit; auto-submits at 6 digits with no separate submit tap; 30s resend cooldown, visible countdown; a wrong code shakes the field and clears it in place — never routes to a separate error screen. |
 | Destination field | Destination Picker | Free-text in v1, `[ASSUMPTION: no address autocomplete/validation for v1]`. `{components.button-ignition}` stays disabled until non-empty; its label reads "Start the Voyage" — confirming both creates the Voyage and cuts to Live Map. No map preview before confirming — the reveal is the point. |
-| Join-code-card (`{components.join-code-card}`) | Post-Destination-Picker-confirm · Organizer Sheet "Invite more" | Tap-to-copy code; primary action opens the OS share sheet. One code per Voyage — it never rotates or expires mid-trip, so late invites reuse the same card. |
+| Join-code card (`{components.join-code-card}`) | Post-Destination-Picker-confirm · Organizer Sheet "Invite more" | Tap-to-copy code; primary action opens the OS share sheet. One code per Voyage — it never rotates or expires mid-trip, so late invites reuse the same card. |
 | Map marker (`{components.map-marker}`) | Live Map | Tap opens a lightweight per-Voyager peek card — never a message or reply entry point. v1: name + player color only. v1.1 adds: Fun Fact count so far. Long-press is unused; reserved for platform default (e.g., text selection elsewhere in the app). |
 | HUD card (`{components.hud-card}`) | Live Map top/bottom dock | Read-only glance surfaces. Content updates live via push; there is no manual refresh control anywhere on the map. |
 | Manual Fun Fact log control (`{colors.accent-gold}`) | Live Map bottom HUD, **Riding role only** | One tap opens a single-screen category picker (police / deer / construction / other) as large icon buttons — no multi-field form. "Add a photo" sits one tap below, always optional. Entirely absent — not disabled — from a Driving-role Voyager's HUD. See Driver-Safety Interaction Model. |
-| Fun-fact-badge / stat chip (`{components.fun-fact-badge}`) | Voyager peek card · Memory Lane | Tap opens that Voyager's Fun Fact timeline for the trip. Accumulates visually per-Voyager — see Contribution Richness. |
+| Fun Fact badge / stat chip (`{components.fun-fact-badge}`) | Voyager peek card · Memory Lane | Tap opens that Voyager's Fun Fact timeline for the trip. Accumulates visually per-Voyager — see Contribution Richness. |
 | Nudge toast (`{components.nudge-toast}`) | Global, contextual | Fires once per trigger; auto-dismisses ~4s or swipe-dismiss. Tapping it navigates only when there's somewhere meaningful to land (e.g., a fresh Fun Fact badge opens that Fun Fact) — never implies a reply is expected. |
 | Organizer action sheet (`{components.organizer-sheet}`) | Live Map, Organizer only | Three rows: End Voyage, Grant Organizer Status, Remove Voyager. Selecting a row swaps the sheet's own content into a confirm step — see Information Architecture's modal-depth rule. |
 | Trust Moment screen | Fires once, first-ever OTP success on an account | Single acknowledgment tap (`{components.button-secondary}`, "Got it") — no link-out wall of legal text gating progress. Full policy stays reachable from Settings for anyone who wants it. |
@@ -116,7 +116,7 @@ Behavioral. Visual specs live in `DESIGN.md.Components`.
 | Notification permission (time-sensitive) declined | Any surface, active Voyage | No blocking, no repeated ask, no degraded app state — this only affects delivery, not functionality. If the Voyager's phone is in OS Focus/Driving-Mode/DND, the live, in-the-moment one-way pings (long-stop detection, a Fun Fact logged by someone else) may be silently suppressed by the OS rather than reaching them. Those events still accumulate normally in the background for Memory Lane either way — only the live "ping" is at risk, not the record. Silently-banked events (e.g., border crossing, which was never a live notification to begin with — see the "Border crossing detected" row above) are entirely unaffected by this permission either way. |
 | Zero-contribution Voyager, late in the trip | Live Map, once | See Contribution Richness — one gentle nudge, never repeated, never a negative/red marker. |
 | End Voyage tapped (Organizer) | Organizer Sheet → confirm | New recording stops immediately; anything already in flight (an uploading photo, a queued offline tap) finishes normally. Brief "Wrapping up…" transitional state, not an abrupt cut. |
-| Voyage ended, v1 build (pre-Memory-Lane) | Wrap-up completion, v1 | Terminal state, not a hand-off: a calm "Voyage ended" summary (duration, Voyager count, destination) with a single way back to Home — no highlight reel, no share action, since those are the v1.1 Memory Lane experience below. The trigger point (End Voyage confirm) never changes across builds; only what it leads to does. |
+| Voyage ended, v1 build (pre-Memory Lane) | Wrap-up completion, v1 | Terminal state, not a hand-off: a calm "Voyage ended" summary (duration, Voyager count, destination) with a single way back to Home — no highlight reel, no share action, since those are the v1.1 Memory Lane experience below. The trigger point (End Voyage confirm) never changes across builds; only what it leads to does. |
 | Voyage ends, solo Organizer (nobody ever joined) | Wrap-up → Memory Lane (v1.1) | Full Fun Facts/Memory Lane experience regardless — never a degraded "not enough people" state. (In a v1 build, this instead lands on the plain "Voyage ended" state above, same as any other End Voyage.) |
 | Voyager removed by Organizer | Removed Voyager's own device | "You've left this Voyage." Calm, no red, no justification text, old join link no longer re-admits them. |
 | Organizer status granted | New Organizer's device | Organizer controls simply appear on their existing Live Map HUD — no new screen, no re-navigation — with a quiet confirmation toast. Deliberately undramatic, in contrast to the "wow" screens. |
@@ -148,7 +148,7 @@ Behavioral. Visual contrast lives in `DESIGN.md` (see `DESIGN.md.Colors`, `DESIG
 
 This is the one constraint in Voylo that overrides the "glamorous, game-like" posture in favor of doing nothing at all: a driver must be able to use Voylo with zero required interaction, ever, and manual capture must be unavailable to them, not merely discouraged.
 
-**Mechanism — self-declared role, not sensor detection.** Each Voyager sets a per-Voyage role, **Riding** or **Driving**, at the moment they land on Live Map for the first time (right after Destination Picker confirm or right after joining). It's a two-large-tap-target prompt, skippable — skipping defaults to Riding, so nobody is ever blocked from the app by an unanswered prompt. The role can be changed anytime with a single tap on their own status pill on the HUD ("Switch to Driving" / "Switch to Riding") — no confirmation dialog, since driver swaps happen mid-trip and shouldn't cost more than a glance. `[ASSUMPTION: self-reported role rather than motion/speed-sensor detection — sensor-based driving detection is out of the PRD's stated scope, and false positives would undermine the trust-based, non-nanny tone the rest of the product commits to. Voylo trusts the Voyager to say who's driving, the same way it trusts them with everything else.]`
+**Mechanism — self-declared role, not sensor detection.** Each Voyager sets a per-Voyage role, **Riding** or **Driving**, at the moment they land on Live Map for the first time (right after Destination Picker confirm or right after joining). The role choice is a two-large-tap-target prompt, skippable — skipping defaults to Riding, so nobody is ever blocked from the app by an unanswered prompt. The role can be changed anytime with a single tap on their own status pill on the HUD ("Switch to Driving" / "Switch to Riding") — no confirmation dialog, since driver swaps happen mid-trip and shouldn't cost more than a glance. `[ASSUMPTION: self-reported role rather than motion/speed-sensor detection — sensor-based driving detection is out of the PRD's stated scope, and false positives would undermine the trust-based, non-nanny tone the rest of the product commits to. Voylo trusts the Voyager to say who's driving, the same way it trusts them with everything else.]`
 
 **What Driving role actually changes:**
 - The manual Fun Fact log control and the photo-attach control are **removed from the HUD entirely** for a Driving-role Voyager — not grayed out, not disabled-with-a-tooltip. A dead tap target is still a temptation to glance and reach for; an absent one isn't.
@@ -190,21 +190,21 @@ The PRD leaves this explicitly unsolved: a Voyager who never taps or photographs
 
 ## Key Flows
 
-### UJ-1 — Chintan sets up the Voyage (Chintan, organizer, packing the car Friday morning)
+### UJ-1 — Chintan sets up the Voyage (Chintan, Organizer, packing the car Friday morning)
 
 1. Chintan opens Voylo for the first time. Cold open, unauthenticated → OTP Entry.
 2. Enters his email, gets a code, enters it → OTP Verify auto-submits at six digits.
-3. First-ever successful sign-in on this account → the Trust Moment fires once: "Your location stays in this Voyage. We never sell it." One tap, "Got it."
-3a. **Driver Attention Consent.** Same first-ever onboarding pass, immediately after the Trust Moment: "If you're behind the wheel, stay focused on the road — Voylo can't do that for you. Voylo isn't responsible for distracted driving." One tap, "Got it." Never resurfaces on this account again. See Driver-Safety Interaction Model.
+3. First-ever successful sign-in on this account → the Trust Moment fires once, one acknowledgment tap ("Got it") — full copy in Trust, Privacy & Consent.
+3a. **Driver Attention Consent.** Same first-ever onboarding pass, immediately after the Trust Moment, same single-tap "Got it" pattern — full copy in Driver-Safety Interaction Model. Never resurfaces on this account again.
 4. Lands on Home (no active Voyage) → taps "Start a Voyage."
 5. **Climax:** the tap cuts straight into Voyage Intro — full-bleed Night Drive gradient wash, `display-hero` Clash Display headline, the coral-glow ignition already fired — the first "wow," and it happens before Chintan has named a destination or a single other person has joined. Not knowing where the trip goes yet doesn't blunt the payoff; if anything it reads as more anticipatory, a promise about the experience rather than a reveal tied to a place. The copy puts the brand tagline directly on screen rather than just alluding to it: headline "**Every journey tells a story.**", subhead "Voylo rides along live and turns the trip into a memory reel — inside jokes, wrong turns, and all — ready the moment you arrive.", button "Choose Your Destination" (see `DESIGN.md.Components`, "Voyage Intro," for the locked copy block).
 6. Taps "Choose Your Destination" → lands on Destination Picker.
 7. Destination Picker: types a destination ("Lake Tahoe"). The confirm button — now labeled "Start the Voyage" — lights up.
 8. Taps "Start the Voyage." This is the real start trigger, not a formality: confirming here is what creates the Voyage and begins live tracking.
-8a. **OS location-permission request.** Since continuous location access is a hard requirement for the length of a Voyage, a brief app-authored priming screen fires first ("One more thing — Voylo needs your location for as long as the Voyage is active, so your Voyagers can see you on the map. Choose 'Always Allow' next so it keeps working if your phone locks."), then the native OS dialog (Always / While Using the App / Don't Allow) appears immediately after — never a cold OS prompt with no context. Chintan taps Always.
-8b. **OS notification-permission (time-sensitive) request.** Same beat, immediately after location permission resolves: an app-authored priming screen explains why first ("Voylo needs to reach you even if your phone's in Driving Focus or Do Not Disturb — allow time-sensitive alerts so a Pit stop ping can still get through."), then the native OS notification-permission dialog fires, requesting delivery as an iOS Time-Sensitive interruption level / Android priority channel. Chintan allows it.
-9. Cut (not a page-nav) into the Join-code-card, then onto Live Map — Chintan is already a Voyager on his own map, alone, marker moving.
-10. Taps the Join-code-card's share action → OS share sheet → sends the link to two other families over text.
+8a. **OS location-permission request.** Since continuous location access is a hard requirement for the length of a Voyage, an app-authored priming screen fires first, then the native OS dialog (Always / While Using the App / Don't Allow) appears immediately after — never a cold OS prompt with no context; full priming copy in State Patterns' "OS location-permission request" row. Chintan taps Always.
+8b. **OS notification-permission (time-sensitive) request.** Same beat, immediately after location permission resolves: an app-authored priming screen explains why first, then the native OS notification-permission dialog fires, requesting delivery as an iOS Time-Sensitive interruption level / Android priority channel — full priming copy in State Patterns' "OS notification-permission request" row. Chintan allows it.
+9. Cut (not a page-nav) into the Join-code card, then onto Live Map — Chintan is already a Voyager on his own map, alone, marker moving.
+10. Taps the Join-code card's share action → OS share sheet → sends the link to two other families over text.
 
 Failure/edge: if Chintan closes the app before sending the link, the same code is always reachable again from the Organizer Sheet — it never expires or regenerates mid-Voyage. Note forward: even if nobody ever joins, Chintan still gets a full Fun Facts/Memory Lane experience solo at End Voyage in a v1.1 build (State Pattern: "Voyage ends, solo Organizer"); in a v1 build without Memory Lane, he'd land on the plain "Voyage ended" state instead.
 

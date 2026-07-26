@@ -1,0 +1,434 @@
+---
+stepsCompleted: [1, 2, 3]
+inputDocuments:
+  - _bmad-output/planning-artifacts/prds/prd-trips-2026-07-25/prd.md
+  - _bmad-output/planning-artifacts/architecture/architecture-trips-2026-07-25/ARCHITECTURE-SPINE.md
+  - _bmad-output/planning-artifacts/ux-designs/ux-trips-2026-07-25/DESIGN.md
+  - _bmad-output/planning-artifacts/ux-designs/ux-trips-2026-07-25/EXPERIENCE.md
+---
+
+# Voylo - Epic Breakdown
+
+## Overview
+
+This document provides the complete epic and story breakdown for Voylo, decomposing the requirements from the PRD, UX Design (DESIGN.md + EXPERIENCE.md), and Architecture (ARCHITECTURE-SPINE.md) into implementable stories.
+
+## Requirements Inventory
+
+### Functional Requirements
+
+FR-1: A user can authenticate using their email and a one-time code, with no password (email OTP sign-in).
+FR-2: An authenticated user remains signed in until they explicitly sign out (persistent session; global sign-out revokes all devices per architecture AD-4).
+FR-3: An authenticated user (the first Organizer) can create and start a new Voyage with a single destination.
+FR-4: An Organizer can obtain a shareable Join Code/Link for an active Voyage.
+FR-5: Any user can join an active Voyage using a valid Join Code/Link, no Organizer approval required.
+FR-6: An Organizer can manually end an active Voyage (a checkpoint, not a hard cutoff — in-flight captures finish; never auto-triggered on arrival).
+FR-7: An Organizer can grant Organizer status to another Voyager (a Voyage can have more than one Organizer).
+FR-8: An Organizer can remove a Voyager from an active Voyage.
+FR-9: Any Voyager can view all Voyagers' live locations on one shared, game-like map for the active Voyage.
+FR-10 (v1.1): Any Voyager can manually log a spotting (police, deer, construction, etc.) with a single tap.
+FR-11 (v1.1): The system automatically detects and logs qualifying events (long stops, border crossings) without requiring Voyager action.
+FR-12 (v1.1): Any Voyager can attach a photo to a moment during the Voyage.
+FR-13 (v1.1): The system shows a first-time Voyager a single, dismissible contextual tip the first time a relevant feature becomes newly relevant.
+FR-14 (v1.1): The system generates a Memory Lane highlight experience when a Voyage ends.
+FR-15 (v1.1): All Voyagers on a completed Voyage can view and revisit its Memory Lane.
+FR-16 (v1.1): Any Voyager can share their Voyage's Memory Lane to external platforms (gated by per-Voyager consent for content featuring them).
+
+### NonFunctional Requirements
+
+NFR1 (Performance): Live map location updates must feel real-time without materially degrading device battery life over a multi-hour drive.
+NFR2 (Reliability): Core Voyage lifecycle (start, join, live tracking, end) must degrade gracefully through cellular dead zones — a connectivity drop must not silently lose a Voyager from the map or corrupt Voyage state.
+NFR3 (Security): OTP-based session tokens must be stored and transmitted securely; a compromised session must be revocable (sign-out on all devices).
+NFR4 (Reliability - Auth): OTP delivery must be reliable and timely enough not to break the "frictionless" sign-in promise.
+NFR5 (Quality - Auto-detection): Automatic event detection (FR-11) must be validated for an acceptably low false-positive rate before wide release.
+NFR6 (Performance - Sharing): Share-asset generation (FR-16) must be fast enough not to break the emotional momentum of the moment.
+NFR7 (Accessibility): VoiceOver/TalkBack support on every map marker and HUD element; dynamic type reflow without truncation; Reduce Motion alternatives for marker pulse/animated gradients; tap targets ≥44pt(iOS)/48dp(Android), ≥60pt/dp for the manual Fun Fact control; live/active state never communicated by color alone; notifications audio/haptic-redundant, not visual-only.
+NFR8 (Contrast): `button-ignition` label text must clear WCAG AA 4.5:1 against its gradient background (requires a text scrim per DESIGN.md); `hud-card` must guarantee ≥85% effective scrim opacity against the live map background regardless of device or map brightness.
+
+### Additional Requirements
+
+**Starter Template:** No named starter/boilerplate kit — greenfield Expo (SDK 56, managed workflow) project with Expo Router, initialized fresh (e.g. via `npx create-expo-app`). This is the Epic 1 / Story 1.1 foundation.
+
+Architecture (ARCHITECTURE-SPINE.md) requirements affecting implementation:
+
+- **Paradigm:** BaaS-centric layered architecture — Screens/Features → Shared hooks/services → Repository layer → Supabase SDK. No screen/feature calls the Supabase SDK directly.
+- **AD-1 (RLS data boundary):** All Voyage-related tables use Postgres Row-Level Security keyed on a single shared predicate function `is_active_voyage_member(voyage_id, user_id)` (requires `removed_at IS NULL` and Voyage `status = 'active'`). No application-layer-only authorization.
+- **AD-2 (Realtime):** Supabase Realtime is the sole live-delivery mechanism; exactly one Realtime channel per active Voyage, managed through the repository layer.
+- **AD-3 (Location persistence):** Live position is broadcast ephemerally, never persisted per-ping. Only one latest-known-location row per Voyager (`voyage_member_locations`, upserted), with a conditional upsert guard (`WHERE updated_at < EXCLUDED.updated_at`) to prevent stale overwrites.
+- **AD-4 (Auth session):** One shared auth context/hook wraps Supabase Auth (email OTP). Global sign-out via `supabase.auth.signOut({ scope: 'global' })` satisfies session revocation.
+- **AD-5 (Repository layer):** Every table has exactly one owning repository module (1:1 mapping); no screen/hook calls the Supabase SDK directly.
+- **AD-6 (Environments):** Three environments (dev/staging/prod), each its own Supabase project and EAS build profile. Promotion pipeline: merge to `main` → dev migrations + `development` EAS build (automatic); staging/prod → tagged release or manual dispatch.
+- **AD-7 (Offline resilience):** Client-side write-outbox for Voyage lifecycle writes attempted offline; per-item flush (not FIFO-blocking); precondition snapshot per queued write; typed conflict event on stale precondition. Location pings are explicitly excluded from the outbox (governed by AD-3/AD-8 instead).
+- **AD-8 (Background location):** `expo-location` (background mode) + `expo-task-manager`; Android 14+ requires explicit `location` foreground-service-type declaration; requires an EAS development build (not Expo Go) for testing; Mapbox native SDK pinned to v11.
+- **AD-9 (One active Voyage per user):** Enforced via a denormalized, trigger-maintained `is_active` boolean on `voyage_members` plus a partial unique index `(user_id) WHERE removed_at IS NULL AND is_active = true`.
+- **AD-10 (Deep-linking):** Join Code/Link uses Expo Router universal/app-links (not a bare URI scheme); redirects to App/Play Store if uninstalled, opens directly to Join Invitation if installed.
+- **Entities:** `users` (Supabase auth), `profiles` (user_id, trust_moment_seen_at, driver_consent_seen_at), `push_tokens` (user_id, expo_push_token, updated_at), `voyages` (id, destination, status, created_by, created_at, ended_at), `voyage_members` (id, voyage_id, user_id, role, joined_at, removed_at, is_active), `voyage_member_locations` (voyage_member_id, lat, lng, updated_at).
+- **Stack:** React Native/Expo SDK 56, Expo Router, TypeScript, EAS Build/Submit/Update, Supabase (Postgres/Auth/Realtime/Storage/Edge Functions), Mapbox (`@rnmapbox/maps`, SDK v11), Expo Notifications, `expo-location` + `expo-task-manager`, GitHub Actions, Sentry (React Native SDK).
+- **One-time manual setup (not code-automatable, needed before Epic 1 can ship):** Supabase (×3 projects), Mapbox, GitHub, Sentry account creation; Apple Developer Program + Google Play Developer enrollment; iOS Time-Sensitive notification entitlement request.
+- **Push notifications:** Delivery dispatched through a Supabase Edge Function keyed off `push_tokens`; iOS requests Time-Sensitive interruption level, Android a priority channel able to bypass Focus/DND.
+
+### UX Design Requirements
+
+**Design tokens (DESIGN.md):**
+
+UX-DR1: Implement the full "Night Drive" color system as design tokens — dark-mode-primary palette (midnight/dusk/dusk-high/glass surfaces, ink primary/secondary/disabled, 4 semantic accents: ignition coral, electric teal, gold, violet) plus a full parallel Daylight (light-mode) palette, plus 8 fixed per-Voyager player colors with separate Daylight variants for each.
+UX-DR2: Implement the 3-typeface type system as tokens: Clash Display (`display-hero` 40px, `display` 28px — rationed to Voyage Intro/Join/Memory Lane only), General Sans (`headline` 20px, `body` 16px, `body-sm` 14px, `label` 13px, `caption` 12px), Space Mono (`stat-numeral` 32px, `stat-numeral-sm` 18px, tabular figures only).
+UX-DR3: Implement the spacing scale (4px base unit: 4/8/12/16/24/32/48/64) plus named tokens `margin-mobile` (20px) and `hero-gap` (40px).
+UX-DR4: Implement the rounded-corner scale (`sm` 10px, `md` 18px, `lg` 28px, `xl` 36px, `full` 9999px) — no sharp (0px) corners anywhere in the system.
+UX-DR5: Implement the elevation model — tonal surface steps (no drop shadows on static UI) plus a distinct "glow" treatment reserved for alive/earned elements (active markers, ignition buttons, badges).
+
+**Components (DESIGN.md Components section — build all, each with the noted contrast/touch-target requirement):**
+
+UX-DR6: `button-ignition` — primary CTA, gradient background, **requires a text scrim** (`surface-midnight` at 50% opacity) to meet WCAG AA 4.5:1 contrast; 56px min height.
+UX-DR7: `button-secondary` — outline/transparent button, 48px min height.
+UX-DR8: `button-destructive` — used only for Remove Voyager; dark fill with error-colored text/hairline, not a solid alarm-red block.
+UX-DR9: `hud-card` — glass HUD panel; **requires `scrimOpacityMin: 85%`** to guarantee contrast against the live map background.
+UX-DR10: `map-marker` — 40px visual size with a **48px padded hit-region** (independent of visual size) to meet touch-target minimums; player-color ring, heading chevron, fading comet-trail.
+UX-DR11: `fun-fact-badge` (v1.1) — gold pill stat chip.
+UX-DR12: `join-code-card` — violet-glowing hero card for the Join Code/Link, code set in `stat-numeral`.
+UX-DR13: `nudge-toast` (v1.1) — glass toast, electric-teal accent bar, auto-dismiss.
+UX-DR14: `organizer-sheet` — bottom sheet housing End Voyage / Grant Organizer Status / Remove Voyager, capped at one modal-stacking level (row taps swap the sheet's own content into a confirm step, never a stacked second dialog).
+UX-DR15: `status-pill` (Riding/Driving role switch) — the single most safety-critical control; two visually distinct states, 48×48px minimum, no confirmation dialog on toggle.
+
+**Screens (7 total for v1, per DESIGN.md Screens + EXPERIENCE.md IA table):**
+
+UX-DR16: OTP Sign-In / Verify screens — minimal, fast, no brand decoration.
+UX-DR17: Home (no active Voyage) — single dominant "Start a Voyage" CTA; Past Voyages list is v1.1-only addition to this same screen.
+UX-DR18: Voyage Intro screen — locked canonical copy: headline "Every journey tells a story.", subhead "Voylo rides along live and turns the trip into a memory reel — inside jokes, wrong turns, and all — ready the moment you arrive.", button "Choose Your Destination". No destination shown (none chosen yet).
+UX-DR19: Destination Picker screen — destination text field (free-text, no autocomplete in v1) + "Start the Voyage" confirm button (disabled until non-empty); this confirm is the actual Voyage-creation trigger.
+UX-DR20: Join Invitation screen — locked canonical copy pattern: eyebrow "{ORGANIZER} INVITED YOU", headline "A road trip worth remembering.", subhead "Ride along live to {destination} — then walk away with a memory reel of the whole thing: inside jokes, wrong turns, and all.", button "Join the Voyage". Shown before any auth is requested.
+UX-DR21: Live Map (Voyage View) screen — full-bleed stylized map (simplified terrain, glowing light-trail roads, no standard street cartography), top/bottom `hud-card` HUD docking, Role-switch pill.
+UX-DR22: Voyage Ended screen (v1's actual terminal state, pre-Memory-Lane) — calm summary (duration, Voyager count, destination), single "back to Home" action, deliberately visually subordinate to Voyage Intro/Join so v1.1's Memory Lane reads as an upgrade, not a duplicate.
+
+**Trust, consent, and safety flows (EXPERIENCE.md):**
+
+UX-DR23: Trust Moment screen — fires exactly once per account ever, immediately after first-ever OTP success; states "we never sell your location data" as a real moment (single acknowledgment tap), not a settings-page disclosure.
+UX-DR24: Driver Attention Consent screen — fires once ever, immediately after the Trust Moment, same onboarding pass; single acknowledgment tap stating the driver-attention expectation and liability disclaimer.
+UX-DR25: Driver-Safety Interaction Model — self-declared Riding/Driving role (not sensor-based), set on first Live Map landing, changeable anytime via the status pill with no confirmation dialog; manual Fun Fact/photo controls are entirely **absent** (not disabled) from a Driving-role Voyager's HUD.
+UX-DR26: OS location-permission flow — app-authored priming screen before the native OS permission dialog fires (never a cold OS prompt); denial/revocation shows a full-bleed explainer, marker simply doesn't render for others until resolved.
+UX-DR27: OS notification-permission (time-sensitive) flow — app-authored priming screen before the native OS dialog; requests iOS Time-Sensitive interruption level / Android priority channel; decline degrades delivery only, never blocks functionality.
+UX-DR28: External-sharing consent gate (v1.1) — "Ask the group" flow: each tagged Voyager gets one approve/decline ask per share action; share only proceeds once all tagged Voyagers approve or are excluded from a trimmed re-share.
+UX-DR29: Contribution Richness / FOMO-as-invitation pattern (v1.1) — player-color ring is always full brightness (never dimmed for low contribution); gold Fun Fact badges accumulate visually; exactly one gentle nudge-toast for a zero-contribution Voyager late in the trip, never repeated, never a negative/red marker; no leaderboard or cross-Voyager ranking, ever.
+
+**Interaction & accessibility (EXPERIENCE.md):**
+
+UX-DR30: Interaction primitives — tap is the only primitive required in the core loop; no custom long-press actions; swipe only for toast-dismiss and sheet drag-to-dismiss; pinch/pan are the map's only continuous gestures plus one "recenter" HUD control (no manual refresh anywhere).
+UX-DR31: No-messaging enforcement — no reply/comment affordance, no DM/chat entry point, no unread badge counts, no push-to-talk, no competitive leaderboards, anywhere in the product (a foundation-level IA exclusion, not a missing feature).
+UX-DR32: Accessibility floor — VoiceOver/TalkBack announcements on every marker and HUD element; dynamic type reflow (Clash Display hero text may scale down but never below a legible floor); Reduce Motion alternatives (static ring instead of pulse, no animated gradient wash); live/active state never color-only (pairs with pulse/chevron); notifications audio/haptic-redundant.
+UX-DR33: Offline/connectivity-loss state — last-known positions stay rendered with a subtle "reconnecting" HUD note (not a blocking banner); taps/photos queue locally and sync on reconnect (implements architecture AD-7).
+UX-DR34: One active Voyage / no-tab-bar IA — no persistent tab bar or drawer; navigation is a state machine (Home ↔ Intro/Picker/Join → Live Map → Wrap-up → Voyage Ended/Memory Lane); Live Map is the entire screen for the Voyage's duration, everything else surfaces as a sheet or toast over it.
+
+### FR Coverage Map
+
+FR-1: Epic 1 - Email OTP sign-in
+FR-2: Epic 1 - Persistent session
+FR-3: Epic 2 - Start Voyage
+FR-4: Epic 2 - Generate Join Code/Link
+FR-5: Epic 2 - Join Voyage via Code/Link
+FR-6: Epic 2 - End Voyage
+FR-7: Epic 2 - Grant Organizer Status
+FR-8: Epic 2 - Remove Voyager
+FR-9: Epic 3 - Real-time Voyager map
+FR-10: Epic 4 (v1.1) - Manual Fun Fact logging
+FR-11: Epic 4 (v1.1) - Automatic event detection
+FR-12: Epic 4 (v1.1) - In-app photo logging
+FR-13: Epic 4 (v1.1) - One-time contextual nudges
+FR-14: Epic 5 (v1.1) - Generate Memory Lane
+FR-15: Epic 5 (v1.1) - View Memory Lane together
+FR-16: Epic 5 (v1.1) - Share Memory Lane externally
+
+## Epic List
+
+### Epic 1: Foundation, Sign-In & Trust
+Users can create an account with a frictionless email code, stay signed in, and see Voylo's privacy and driver-safety commitments as real onboarding moments before anything else. Includes the greenfield project setup (Expo/Supabase/EAS scaffolding) as its foundation story.
+**FRs covered:** FR-1, FR-2
+
+### Epic 2: Voyage Creation, Invite & Group Management
+An Organizer can start a Voyage, invite others with a link, have them join instantly, and run the group for the whole trip — promoting co-organizers, removing anyone who shouldn't be there, and ending it cleanly when it's over.
+**FRs covered:** FR-3, FR-4, FR-5, FR-6, FR-7, FR-8
+
+### Epic 3: Live Map & Presence
+Every Voyager sees the whole group moving together in real time on a stylized, game-like map for the duration of the drive — reliably, safely for drivers, and without draining the battery.
+**FRs covered:** FR-9
+
+### Epic 4: Fun Fact Capture (v1.1)
+Voyagers can tap-log spottings, get automatic detection of stops and border crossings, attach photos, and get gently nudged toward these features the first time each becomes relevant.
+**FRs covered:** FR-10, FR-11, FR-12, FR-13
+
+**Idea captured for story detailing (not yet a story):** a new automatic Fun Fact type — "connection drops" — counting how many times a Voyager lost and regained connectivity during the Voyage (e.g. "Went off-grid 4 times"). Cheap to add: Epic 3's Story 3.5 already detects every drop/reconnect to drive the "reconnecting" HUD note; this would extend FR-11 (Automatic Event Detection) to also log that event as a bankable Fun Fact, the same way border crossings are silently banked.
+
+### Epic 5: Memory Lane (v1.1)
+When a Voyage ends, the group gets a generated highlight-reel recap they can watch together, revisit, and share externally with consent.
+**FRs covered:** FR-14, FR-15, FR-16
+
+## Epic 1: Foundation, Sign-In & Trust
+
+Users can create an account with a frictionless email code, stay signed in, and see Voylo's privacy and driver-safety commitments as real onboarding moments before anything else. Includes the greenfield project setup as its foundation story.
+
+### Story 1.1: Project Foundation & Environments
+
+As a developer,
+I want the Voylo app scaffolded on Expo with Supabase, EAS, and CI/CD wired across dev/staging/prod,
+So that every later story has a working, deployable base.
+
+**Acceptance Criteria:**
+
+**Given** a fresh repository
+**When** the project is initialized
+**Then** it is an Expo SDK 56 + TypeScript + Expo Router app matching the `ARCHITECTURE-SPINE.md` source tree (app/, features/, shared/, repositories/, lib/, supabase/)
+**And** three Supabase projects (dev/staging/prod) exist with base migrations applied and RLS enabled
+**And** EAS build profiles (development/preview/production) are configured per AD-6
+**And** GitHub Actions runs the AD-6 promotion pipeline (dev auto-deploys on merge to main; staging/prod on tagged release or manual dispatch)
+**And** Sentry captures a test error in each environment
+
+### Story 1.2: Email OTP Sign-In
+
+As a new or returning user,
+I want to sign in with just my email and a one-time code,
+So that I don't need to remember a password.
+
+**Acceptance Criteria:**
+
+**Given** the OTP Sign-In screen
+**When** I enter my email
+**Then** I receive a numeric one-time code
+**And** entering a valid, unexpired code signs me in
+**And** the code field auto-advances per digit and auto-submits at 6 digits
+**When** I enter an invalid or expired code
+**Then** the field shakes and clears in place with an error and a resend option (30s cooldown)
+
+*(Fulfills FR-1.)*
+
+### Story 1.3: Persistent Session & Sign-Out
+
+As a signed-in user,
+I want to stay signed in until I choose to sign out,
+So that I'm not re-authenticating constantly.
+
+**Acceptance Criteria:**
+
+**Given** I've signed in once
+**When** I relaunch the app
+**Then** I land straight past OTP Entry, no re-auth prompt
+**When** I tap sign out in Settings
+**Then** my session is invalidated on this device, and (per AD-4 global sign-out) on every device
+
+*(Fulfills FR-2, NFR3.)*
+
+### Story 1.4: Trust Moment
+
+As a first-time user,
+I want a clear, real statement that Voylo never sells my location data,
+So that I trust it enough to grant location access later.
+
+**Acceptance Criteria:**
+
+**Given** my first-ever successful OTP sign-in
+**When** the app proceeds
+**Then** the Trust Moment screen fires with the locked copy ("Your location stays in this Voyage." / "We never sell your location data...")
+**And** one "Got it" tap dismisses it, setting `profiles.trust_moment_seen_at`
+**And** it never resurfaces on this account again; full policy stays reachable from Settings
+
+*(Fulfills UX-DR23.)*
+
+### Story 1.5: Driver Attention Consent
+
+As a first-time user,
+I want to explicitly acknowledge that I'm responsible for driving attentively,
+So that Voylo's driver-safety approach is grounded in real consent, not a silent assumption.
+
+**Acceptance Criteria:**
+
+**Given** the Trust Moment was just dismissed (same onboarding pass)
+**When** it closes
+**Then** the Driver Attention Consent screen fires with the locked liability copy
+**And** one "Got it" tap dismisses it, setting `profiles.driver_consent_seen_at`
+**And** it never resurfaces on this account again
+
+*(Fulfills UX-DR24.)*
+
+## Epic 2: Voyage Creation, Invite & Group Management
+
+An Organizer can start a Voyage, invite others with a link, have them join instantly, and run the group for the whole trip — promoting co-organizers, removing anyone who shouldn't be there, and ending it cleanly when it's over.
+
+### Story 2.1: Start a Voyage
+
+As an Organizer,
+I want to start a new Voyage by choosing a destination,
+So that I can begin coordinating a road trip with my group.
+
+**Acceptance Criteria:**
+
+**Given** I'm signed in with no active Voyage
+**When** I open the app
+**Then** I see Home with a single "Start a Voyage" CTA
+**When** I tap it
+**Then** I see the Voyage Intro screen (locked copy), then tap "Choose Your Destination" to reach Destination Picker
+**When** I enter a destination and tap "Start the Voyage"
+**Then** a Voyage is created with me as its first Organizer and Voyager, single destination only, live tracking active
+**And** if I already belong to another active Voyage, starting a new one is blocked (AD-9: one active Voyage per user)
+
+*(Fulfills FR-3; UX-DR17, UX-DR18, UX-DR19.)*
+
+### Story 2.2: Generate & Share Join Code/Link
+
+As an Organizer,
+I want a shareable Join Code/Link for my Voyage,
+So that I can invite others.
+
+**Acceptance Criteria:**
+
+**Given** I just started a Voyage
+**When** Destination Picker confirms
+**Then** a Join-code card appears immediately with a tap-to-copy code and a share action opening the OS share sheet
+**And** the code is a deep link (AD-10: universal/app link) that stays valid for the Voyage's full duration and never rotates
+**And** opening it without the app installed redirects to the App Store/Play Store
+
+*(Fulfills FR-4; UX-DR12, AD-10.)*
+
+### Story 2.3: Join Voyage via Code/Link
+
+As any user,
+I want to join an active Voyage using a Join Code/Link,
+So that I can ride along with the group.
+
+**Acceptance Criteria:**
+
+**Given** I open a valid Join Code/Link
+**When** the app loads
+**Then** I see the Join Invitation screen (locked copy) before any authentication is requested
+**When** I tap "Join the Voyage" and complete OTP sign-in
+**Then** I'm added as a Voyager and land immediately on the live Voyage view
+**And** joining after the Voyage has already started is allowed, not an error — I simply appear normally, with my `joined_at` timestamp recorded
+**And** if I already belong to another active Voyage, joining this one is blocked (AD-9)
+
+*(Fulfills FR-5; UX-DR20.)*
+
+### Story 2.4: End Voyage
+
+As an Organizer,
+I want to manually end an active Voyage,
+So that I can close out the trip when it's done.
+
+**Acceptance Criteria:**
+
+**Given** an active Voyage
+**When** I open the Organizer Action Sheet and confirm End Voyage
+**Then** new recording stops immediately but never auto-triggers on anyone's arrival
+**And** I land on the Voyage Ended screen — a calm summary (duration, Voyager count, destination) with one action back to Home
+
+*(Fulfills FR-6; UX-DR14, UX-DR22.)*
+
+### Story 2.5: Grant Organizer Status
+
+As an Organizer,
+I want to grant Organizer status to another Voyager,
+So that no single person is a point of failure for managing the trip.
+
+**Acceptance Criteria:**
+
+**Given** the Organizer Action Sheet
+**When** I select Grant Organizer Status for a Voyager
+**Then** they immediately gain End Voyage / Remove Voyager / Grant Organizer Status capabilities, with a quiet confirmation toast, no re-navigation
+**And** a Voyage can have more than one Organizer at a time
+
+*(Fulfills FR-7.)*
+
+### Story 2.6: Remove Voyager
+
+As an Organizer,
+I want to remove a Voyager from an active Voyage,
+So that I can fix an accidentally-leaked Join Code/Link.
+
+**Acceptance Criteria:**
+
+**Given** the Organizer Action Sheet
+**When** I confirm Remove Voyager for someone
+**Then** their location and further participation stop immediately
+**And** they see a calm "You've left this Voyage" state, and the old Join Code/Link no longer re-admits them
+
+*(Fulfills FR-8.)*
+
+## Epic 3: Live Map & Presence
+
+Every Voyager sees the whole group moving together in real time on a stylized, game-like map for the duration of the drive — reliably, safely for drivers, and without draining the battery.
+
+**Scoping note:** the OS notification-permission (Time-Sensitive) priming screen from EXPERIENCE.md is deferred to Epic 4 — v1 has nothing to notify about yet (Fun Facts/long-stop detection don't exist until then), so requesting that permission early has no payoff. Location permission is in scope here since it's required for the map itself.
+
+### Story 3.1: OS Location Permission
+
+As a Voyager,
+I want to grant Voylo location access,
+So that the app can show me and my group on a live map.
+
+**Acceptance Criteria:**
+
+**Given** I just started or joined a Voyage
+**When** the app needs location
+**Then** an app-authored priming screen explains why before the native OS dialog appears
+**And** choosing "Always Allow" enables background updates; choosing less shows a full-bleed explainer with a link to Settings, and my marker doesn't render for others until resolved
+
+*(Fulfills UX-DR26.)*
+
+### Story 3.2: Real-Time Voyager Map
+
+As a Voyager,
+I want to see all Voyagers' live locations on one shared, stylized map,
+So that I always know where everyone in the group is.
+
+**Acceptance Criteria:**
+
+**Given** an active Voyage
+**When** I open Live Map
+**Then** I see a stylized world (glowing light-trail roads, simplified terrain — not a standard street map), each Voyager as a marker (player-color ring, heading chevron, comet-trail, 48px tap region)
+**And** positions update near-real-time via one Realtime channel per Voyage; the map is visible only to that Voyage's own Voyagers
+**And** I can pinch/pan and use one "recenter" control — no manual refresh button anywhere
+**And** the marker's live state is never color-only (paired with pulse/chevron), and notifications are audio/haptic-redundant, per the accessibility floor
+
+*(Fulfills FR-9; UX-DR10, UX-DR21, UX-DR30, UX-DR32; AD-2, AD-1.)*
+
+### Story 3.3: Location Persistence & Background Tracking
+
+As a Voyager,
+I want my location to keep updating even when my phone is locked,
+So that my group can see me without me keeping the app open.
+
+**Acceptance Criteria:**
+
+**Given** the app is backgrounded or the phone is locked
+**When** I'm on an active Voyage
+**Then** location upserts keep sending (background mode + task manager; Android 14+ foreground-service-type declared)
+**And** only my single latest-known location is persisted (never per-ping), with a conditional upsert so a stale/delayed update can never overwrite a newer one
+
+*(Fulfills AD-3, AD-8.)*
+
+### Story 3.4: Driver-Safety Role Switch
+
+As a driver,
+I want to mark myself as Driving,
+So that Voylo knows to keep my screen hands-off.
+
+**Acceptance Criteria:**
+
+**Given** I land on Live Map for the first time this Voyage
+**When** the role prompt appears
+**Then** I can pick Riding or Driving (skippable, defaults to Riding)
+**And** I can switch anytime with one tap on my status pill, no confirmation dialog
+**And** in v1 there are no manual controls yet for Driving mode to remove (Fun Fact capture is v1.1) — this story establishes the role mechanism and persisted state that v1.1's controls will respect from day one
+
+*(Fulfills UX-DR15, UX-DR25.)*
+
+### Story 3.5: Connectivity Loss & Reconnection
+
+As a Voyager,
+I want the map to handle a dead zone gracefully,
+So that a temporary signal drop doesn't corrupt the trip or make me look like I vanished.
+
+**Acceptance Criteria:**
+
+**Given** I lose connectivity mid-drive
+**When** the map can't reach the server
+**Then** last-known positions stay rendered with a subtle "reconnecting" note, not a blocking banner
+**And** any queued Voyage-lifecycle write (not location pings) flushes per-item on reconnect; one with a stale precondition (e.g. my membership was revoked while offline) is dropped with a clear conflict message, never silently retried forever
+
+*(Fulfills NFR2; UX-DR33; AD-7.)*
