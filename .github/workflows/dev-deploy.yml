@@ -27,6 +27,11 @@ jobs:
       - name: Typecheck
         run: |
           echo '/// <reference types="expo/types" />' > expo-env.d.ts
+          # `expo customize tsconfig.json` looks like config scaffolding but its real
+          # job here is a side effect: it regenerates the gitignored
+          # .expo/types/router.d.ts (Expo Router's typed-routes declarations), which
+          # tsc needs to check any `href`/`Link` string against. Do not remove this
+          # thinking it's stray — without it, any typed route usage fails to compile.
           npx expo customize tsconfig.json
           npx tsc --noEmit
 

@@ -28,6 +28,8 @@ jobs:
       - name: Typecheck
         run: |
           echo '/// <reference types="expo/types" />' > expo-env.d.ts
+          # See dev-deploy.yml's Typecheck step for why this line is here — it
+          # regenerates .expo/types/router.d.ts as a side effect, not stray scaffolding.
           npx expo customize tsconfig.json
           npx tsc --noEmit
 

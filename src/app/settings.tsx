@@ -1,68 +1,77 @@
-import { useState } from 'react';
+import { Link } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Colors, Spacing, Typography } from '@/constants/design-tokens';
+import { Colors, Typography } from '@/constants/design-tokens';
+import { IgnitionButton } from '@/shared/components/ignition-button';
 import { useAuth } from '@/shared/hooks/use-auth';
+import { screenStyles } from '@/shared/styles/screen';
+
+const GENERIC_ERROR = 'Something went wrong signing you out. Please try again.';
 
 export default function SettingsScreen() {
   const { signOut } = useAuth();
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const isMounted = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
 
   async function handleSignOut() {
     setIsSigningOut(true);
-    await signOut();
-    // On success, the shared auth hook's session becomes null and the root
-    // layout's Stack.Protected guard routes to /sign-in automatically.
-    setIsSigningOut(false);
+    setError(null);
+
+    try {
+      const { error: signOutError } = await signOut();
+      if (!isMounted.current) return;
+
+      if (signOutError) {
+        setError(signOutError.message);
+      }
+      // On success, the shared auth hook's session becomes null and the root
+      // layout's Stack.Protected guard routes to /sign-in automatically.
+    } catch {
+      if (!isMounted.current) return;
+      setError(GENERIC_ERROR);
+    } finally {
+      if (isMounted.current) {
+        setIsSigningOut(false);
+      }
+    }
   }
 
   return (
-    <View style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <Text style={styles.headline}>Settings</Text>
-        <Text
-          testID="sign-out-button"
-          accessibilityRole="button"
-          accessibilityState={{ disabled: isSigningOut }}
-          onPress={isSigningOut ? undefined : handleSignOut}
-          style={[styles.signOutLabel, isSigningOut && styles.disabledLabel]}
-        >
-          Sign out
-        </Text>
+    <View style={screenStyles.container}>
+      <SafeAreaView style={screenStyles.safeArea}>
+        <Text style={screenStyles.headline}>Settings</Text>
+        <IgnitionButton testID="sign-out-button" label="Sign out" disabled={isSigningOut} onPress={handleSignOut} variant="secondary" />
+        <Text style={styles.caption}>Signs you out on every device, not just this one.</Text>
+        {error ? (
+          <Text testID="error-message" style={screenStyles.error}>
+            {error}
+          </Text>
+        ) : null}
+        <Link testID="back-to-home-link" href="/">
+          <Text style={styles.backLabel}>Back to Home</Text>
+        </Link>
       </SafeAreaView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.surfaceMidnight,
+  caption: {
+    color: Colors.inkSecondary,
+    fontSize: 13,
+    textAlign: 'center',
   },
-  safeArea: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing['4'],
-    paddingHorizontal: Spacing.gutter,
-  },
-  headline: {
-    color: Colors.inkPrimary,
-    fontSize: Typography.headline.fontSize,
-    fontWeight: Typography.headline.fontWeight,
-    lineHeight: Typography.headline.lineHeight,
-  },
-  signOutLabel: {
+  backLabel: {
     color: Colors.inkPrimary,
     fontSize: Typography.body.fontSize,
-    borderWidth: 1,
-    borderColor: Colors.borderHairline,
-    borderRadius: Spacing['2'],
-    paddingVertical: Spacing['3'],
-    paddingHorizontal: Spacing['5'],
-  },
-  disabledLabel: {
-    color: Colors.inkSecondary,
   },
 });

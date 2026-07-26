@@ -88,6 +88,25 @@ test('updates session when onAuthStateChange fires', async () => {
   await waitFor(() => expect(getByTestId('probe').props.children).toBe('signed-in'));
 });
 
+test('updates session to signed-out when onAuthStateChange fires SIGNED_OUT with a null session', async () => {
+  mockGetSession.mockResolvedValue({ data: { session: { user: { id: 'user-1' } } } });
+
+  const { getByTestId } = await render(
+    <AuthProvider>
+      <Probe />
+    </AuthProvider>,
+  );
+
+  await waitFor(() => expect(getByTestId('probe').props.children).toBe('signed-in'));
+
+  const onChangeCallback = mockOnAuthStateChange.mock.calls[0][0];
+  await act(async () => {
+    onChangeCallback('SIGNED_OUT', null);
+  });
+
+  await waitFor(() => expect(getByTestId('probe').props.children).toBe('signed-out'));
+});
+
 test('unsubscribes from onAuthStateChange on unmount', async () => {
   mockGetSession.mockResolvedValue({ data: { session: null } });
 

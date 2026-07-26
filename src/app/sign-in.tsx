@@ -1,10 +1,11 @@
-import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Animated, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { ButtonIgnition, Colors, Spacing, Typography } from '@/constants/design-tokens';
+import { Colors, Spacing, Typography } from '@/constants/design-tokens';
+import { IgnitionButton } from '@/shared/components/ignition-button';
 import { useAuth } from '@/shared/hooks/use-auth';
+import { screenStyles } from '@/shared/styles/screen';
 
 const RESEND_COOLDOWN_SECONDS = 30;
 const GENERIC_ERROR = 'Something went wrong. Please try again.';
@@ -109,11 +110,11 @@ export default function SignInScreen() {
   const emailIsValid = isPlausibleEmail(email);
 
   return (
-    <View style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
+    <View style={screenStyles.container}>
+      <SafeAreaView style={screenStyles.safeArea}>
         {step === 'entry' ? (
           <>
-            <Text style={styles.headline}>Enter your email</Text>
+            <Text style={screenStyles.headline}>Enter your email</Text>
             <TextInput
               testID="email-input"
               style={styles.input}
@@ -130,7 +131,7 @@ export default function SignInScreen() {
           </>
         ) : (
           <>
-            <Text style={styles.headline}>Enter the code</Text>
+            <Text style={screenStyles.headline}>Enter the code</Text>
             <Animated.View style={{ transform: [{ translateX: shakeX }] }}>
               <TextInput
                 testID="code-input"
@@ -150,13 +151,11 @@ export default function SignInScreen() {
               onPress={handleResend}
               variant="secondary"
             />
-            <Text testID="back-to-entry" accessibilityRole="button" onPress={backToEntry} style={styles.secondaryButtonLabel}>
-              Wrong email? Go back
-            </Text>
+            <IgnitionButton testID="back-to-entry" label="Wrong email? Go back" disabled={false} onPress={backToEntry} variant="secondary" />
           </>
         )}
         {error ? (
-          <Text testID="error-message" style={styles.error}>
+          <Text testID="error-message" style={screenStyles.error}>
             {error}
           </Text>
         ) : null}
@@ -165,67 +164,7 @@ export default function SignInScreen() {
   );
 }
 
-function IgnitionButton({
-  testID,
-  label,
-  disabled,
-  onPress,
-  variant = 'primary',
-}: {
-  testID: string;
-  label: string;
-  disabled: boolean;
-  onPress: () => void;
-  variant?: 'primary' | 'secondary';
-}) {
-  if (variant === 'secondary') {
-    return (
-      <Text
-        testID={testID}
-        accessibilityRole="button"
-        accessibilityState={{ disabled }}
-        onPress={disabled ? undefined : onPress}
-        style={[styles.secondaryButtonLabel, disabled && styles.disabledLabel]}
-      >
-        {label}
-      </Text>
-    );
-  }
-
-  return (
-    <Pressable testID={testID} accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled} onPress={onPress}>
-      <LinearGradient
-        colors={disabled ? [Colors.inkSecondary, Colors.inkSecondary] : [...ButtonIgnition.gradient]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.button}
-      >
-        <View style={styles.textScrim}>
-          <Text style={styles.buttonLabel}>{label}</Text>
-        </View>
-      </LinearGradient>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.surfaceMidnight,
-  },
-  safeArea: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing['4'],
-    paddingHorizontal: Spacing.gutter,
-  },
-  headline: {
-    color: Colors.inkPrimary,
-    fontSize: Typography.headline.fontSize,
-    fontWeight: Typography.headline.fontWeight,
-    lineHeight: Typography.headline.lineHeight,
-  },
   input: {
     width: '100%',
     color: Colors.inkPrimary,
@@ -236,35 +175,5 @@ const styles = StyleSheet.create({
     borderRadius: Spacing['2'],
     paddingVertical: Spacing['3'],
     paddingHorizontal: Spacing['4'],
-  },
-  button: {
-    width: '100%',
-    minHeight: ButtonIgnition.minHeight,
-    borderRadius: ButtonIgnition.radius,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  textScrim: {
-    backgroundColor: ButtonIgnition.textScrim,
-    borderRadius: Spacing['2'],
-    paddingVertical: Spacing['1'],
-    paddingHorizontal: Spacing['3'],
-  },
-  buttonLabel: {
-    color: ButtonIgnition.foreground,
-    fontSize: Typography.body.fontSize,
-    fontWeight: '600',
-  },
-  secondaryButtonLabel: {
-    color: Colors.inkPrimary,
-    fontSize: Typography.body.fontSize,
-    padding: Spacing['3'],
-  },
-  disabledLabel: {
-    color: Colors.inkSecondary,
-  },
-  error: {
-    color: Colors.error,
-    fontSize: Typography.body.fontSize,
   },
 });
