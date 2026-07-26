@@ -39,6 +39,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "c17e355c-3a95-453e-940a-9fb2145c8f44"
+      }
+    },
+    "owner": "pointmax"
   }
 }
