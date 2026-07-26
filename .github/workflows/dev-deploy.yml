@@ -25,7 +25,9 @@ jobs:
         run: npm ci
 
       - name: Typecheck
-        run: npx tsc --noEmit
+        run: |
+          echo '/// <reference types="expo/types" />' > expo-env.d.ts
+          npx tsc --noEmit
 
       - uses: supabase/setup-cli@v1
         with:
