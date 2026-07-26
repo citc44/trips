@@ -1,15 +1,16 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useRef, useState } from 'react';
-import { Animated, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Animated, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ButtonIgnition, Colors, Spacing, Typography } from '@/constants/design-tokens';
 import { useAuth } from '@/shared/hooks/use-auth';
 
 const RESEND_COOLDOWN_SECONDS = 30;
+const GENERIC_ERROR = 'Something went wrong. Please try again.';
 
 function isPlausibleEmail(value: string) {
-  return /\S+@\S+\.\S+/.test(value);
+  return /^\S+@\S+\.\S+$/.test(value.trim());
 }
 
 export default function SignInScreen() {
@@ -45,16 +46,26 @@ export default function SignInScreen() {
   async function sendCode() {
     setIsSubmitting(true);
     setError(null);
-    const { error: sendError } = await signInWithEmail(email);
-    setIsSubmitting(false);
 
-    if (sendError) {
-      setError(sendError.message);
-      return;
+    try {
+      const { error: sendError } = await signInWithEmail(email.trim());
+      setIsSubmitting(false);
+
+      if (sendError) {
+        setError(sendError.message);
+        // Still cooldown on failure (e.g. hitting Supabase's own rate limit) so
+        // the resend button doesn't let the user immediately retry into it.
+        setCooldown(RESEND_COOLDOWN_SECONDS);
+        return;
+      }
+
+      setStep('verify');
+      setCooldown(RESEND_COOLDOWN_SECONDS);
+    } catch {
+      setIsSubmitting(false);
+      setError(GENERIC_ERROR);
+      setCooldown(RESEND_COOLDOWN_SECONDS);
     }
-
-    setStep('verify');
-    setCooldown(RESEND_COOLDOWN_SECONDS);
   }
 
   async function handleCodeChange(text: string) {
@@ -65,21 +76,34 @@ export default function SignInScreen() {
     if (digitsOnly.length !== 6) return;
 
     setIsSubmitting(true);
-    const { error: verifyError } = await verifyCode(email, digitsOnly);
-    setIsSubmitting(false);
+    try {
+      const { error: verifyError } = await verifyCode(email.trim(), digitsOnly);
+      setIsSubmitting(false);
 
-    if (verifyError) {
-      setError('Incorrect code. Try again.');
+      if (verifyError) {
+        setError('Incorrect code. Try again.');
+        setCode('');
+        triggerShake();
+      }
+      // On success, the shared auth hook picks up the new session via
+      // onAuthStateChange and the root layout's guard routes away from here.
+    } catch {
+      setIsSubmitting(false);
+      setError(GENERIC_ERROR);
       setCode('');
       triggerShake();
     }
-    // On success, the shared auth hook picks up the new session via
-    // onAuthStateChange and the root layout's guard routes away from here.
   }
 
   function handleResend() {
     if (cooldown > 0 || isSubmitting) return;
     sendCode();
+  }
+
+  function backToEntry() {
+    setStep('entry');
+    setCode('');
+    setError(null);
   }
 
   const emailIsValid = isPlausibleEmail(email);
@@ -126,6 +150,9 @@ export default function SignInScreen() {
               onPress={handleResend}
               variant="secondary"
             />
+            <Text testID="back-to-entry" accessibilityRole="button" onPress={backToEntry} style={styles.secondaryButtonLabel}>
+              Wrong email? Go back
+            </Text>
           </>
         )}
         {error ? (
@@ -166,18 +193,18 @@ function IgnitionButton({
   }
 
   return (
-    <LinearGradient
-      testID={testID}
-      colors={disabled ? [Colors.inkSecondary, Colors.inkSecondary] : [...ButtonIgnition.gradient]}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={styles.button}
-      accessibilityRole="button"
-      accessibilityState={{ disabled }}
-      onTouchEnd={disabled ? undefined : onPress}
-    >
-      <Text style={styles.buttonLabel}>{label}</Text>
-    </LinearGradient>
+    <Pressable testID={testID} accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled} onPress={onPress}>
+      <LinearGradient
+        colors={disabled ? [Colors.inkSecondary, Colors.inkSecondary] : [...ButtonIgnition.gradient]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.button}
+      >
+        <View style={styles.textScrim}>
+          <Text style={styles.buttonLabel}>{label}</Text>
+        </View>
+      </LinearGradient>
+    </Pressable>
   );
 }
 
@@ -216,6 +243,12 @@ const styles = StyleSheet.create({
     borderRadius: ButtonIgnition.radius,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  textScrim: {
+    backgroundColor: ButtonIgnition.textScrim,
+    borderRadius: Spacing['2'],
+    paddingVertical: Spacing['1'],
+    paddingHorizontal: Spacing['3'],
   },
   buttonLabel: {
     color: ButtonIgnition.foreground,

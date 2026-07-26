@@ -17,10 +17,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setIsLoading(false);
-    });
+    let isMounted = true;
+
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        if (!isMounted) return;
+        setSession(data.session);
+        setIsLoading(false);
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        // Fail open to signed-out rather than leaving isLoading stuck true forever.
+        setSession(null);
+        setIsLoading(false);
+      });
 
     const {
       data: { subscription },
@@ -28,7 +39,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(newSession);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signInWithEmail = async (email: string) => {

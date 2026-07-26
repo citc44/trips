@@ -43,6 +43,18 @@ test('resolves to signed-out when there is no session', async () => {
   await waitFor(() => expect(getByTestId('probe').props.children).toBe('signed-out'));
 });
 
+test('resolves to signed-out (not stuck loading) when getSession rejects', async () => {
+  mockGetSession.mockRejectedValue(new Error('network error'));
+
+  const { getByTestId } = await render(
+    <AuthProvider>
+      <Probe />
+    </AuthProvider>,
+  );
+
+  await waitFor(() => expect(getByTestId('probe').props.children).toBe('signed-out'));
+});
+
 test('resolves to signed-in when getSession returns an existing session', async () => {
   mockGetSession.mockResolvedValue({ data: { session: { user: { id: 'user-1' } } } });
 

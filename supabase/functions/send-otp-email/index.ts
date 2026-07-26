@@ -4,6 +4,13 @@ import { Resend } from 'npm:resend@^6';
 const hookSecret = (Deno.env.get('SEND_EMAIL_HOOK_SECRET') ?? '').replace('v1,whsec_', '');
 const resend = new Resend(Deno.env.get('RESEND_API_KEY'));
 
+// This project never triggers password recovery, admin invites, or email-change
+// flows — only OTP sign-in (signup on first request, magiclink/email thereafter).
+// Enabling this hook routes ALL Supabase auth emails through it, so an
+// unsupported action_type is rejected rather than silently sent with a
+// missing/blank code.
+const SUPPORTED_ACTION_TYPES = new Set(['signup', 'magiclink', 'email']);
+
 type SendEmailPayload = {
   user: { email: string };
   email_data: {
@@ -24,8 +31,11 @@ function renderOtpEmail(code: string): string {
   `;
 }
 
-function errorResponse(httpCode: number, message: string): Response {
-  return new Response(JSON.stringify({ error: { http_code: httpCode, message } }), {
+function errorResponse(httpCode: number, publicMessage: string, internalDetail?: unknown): Response {
+  if (internalDetail !== undefined) {
+    console.error(publicMessage, internalDetail);
+  }
+  return new Response(JSON.stringify({ error: { http_code: httpCode, message: publicMessage } }), {
     status: httpCode,
     headers: { 'Content-Type': 'application/json' },
   });
@@ -48,7 +58,11 @@ Deno.serve(async (req) => {
     user = verified.user;
     emailData = verified.email_data;
   } catch (error) {
-    return errorResponse(401, `Webhook signature verification failed: ${(error as Error).message}`);
+    return errorResponse(401, 'Webhook signature verification failed', error);
+  }
+
+  if (!SUPPORTED_ACTION_TYPES.has(emailData.email_action_type)) {
+    return errorResponse(400, `Unsupported email_action_type: ${emailData.email_action_type}`);
   }
 
   try {
@@ -60,10 +74,10 @@ Deno.serve(async (req) => {
     });
 
     if (error) {
-      return errorResponse(500, error.message);
+      return errorResponse(500, 'Failed to send email', error);
     }
   } catch (error) {
-    return errorResponse(500, `Failed to send email: ${(error as Error).message}`);
+    return errorResponse(500, 'Failed to send email', error);
   }
 
   return new Response(JSON.stringify({}), {

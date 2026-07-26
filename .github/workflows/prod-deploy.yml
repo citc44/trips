@@ -30,6 +30,17 @@ jobs:
           echo '/// <reference types="expo/types" />' > expo-env.d.ts
           npx tsc --noEmit
 
+      - name: Test
+        run: npm test
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Check Edge Functions (Deno)
+        working-directory: supabase/functions/send-otp-email
+        run: deno check --no-config index.ts
+
       - uses: supabase/setup-cli@v1
         with:
           version: latest

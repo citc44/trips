@@ -44,10 +44,16 @@ export const Rounded = {
   full: 9999,
 } as const;
 
-/** button-ignition component spec (DESIGN.md#components) */
+/**
+ * button-ignition component spec (DESIGN.md#components).
+ * textScrim is a hard requirement, not decorative: ink-primary alone fails
+ * WCAG AA (≈2.86:1–3.29:1) against the gradient; a surface-midnight-at-50%
+ * backing behind the label restores contrast to ≈7.7:1+.
+ */
 export const ButtonIgnition = {
   gradient: [Colors.accentIgnition, Colors.accentViolet] as const,
   foreground: Colors.inkPrimary,
+  textScrim: `${Colors.surfaceMidnight}80`,
   minHeight: 56,
   radius: Rounded.full,
 };
