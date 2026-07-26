@@ -254,6 +254,13 @@ otp_expiry = 3600
 # subject = "Your password has been changed"
 # content_path = "./templates/password_changed_notification.html"
 
+# AD-11: OTP emails are sent via a Supabase Edge Function calling Resend,
+# not Supabase's built-in emailer. See supabase/functions/send-otp-email.
+[auth.hook.send_email]
+enabled = true
+uri = "https://dhdxaeczbgkdgoxxpxud.supabase.co/functions/v1/send-otp-email"
+secrets = "env(SEND_EMAIL_HOOK_SECRET)"
+
 [auth.sms]
 # Allow/disallow new user signups via SMS to your project.
 enable_signup = false
