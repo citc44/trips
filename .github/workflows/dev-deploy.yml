@@ -37,4 +37,7 @@ jobs:
           token: ${{ secrets.EXPO_TOKEN }}
 
       - name: Trigger development EAS build
-        run: eas build --platform all --profile development --non-interactive --no-wait
+        # Android only for now: iOS internal/ad-hoc distribution requires a one-time
+        # interactive credential setup (Apple's own constraint, not scriptable even
+        # with an App Store Connect API key) — see Story 1.1 Dev Notes.
+        run: eas build --platform android --profile development --non-interactive --no-wait

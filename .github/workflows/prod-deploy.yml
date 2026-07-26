@@ -38,4 +38,5 @@ jobs:
           token: ${{ secrets.EXPO_TOKEN }}
 
       - name: Trigger production EAS build
-        run: eas build --platform all --profile production --non-interactive --no-wait
+        # Android only for now — see dev-deploy.yml comment / Story 1.1 Dev Notes.
+        run: eas build --platform android --profile production --non-interactive --no-wait
