@@ -12,7 +12,7 @@ SplashScreen.preventAutoHideAsync();
 
 function AppNavigator() {
   const { session, isLoading: isAuthLoading } = useAuth();
-  const { profile, isLoading: isProfileLoading } = useProfile();
+  const { profile, isLoading: isProfileLoading, hasError: profileHasError } = useProfile();
 
   // Profile data only starts loading once a session exists (see use-profile.tsx),
   // so only wait on it while signed in -- an unauthenticated user would otherwise
@@ -29,7 +29,10 @@ function AppNavigator() {
     return null;
   }
 
-  const hasSeenTrustMoment = !!profile?.trustMomentSeenAt;
+  // Fail open on a profile-fetch error: treat "unknown" as "already seen" rather
+  // than "never seen," so a transient network failure doesn't re-show Trust Moment
+  // to an already-onboarded user (see use-profile.tsx).
+  const hasSeenTrustMoment = !!profile?.trustMomentSeenAt || profileHasError;
 
   return (
     <Stack screenOptions={{ headerShown: false }}>

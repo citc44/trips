@@ -6,18 +6,16 @@ const mockMaybeSingle = jest.fn<(...args: any[]) => Promise<any>>();
 const mockEq = jest.fn(() => ({ maybeSingle: mockMaybeSingle }));
 const mockSelectForGet = jest.fn(() => ({ eq: mockEq }));
 
-const mockSingle = jest.fn<(...args: any[]) => Promise<any>>();
-const mockSelectForUpsert = jest.fn(() => ({ single: mockSingle }));
-const mockUpsert = jest.fn(() => ({ select: mockSelectForUpsert }));
-
 const mockFrom = jest.fn((..._args: unknown[]) => ({
   select: mockSelectForGet,
-  upsert: mockUpsert,
 }));
+
+const mockRpc = jest.fn<(...args: any[]) => Promise<any>>();
 
 jest.mock('@/lib/supabase', () => ({
   supabase: {
     from: (...args: unknown[]) => mockFrom(...args),
+    rpc: (...args: unknown[]) => mockRpc(...args),
   },
 }));
 
@@ -65,27 +63,24 @@ test('getProfile returns a typed { code, message } error, never the raw Supabase
   expect(result).toEqual({ data: null, error: { code: '42501', message: 'permission denied' } });
 });
 
-test('markTrustMomentSeen upserts trust_moment_seen_at only, keyed on user_id', async () => {
-  mockSingle.mockResolvedValue({
+test('markTrustMomentSeen calls the server-stamping RPC with no client-supplied timestamp or user id', async () => {
+  mockRpc.mockResolvedValue({
     data: { user_id: 'user-1', trust_moment_seen_at: '2026-07-26T00:00:00Z', driver_consent_seen_at: null },
     error: null,
   });
 
-  await profileRepository.markTrustMomentSeen('user-1');
+  await profileRepository.markTrustMomentSeen();
 
-  expect(mockUpsert).toHaveBeenCalledWith(
-    { user_id: 'user-1', trust_moment_seen_at: expect.any(String) },
-    { onConflict: 'user_id' },
-  );
+  expect(mockRpc).toHaveBeenCalledWith('mark_trust_moment_seen');
 });
 
 test('markTrustMomentSeen returns the mapped, updated profile', async () => {
-  mockSingle.mockResolvedValue({
+  mockRpc.mockResolvedValue({
     data: { user_id: 'user-1', trust_moment_seen_at: '2026-07-26T00:00:00Z', driver_consent_seen_at: null },
     error: null,
   });
 
-  const result = await profileRepository.markTrustMomentSeen('user-1');
+  const result = await profileRepository.markTrustMomentSeen();
 
   expect(result).toEqual({
     data: { userId: 'user-1', trustMomentSeenAt: '2026-07-26T00:00:00Z', driverConsentSeenAt: null },
@@ -94,9 +89,9 @@ test('markTrustMomentSeen returns the mapped, updated profile', async () => {
 });
 
 test('markTrustMomentSeen returns a typed { code, message } error on failure', async () => {
-  mockSingle.mockResolvedValue({ data: null, error: { code: '23505', message: 'conflict' } });
+  mockRpc.mockResolvedValue({ data: null, error: { code: '23505', message: 'conflict' } });
 
-  const result = await profileRepository.markTrustMomentSeen('user-1');
+  const result = await profileRepository.markTrustMomentSeen();
 
   expect(result).toEqual({ data: null, error: { code: '23505', message: 'conflict' } });
 });

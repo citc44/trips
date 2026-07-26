@@ -52,7 +52,7 @@ development_status:
   1-1-project-foundation-environments: done
   1-2-email-otp-sign-in: done
   1-3-persistent-session-sign-out: done
-  1-4-trust-moment: review
+  1-4-trust-moment: done
   1-5-driver-attention-consent: backlog
   epic-1-retrospective: optional
 

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -13,6 +13,13 @@ export default function TrustMomentScreen() {
   const { markTrustMomentSeen } = useProfile();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const isMounted = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
 
   async function handleGotIt() {
     setIsSubmitting(true);
@@ -20,16 +27,17 @@ export default function TrustMomentScreen() {
 
     try {
       const { error: markError } = await markTrustMomentSeen();
+      if (!isMounted.current) return;
       if (markError) {
-        setIsSubmitting(false);
         setError(markError.message);
-        return;
       }
       // On success, _layout.tsx's guard reacts to the updated profile state
       // and routes to Home on its own -- no manual navigation here.
     } catch {
-      setIsSubmitting(false);
+      if (!isMounted.current) return;
       setError(GENERIC_ERROR);
+    } finally {
+      if (isMounted.current) setIsSubmitting(false);
     }
   }
 
@@ -54,6 +62,7 @@ export default function TrustMomentScreen() {
 const styles = StyleSheet.create({
   headline: {
     color: Colors.inkPrimary,
+    fontFamily: Typography.display.fontFamily,
     fontSize: Typography.display.fontSize,
     fontWeight: Typography.display.fontWeight,
     lineHeight: Typography.display.lineHeight,

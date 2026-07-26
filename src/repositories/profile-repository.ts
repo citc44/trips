@@ -38,12 +38,11 @@ async function getProfile(userId: string): Promise<ProfileResult> {
   return { data: data ? toProfile(data as ProfileRow) : null, error: null };
 }
 
-async function markTrustMomentSeen(userId: string): Promise<ProfileResult> {
-  const { data, error } = await supabase
-    .from('profiles')
-    .upsert({ user_id: userId, trust_moment_seen_at: new Date().toISOString() }, { onConflict: 'user_id' })
-    .select()
-    .single();
+async function markTrustMomentSeen(): Promise<ProfileResult> {
+  // Server-stamped (AC2): the mark_trust_moment_seen() RPC sets trust_moment_seen_at
+  // via Postgres's own now() and derives the row from auth.uid(), not a client-
+  // supplied timestamp or user_id. See its migration for the full rationale.
+  const { data, error } = await supabase.rpc('mark_trust_moment_seen');
 
   if (error) {
     return { data: null, error: toRepositoryError(error) };
