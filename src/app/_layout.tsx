@@ -2,10 +2,14 @@ import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useColorScheme } from 'react-native';
 
+import { initSentry, Sentry } from '@/lib/sentry';
+
 SplashScreen.preventAutoHideAsync();
 SplashScreen.hideAsync();
 
-export default function RootLayout() {
+initSentry();
+
+function RootLayout() {
   const colorScheme = useColorScheme();
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
@@ -13,3 +17,5 @@ export default function RootLayout() {
     </ThemeProvider>
   );
 }
+
+export default Sentry.wrap(RootLayout);
