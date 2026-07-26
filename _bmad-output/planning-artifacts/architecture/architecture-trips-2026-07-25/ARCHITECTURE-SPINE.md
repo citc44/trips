@@ -102,6 +102,14 @@ graph LR
 - **Prevents:** two different link-handling implementations between invite-generation code (creating the Join Code/Link) and invite-consumption code (the screen that opens it).
 - **Rule:** the Join Code/Link (PRD FR-4/FR-5) uses Expo Router's universal/app-link support — associated domains on iOS, App Links on Android — rather than a bare custom URI scheme, since v1 has no web companion to fall back to. If the app isn't installed, the link redirects to the App Store/Play Store; if it is installed, the link opens directly into the Join Invitation screen.
 
+### AD-11 — Custom OTP email delivery via Resend `[ADOPTED, added during implementation]`
+
+- **Binds:** Story 1.2 (Email OTP Sign-In, FR-1).
+- **Prevents:** shipping Supabase's default built-in auth emails — generic template, no Voylo branding, low daily-send limits on the built-in mailer.
+- **Rule:** Supabase Auth's **Send Email** HTTP Hook is wired to a Supabase Edge Function (`supabase/functions/send-otp-email`) instead of Supabase's built-in emailer. Auth calls the hook with the OTP payload (recipient, the numeric code, email action type); the function verifies the hook's signing secret, renders a branded HTML template (Night Drive identity, per `DESIGN.md`) with the code, and sends it via Resend's API. No screen or repository sends email directly — this hook is the single OTP-email send path.
+- **Sending domain:** Resend's shared test domain (`onboarding@resend.dev`) until a real Voylo domain is verified for production — swapping domains later is a Resend/config change (from-address + domain verification), not a code change.
+- **Secrets:** `RESEND_API_KEY` and the hook's signing secret are Supabase Edge Function secrets (`supabase secrets set`), set per environment (dev/prod) — never client-exposed, never `EXPO_PUBLIC_`-prefixed.
+
 ## Consistency Conventions
 
 | Concern | Convention |
@@ -124,6 +132,7 @@ graph LR
 | `expo-location` + `expo-task-manager` (background location, AD-8) | current, compatible with Expo SDK 56 |
 | GitHub Actions | n/a (hosted CI) |
 | Sentry (React Native SDK) | current, free tier |
+| Resend (`resend` npm package, used server-side in a Supabase Edge Function only) | current, free tier — AD-11 |
 
 ## Structural Seed
 
