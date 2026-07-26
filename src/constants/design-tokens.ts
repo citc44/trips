@@ -16,6 +16,12 @@ export const Colors = {
 } as const;
 
 export const Typography = {
+  display: {
+    fontFamily: 'Clash Display',
+    fontSize: 28,
+    fontWeight: '600',
+    lineHeight: 31,
+  },
   headline: {
     fontFamily: 'General Sans',
     fontSize: 20,

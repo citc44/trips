@@ -5,12 +5,19 @@ import { useColorScheme } from 'react-native';
 
 import { initSentry, Sentry } from '@/lib/sentry';
 import { AuthProvider, useAuth } from '@/shared/hooks/use-auth';
+import { ProfileProvider, useProfile } from '@/shared/hooks/use-profile';
 
 initSentry();
 SplashScreen.preventAutoHideAsync();
 
 function AppNavigator() {
-  const { session, isLoading } = useAuth();
+  const { session, isLoading: isAuthLoading } = useAuth();
+  const { profile, isLoading: isProfileLoading } = useProfile();
+
+  // Profile data only starts loading once a session exists (see use-profile.tsx),
+  // so only wait on it while signed in -- an unauthenticated user would otherwise
+  // be stuck on the splash screen forever.
+  const isLoading = isAuthLoading || (!!session && isProfileLoading);
 
   useEffect(() => {
     if (!isLoading) {
@@ -22,11 +29,16 @@ function AppNavigator() {
     return null;
   }
 
+  const hasSeenTrustMoment = !!profile?.trustMomentSeenAt;
+
   return (
     <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Protected guard={!!session}>
+      <Stack.Protected guard={!!session && hasSeenTrustMoment}>
         <Stack.Screen name="index" />
         <Stack.Screen name="settings" />
+      </Stack.Protected>
+      <Stack.Protected guard={!!session && !hasSeenTrustMoment}>
+        <Stack.Screen name="trust-moment" />
       </Stack.Protected>
       <Stack.Protected guard={!session}>
         <Stack.Screen name="sign-in" />
@@ -40,7 +52,9 @@ function RootLayout() {
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <AuthProvider>
-        <AppNavigator />
+        <ProfileProvider>
+          <AppNavigator />
+        </ProfileProvider>
       </AuthProvider>
     </ThemeProvider>
   );
