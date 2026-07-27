@@ -23,6 +23,7 @@ test('startVoyage calls the start_voyage RPC with the destination', async () => 
       created_by: 'user-1',
       created_at: '2026-07-26T00:00:00Z',
       ended_at: null,
+      join_code: 'ABCD2345',
     },
     error: null,
   });
@@ -41,6 +42,7 @@ test('startVoyage returns the mapped, created Voyage', async () => {
       created_by: 'user-1',
       created_at: '2026-07-26T00:00:00Z',
       ended_at: null,
+      join_code: 'ABCD2345',
     },
     error: null,
   });
@@ -55,9 +57,29 @@ test('startVoyage returns the mapped, created Voyage', async () => {
       createdBy: 'user-1',
       createdAt: '2026-07-26T00:00:00Z',
       endedAt: null,
+      joinCode: 'ABCD2345',
     },
     error: null,
   });
+});
+
+test('startVoyage maps a null join_code to null (pre-existing rows created before this column existed)', async () => {
+  mockRpc.mockResolvedValue({
+    data: {
+      id: 'voyage-1',
+      destination: 'Lake Tahoe',
+      status: 'active',
+      created_by: 'user-1',
+      created_at: '2026-07-26T00:00:00Z',
+      ended_at: null,
+      join_code: null,
+    },
+    error: null,
+  });
+
+  const result = await voyageRepository.startVoyage('Lake Tahoe');
+
+  expect(result.data?.joinCode).toBeNull();
 });
 
 test('startVoyage returns a typed { code, message } error on generic failure', async () => {

@@ -36,7 +36,10 @@ export default function DestinationPickerScreen() {
         setError(startError?.message ?? GENERIC_ERROR);
         return;
       }
-      router.push('/');
+      // Interim landing (see Story 2.2's Dev Notes): the Join-code card is its
+      // own full screen for now, not an overlay on Live Map -- Epic 3 will
+      // change this destination again once Live Map exists.
+      router.push({ pathname: '/join-code', params: { destination: data.destination, joinCode: data.joinCode } });
     } catch {
       if (!isMounted.current) return;
       setError(GENERIC_ERROR);

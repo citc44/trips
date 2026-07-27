@@ -8,6 +8,7 @@ export type Voyage = {
   createdBy: string;
   createdAt: string;
   endedAt: string | null;
+  joinCode: string | null;
 };
 
 type VoyageRow = {
@@ -17,6 +18,7 @@ type VoyageRow = {
   created_by: string;
   created_at: string;
   ended_at: string | null;
+  join_code: string | null;
 };
 
 type VoyageResult = { data: Voyage | null; error: RepositoryError | null };
@@ -29,6 +31,7 @@ function toVoyage(row: VoyageRow): Voyage {
     createdBy: row.created_by,
     createdAt: row.created_at,
     endedAt: row.ended_at,
+    joinCode: row.join_code,
   };
 }
 

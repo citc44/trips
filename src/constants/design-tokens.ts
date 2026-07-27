@@ -43,6 +43,14 @@ export const Typography = {
     fontWeight: '400',
     lineHeight: 24,
   },
+  // -0.01em @ 32px = -0.32 (React Native's letterSpacing is absolute points, not em).
+  statNumeral: {
+    fontFamily: 'Space Mono',
+    fontSize: 32,
+    fontWeight: '700',
+    lineHeight: 32,
+    letterSpacing: -0.32,
+  },
 } as const;
 
 export const Spacing = {
@@ -60,6 +68,7 @@ export const Spacing = {
 
 export const Rounded = {
   sm: 10,
+  xl: 36,
   full: 9999,
 } as const;
 
@@ -75,4 +84,20 @@ export const ButtonIgnition = {
   textScrim: `${Colors.surfaceMidnight}80`,
   minHeight: 56,
   radius: Rounded.full,
+};
+
+/**
+ * join-code-card component spec (DESIGN.md#components): "a violet-glowing hero
+ * card... not a plain text string in a toast." No React Native shadow token
+ * existed anywhere in this codebase to copy (IgnitionButton's own `glow` isn't
+ * actually implemented, only described in prose) -- shadowColor/shadowOpacity/
+ * shadowRadius (iOS) + elevation (Android) is a reasonable native approximation
+ * of the web mockup's `0 0 40px accent-violet at 40%` box-shadow glow.
+ */
+export const JoinCodeCard = {
+  gradient: [Colors.surfaceDuskHigh, Colors.surfaceMidnight] as const,
+  radius: Rounded.xl,
+  glowColor: Colors.accentViolet,
+  glowOpacity: 0.4,
+  glowRadius: 40,
 };

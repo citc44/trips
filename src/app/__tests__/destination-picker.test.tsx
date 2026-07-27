@@ -71,8 +71,11 @@ test('tapping "Start the Voyage" calls voyageRepository.startVoyage with the tri
   expect(mockStartVoyage).toHaveBeenCalledWith('Lake Tahoe');
 });
 
-test('navigates to Home on successful creation', async () => {
-  mockStartVoyage.mockResolvedValue({ data: { id: 'voyage-1' }, error: null });
+test('navigates to the Join-code screen with the created Voyage\'s destination and code on success', async () => {
+  mockStartVoyage.mockResolvedValue({
+    data: { id: 'voyage-1', destination: 'Lake Tahoe', joinCode: 'ABCD2345' },
+    error: null,
+  });
 
   const { getByTestId } = await render(<DestinationPickerScreen />);
 
@@ -83,7 +86,10 @@ test('navigates to Home on successful creation', async () => {
     fireEvent.press(getByTestId('start-the-voyage-button'));
   });
 
-  expect(mockPush).toHaveBeenCalledWith('/');
+  expect(mockPush).toHaveBeenCalledWith({
+    pathname: '/join-code',
+    params: { destination: 'Lake Tahoe', joinCode: 'ABCD2345' },
+  });
 });
 
 test('shows the AD-9 rejection message inline and re-enables the button', async () => {
