@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors, Typography } from '@/constants/design-tokens';
 import { voyageRepository } from '@/repositories/voyage-repository';
 import { IgnitionButton } from '@/shared/components/ignition-button';
+import { useActiveVoyage } from '@/shared/hooks/use-active-voyage';
 import { usePendingJoin } from '@/shared/hooks/use-pending-join';
 import { screenStyles } from '@/shared/styles/screen';
 
@@ -20,6 +21,7 @@ const GENERIC_ERROR = 'Something went wrong. Please try again.';
 // called, regardless of which path got the user here.
 export default function VoyageJoinedScreen() {
   const { pendingJoinCode, clearPendingJoinCode } = usePendingJoin();
+  const { refetch: refetchActiveVoyage } = useActiveVoyage();
   const [destination, setDestination] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -49,17 +51,23 @@ export default function VoyageJoinedScreen() {
         if (!isMounted.current) return;
         if (joinError || !data) {
           setError(joinError?.message ?? GENERIC_ERROR);
-        } else {
-          setDestination(data.destination);
+          setIsLoading(false);
+          return;
         }
+        setDestination(data.destination);
         setIsLoading(false);
+        // Without this, ActiveVoyageProvider only re-fetches on a userId
+        // change -- tapping Continue below would clear pendingJoinCode and
+        // route back to plain Home instead of active-voyage.tsx, since
+        // activeVoyage would still be stale/null (code review finding).
+        refetchActiveVoyage();
       })
       .catch(() => {
         if (!isMounted.current) return;
         setError(GENERIC_ERROR);
         setIsLoading(false);
       });
-  }, [pendingJoinCode]);
+  }, [pendingJoinCode, refetchActiveVoyage]);
 
   if (!pendingJoinCode) {
     return <Redirect href="/" />;

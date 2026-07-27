@@ -39,8 +39,13 @@ function Probe() {
 }
 
 function RefetchProbe() {
-  const { refetch } = useActiveVoyage();
-  return <Text testID="refetch" onPress={() => refetch()} />;
+  const { refetch, hasError } = useActiveVoyage();
+  return (
+    <>
+      <Text testID="refetch" onPress={() => refetch()} />
+      <Text testID="refetch-error">{hasError ? 'error' : 'no-error'}</Text>
+    </>
+  );
 }
 
 beforeEach(() => {
@@ -173,4 +178,33 @@ test('refetch re-pulls and updates the exposed active Voyage', async () => {
   });
 
   await waitFor(() => expect(getByTestId('probe').props.children).toBe('none'));
+});
+
+test('refetch does not throw (resolves to hasError) when the repository call rejects -- a caller that fires refetch without awaiting/catching must not see an unhandled rejection', async () => {
+  mockUseAuth.mockReturnValue({ session: { user: { id: 'user-1' } } });
+  mockGetMyActiveVoyage.mockResolvedValueOnce({ data: activeVoyageFixture, error: null });
+
+  const { getByTestId } = await render(
+    <ActiveVoyageProvider>
+      <RefetchProbe />
+      <Probe />
+    </ActiveVoyageProvider>,
+  );
+
+  await waitFor(() => expect(getByTestId('probe').props.children).toBe('active:organizer'));
+
+  mockGetMyActiveVoyage.mockRejectedValueOnce(new Error('network error'));
+
+  await expect(
+    act(async () => {
+      await getByTestId('refetch').props.onPress();
+    }),
+  ).resolves.not.toThrow();
+
+  // Fails open, matching use-profile.tsx's precedent: a transient refetch
+  // error surfaces via hasError but doesn't disruptively clear the
+  // last-known-good activeVoyage (which would otherwise kick a legitimately
+  // still-active-Voyage user off active-voyage.tsx on a blip).
+  await waitFor(() => expect(getByTestId('refetch-error').props.children).toBe('error'));
+  expect(getByTestId('probe').props.children).toBe('active:organizer');
 });

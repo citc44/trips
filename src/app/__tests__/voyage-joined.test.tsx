@@ -16,6 +16,11 @@ jest.mock('@/repositories/voyage-repository', () => ({
   },
 }));
 
+const mockRefetchActiveVoyage = jest.fn<() => Promise<void>>();
+jest.mock('@/shared/hooks/use-active-voyage', () => ({
+  useActiveVoyage: () => ({ activeVoyage: null, isLoading: false, hasError: false, refetch: mockRefetchActiveVoyage }),
+}));
+
 const mockUsePendingJoin = usePendingJoin as jest.MockedFunction<typeof usePendingJoin>;
 const mockJoinVoyage = voyageRepository.joinVoyage as jest.MockedFunction<typeof voyageRepository.joinVoyage>;
 const mockClearPendingJoinCode = jest.fn();
@@ -62,6 +67,36 @@ test('shows a success confirmation with the destination on success', async () =>
 
   await waitFor(() => expect(getByText(/Lake Tahoe/)).toBeTruthy());
   expect(getByTestId('voyage-joined-continue-button')).toBeTruthy();
+});
+
+test('refetches activeVoyage on a successful join -- otherwise Continue would route back to plain Home instead of active-voyage', async () => {
+  mockUsePendingJoin.mockReturnValue({
+    pendingJoinCode: 'ABCD2345',
+    setPendingJoinCode: jest.fn(),
+    clearPendingJoinCode: mockClearPendingJoinCode,
+  });
+  mockJoinVoyage.mockResolvedValue({
+    data: { id: 'v1', destination: 'Lake Tahoe', status: 'active', createdBy: 'u1', createdAt: 't', endedAt: null, joinCode: 'ABCD2345' },
+    error: null,
+  });
+
+  await render(<VoyageJoinedScreen />);
+
+  await waitFor(() => expect(mockRefetchActiveVoyage).toHaveBeenCalledTimes(1));
+});
+
+test('does not refetch activeVoyage on a failed join', async () => {
+  mockUsePendingJoin.mockReturnValue({
+    pendingJoinCode: 'ABCD2345',
+    setPendingJoinCode: jest.fn(),
+    clearPendingJoinCode: mockClearPendingJoinCode,
+  });
+  mockJoinVoyage.mockResolvedValue({ data: null, error: { code: 'P0001', message: 'You already have an active Voyage.' } });
+
+  const { getByTestId } = await render(<VoyageJoinedScreen />);
+
+  await waitFor(() => expect(getByTestId('voyage-joined-error')).toBeTruthy());
+  expect(mockRefetchActiveVoyage).not.toHaveBeenCalled();
 });
 
 test('shows the error message on failure (e.g. AD-9 conflict)', async () => {

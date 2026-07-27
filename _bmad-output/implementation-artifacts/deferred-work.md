@@ -39,3 +39,7 @@
 ## Deferred from: code review of story-2-3-join-voyage-via-code-link (2026-07-27)
 
 - **`get_voyage_preview()` is an unrated anonymous enumeration surface.** It's deliberately callable pre-auth (needed for AC1's pre-authentication invitation preview) and returns a Voyage's destination, status, and live Voyager count for any syntactically-valid join code, including ended Voyages, with no rate limiting anywhere in this migration. The 8-character code space makes brute-forcing impractical, but nothing prevents scripted polling of a *known* code to passively monitor a trip's group size/activity. Consistent with the rest of this app having no custom rate-limiting anywhere (relies on Supabase's platform-level protections for anonymous RPC calls); building dedicated rate-limiting is a cross-cutting concern beyond this story's scope.
+
+## Deferred from: code review of story-2-4-end-voyage (2026-07-28)
+
+- **`is_voyage_participant()`'s broadened read access has no expiry.** Fixed for this story's actual need (an Organizer must be able to read their own just-ended Voyage's summary), but as a side effect, any never-explicitly-removed past participant retains read access to an ended Voyage's full member list indefinitely — there's no time-based or event-based cutoff. Whether indefinite retroactive visibility into an old trip's roster is the intended long-term policy (vs., say, revoking it once the Organizer has seen the summary, or some other boundary) hasn't been decided — flagged for product/PM input rather than guessed at unilaterally.

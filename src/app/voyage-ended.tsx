@@ -14,8 +14,12 @@ import { screenStyles } from '@/shared/styles/screen';
 // all summary data arrives via route params from active-voyage.tsx, not read
 // from useActiveVoyage()'s context, so this screen never depends on
 // activeVoyage still being populated (it won't be, by the time this renders).
-function formatDuration(createdAt: string, endedAt: string): string {
+// Reachable in principle without params (registered unconditionally, not
+// gated) -- defensive against malformed/missing values rather than rendering
+// a literal "NaN" (code review finding).
+function formatDuration(createdAt: string, endedAt: string): string | null {
   const ms = new Date(endedAt).getTime() - new Date(createdAt).getTime();
+  if (!Number.isFinite(ms)) return null;
   const totalMinutes = Math.max(0, Math.round(ms / 60000));
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
@@ -31,14 +35,15 @@ export default function VoyageEndedScreen() {
   }>();
 
   const duration = createdAt && endedAt ? formatDuration(createdAt, endedAt) : null;
-  const count = Number(voyagerCount ?? 0);
+  const parsedCount = Number(voyagerCount);
+  const count = Number.isFinite(parsedCount) ? parsedCount : null;
 
   return (
     <View style={screenStyles.container}>
       <SafeAreaView style={screenStyles.safeArea}>
         <Text style={screenStyles.headline}>Voyage ended.</Text>
         <Text style={styles.summary}>
-          {[duration, `${count} ${count === 1 ? 'Voyager' : 'Voyagers'}`, destination].filter(Boolean).join(' · ')}
+          {[duration, count !== null ? `${count} ${count === 1 ? 'Voyager' : 'Voyagers'}` : null, destination].filter(Boolean).join(' · ')}
         </Text>
         <IgnitionButton testID="back-to-home-button" label="Back to Home" disabled={false} onPress={() => router.push('/')} variant="secondary" />
       </SafeAreaView>

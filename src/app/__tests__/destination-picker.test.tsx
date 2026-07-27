@@ -19,6 +19,11 @@ jest.mock('@/repositories/voyage-repository', () => ({
   },
 }));
 
+const mockRefetch = jest.fn<() => Promise<void>>();
+jest.mock('@/shared/hooks/use-active-voyage', () => ({
+  useActiveVoyage: () => ({ activeVoyage: null, isLoading: false, hasError: false, refetch: mockRefetch }),
+}));
+
 beforeEach(() => {
   jest.clearAllMocks();
 });
@@ -90,6 +95,24 @@ test('navigates to the Join-code screen with the created Voyage\'s destination a
     pathname: '/join-code',
     params: { destination: 'Lake Tahoe', joinCode: 'ABCD2345' },
   });
+});
+
+test('refetches activeVoyage on success, before navigating -- otherwise the new active-voyage routing never engages this session', async () => {
+  mockStartVoyage.mockResolvedValue({
+    data: { id: 'voyage-1', destination: 'Lake Tahoe', joinCode: 'ABCD2345' },
+    error: null,
+  });
+
+  const { getByTestId } = await render(<DestinationPickerScreen />);
+
+  await act(async () => {
+    fireEvent.changeText(getByTestId('destination-input'), 'Lake Tahoe');
+  });
+  await act(async () => {
+    fireEvent.press(getByTestId('start-the-voyage-button'));
+  });
+
+  expect(mockRefetch).toHaveBeenCalledTimes(1);
 });
 
 test('shows the AD-9 rejection message inline and re-enables the button', async () => {

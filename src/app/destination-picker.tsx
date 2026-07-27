@@ -6,11 +6,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors, Rounded, Spacing, Typography } from '@/constants/design-tokens';
 import { voyageRepository } from '@/repositories/voyage-repository';
 import { IgnitionButton } from '@/shared/components/ignition-button';
+import { useActiveVoyage } from '@/shared/hooks/use-active-voyage';
 import { screenStyles } from '@/shared/styles/screen';
 
 const GENERIC_ERROR = 'Something went wrong. Please try again.';
 
 export default function DestinationPickerScreen() {
+  const { refetch: refetchActiveVoyage } = useActiveVoyage();
   const [destination, setDestination] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,6 +38,12 @@ export default function DestinationPickerScreen() {
         setError(startError?.message ?? GENERIC_ERROR);
         return;
       }
+      // Without this, ActiveVoyageProvider only re-fetches on a userId change
+      // -- the Organizer is still the same user, so activeVoyage would stay
+      // stale/null and _layout.tsx's hasActiveVoyage guard would never engage
+      // this session, leaving active-voyage.tsx (and its End Voyage control)
+      // unreachable until a full app relaunch (code review finding).
+      await refetchActiveVoyage();
       // Interim landing (see Story 2.2's Dev Notes): the Join-code card is its
       // own full screen for now, not an overlay on Live Map -- Epic 3 will
       // change this destination again once Live Map exists.

@@ -4,7 +4,7 @@ baseline_commit: 7e0e9e6
 
 # Story 2.4: End Voyage
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -49,9 +49,9 @@ so that I can close out the trip when it's done.
 
 - [x] Task 3: Repository additions (AC: #1, #2)
   - [x] In `src/repositories/voyage-repository.ts`: `getMyActiveVoyage()` → `{ voyage: Voyage; role: 'organizer' | 'voyager' } | null`, `endVoyage(voyageId: string)` → same `VoyageResult` shape `startVoyage`/`joinVoyage` already return.
-  - [x] Tests: mapped-value cases for both, the "no active Voyage" (`null`) case for `getMyActiveVoyage`, and error-passthrough for `endVoyage`. 26/26 repository tests passing (13 new).
+  - [x] Tests: mapped-value cases for both, the "no active Voyage" (`null`) case for `getMyActiveVoyage`, and error-passthrough for `endVoyage`. 26/26 repository tests passing (8 new).
 
-- [ ] Task 4: `useActiveVoyage` — fetches "do I have one" on session change (AC: #1, #2)
+- [x] Task 4: `useActiveVoyage` — fetches "do I have one" on session change (AC: #1, #2)
   - [x] New `src/shared/hooks/use-active-voyage.tsx`: `ActiveVoyageProvider`/`useActiveVoyage()`, same fetch-on-`userId`-change pattern as `use-profile.tsx`. Exposes `{ activeVoyage, isLoading, hasError, refetch }` — `refetch` used by `active-voyage.tsx` to re-pull after `end_voyage()` succeeds.
   - [x] Reused `use-profile.tsx`'s established resolved-for-userId pattern for deriving `isLoading` correctly across a userId transition. 7/7 tests passing, including the same-class Story 1.4 regression test.
   - [x] Wrapped `AppNavigator` with `ActiveVoyageProvider` in `_layout.tsx`, alongside `AuthProvider`/`ProfileProvider`/`PendingJoinProvider`.
@@ -128,21 +128,39 @@ Claude Sonnet 5
 ### Completion Notes List
 
 - Task 1/2 complete: `is_voyage_participant()`, repointed `voyages_select_members`/`voyage_members_select_fellow_members` policies, `get_my_active_voyage()`, `end_voyage()` — all in `supabase/migrations/20260728000000_end_voyage.sql`. Hand-verified against established security-definer/invoker and atomic-write patterns; **not live-verified** (see Debug Log).
-- Task 3 complete: `getMyActiveVoyage`/`endVoyage` repository functions. 26/26 repository tests passing (13 new).
+- Task 3 complete: `getMyActiveVoyage`/`endVoyage` repository functions. 26/26 repository tests passing (8 new).
 - Task 4 complete: `useActiveVoyage` hook, mirroring `use-profile.tsx`'s proven fetch-on-userId pattern exactly, including its own version of the Story 1.4 isLoading regression test. 7/7 tests passing.
 - Task 5 complete: `_layout.tsx`'s `home` guard split into three branches; `voyage-ended` registered unconditionally (see Debug Log for why). `resolveRoute()` itself untouched.
 - Task 6 complete: `active-voyage.tsx` — interim placeholder with Organizer-only End Voyage control, in-place confirm swap, ceremonial `button-ignition` confirm treatment. 6/6 tests passing.
 - Task 7 complete: `voyage-ended.tsx` — calm, non-hero terminal summary. 3/3 tests passing.
 - Task 8 complete: `join-code.tsx`'s pre-existing dead end fixed with a "Continue" action. 4/4 tests passing (1 new).
 - Task 9: live verification blocked by the ongoing Supabase CLI access issue — stated plainly, not glossed over.
-- Full regression suite: 133/133 tests passing, up from Story 2.3's 108 (25 new: 13 repository, 7 `useActiveVoyage`, 6 `active-voyage`, 3 `voyage-ended`, 1 `join-code` Continue — note some totals overlap task-level counts already listed above). `tsc --noEmit` clean. `npm run lint`: no new errors.
+- Full regression suite: 133/133 tests passing, up from Story 2.3's 108 (25 new: 8 repository, 7 `useActiveVoyage`, 6 `active-voyage`, 3 `voyage-ended`, 1 `join-code` Continue). `tsc --noEmit` clean. `npm run lint`: no new errors.
 - **Story 2.4 is code-complete but not live-verified**, the same disclosed limitation as the last two stories, now compounding across three consecutive stories' worth of un-pushed SQL.
+
+### Review Findings
+
+- [x] [Review][Patch] `is_voyage_participant()` is missing the `revoke execute ... from public/anon` statements — reopens the exact anonymous-membership-disclosure vulnerability class Story 2.1's code review already found and fixed for its sibling function `is_active_voyage_member()`, confirmed live at the time [supabase/migrations/20260728000000_end_voyage.sql] — fixed via `supabase/migrations/20260728010000_fix_end_voyage_review_findings.sql` (new forward-only migration, not an edit to the already-shipped one).
+- [x] [Review][Patch] `activeVoyage` never refetches after `start_voyage()` or `join_voyage()` succeed elsewhere in the app — the story's headline mechanism (landing on `active-voyage.tsx` to reach End Voyage) is unreachable within a live session [src/app/destination-picker.tsx; src/app/voyage-joined.tsx] — fixed: both now call `useActiveVoyage().refetch()` on success, before navigating onward.
+- [x] [Review][Patch] `get_my_active_voyage()` is also missing `revoke` statements [supabase/migrations/20260728000000_end_voyage.sql] — fixed in the same follow-up migration.
+- [x] [Review][Patch] `end_voyage()`'s status/authorization checks are not atomic with its updates [supabase/migrations/20260728000000_end_voyage.sql] — fixed: redefined with an atomic `update ... where status = 'active'` as the race-free operation itself (no row lock needed — a losing concurrent call simply matches zero rows and falls into the already-ended branch).
+- [x] [Review][Patch] A successful `endVoyage()` followed by a failing `refetch()` strands the user with a false "Something went wrong" message [src/app/active-voyage.tsx; src/shared/hooks/use-active-voyage.tsx] — fixed: `refetch()` now has its own try/catch (never propagates a rejection) and fails open (keeps the last-known-good `activeVoyage` rather than clearing it on a transient error), matching `use-profile.tsx`'s established precedent. This structurally resolves the strand — `await refetch()` in `active-voyage.tsx` can no longer throw.
+- [x] [Review][Patch] `voyage-ended.tsx` renders literal "NaN Voyagers"/"NaNh NaNm" if reached with missing or malformed route params [src/app/voyage-ended.tsx] — fixed: both segments are now omitted (not rendered as "NaN") when unparseable.
+- [x] [Review][Patch] Dev Agent Record's repository-test count is wrong — claims "13 new" but the diff adds 8 [Dev Agent Record → Task 3, Completion Notes, File List] — corrected throughout.
+- [x] [Review][Patch] Task 4's own checkbox is left unchecked while all four of its subtasks are checked and the code is present and working [Tasks/Subtasks → Task 4] — corrected.
+- [x] [Review][Defer] `is_voyage_participant`'s broadened read access has no expiry — any never-explicitly-removed past participant retains read access to an ended Voyage's member list indefinitely. Framed here purely as "fixing" Story 2.1's deferred gap without addressing whether indefinite retroactive visibility is the actually-intended long-term policy — a real product-scope question, not a bug, worth the user/PM's attention.
+
+**Dismissed (noise / handled elsewhere / already disclosed):**
+- Voyager count in the Voyage Ended summary includes the Organizer — matches Story 2.3's own `get_voyage_preview()` counting convention (no role distinction anywhere else in the app either); not a new inconsistency.
+- Empty-string RPC error messages rendering blank (`?? GENERIC_ERROR` doesn't catch `''`) — pre-existing pattern used identically everywhere else in this codebase, already explicitly deferred in Story 1.4's deferred-work.md ("narrow edge case since Supabase/PostgREST errors always populate a real message in practice"); not newly introduced here.
+- The initial "End Voyage" button hardcoded `disabled={false}` while confirm-view buttons use `disabled={isSubmitting}` — not actually inconsistent: tapping it only swaps to the confirm view (no async operation), so there's nothing to guard against.
+- "Three consecutive stories' SQL never run against a real database" — already extensively disclosed in this story's own interim-scope notes and Debug Log; not a new finding.
 
 ### File List
 
 - `supabase/migrations/20260728000000_end_voyage.sql` (new) — `is_voyage_participant()`, repointed RLS policies, `get_my_active_voyage()`, `end_voyage()`
 - `src/repositories/voyage-repository.ts` — `ActiveVoyage`/`EndedVoyage` types, `getMyActiveVoyage`, `endVoyage` added (modified)
-- `src/repositories/__tests__/voyage-repository.test.ts` — 13 new tests (modified)
+- `src/repositories/__tests__/voyage-repository.test.ts` — 8 new tests (modified)
 - `src/shared/hooks/use-active-voyage.tsx` (new) — `ActiveVoyageProvider`/`useActiveVoyage`
 - `src/shared/hooks/__tests__/use-active-voyage.test.tsx` (new)
 - `src/app/active-voyage.tsx` (new) — interim placeholder screen + End Voyage control
@@ -152,3 +170,11 @@ Claude Sonnet 5
 - `src/app/_layout.tsx` — `ActiveVoyageProvider` wired in, `isLoading` gate extended, `home` block split into three branches, `voyage-ended` registered unconditionally (modified)
 - `src/app/join-code.tsx` — "Continue" forward action added (modified)
 - `src/app/__tests__/join-code.test.tsx` — 1 new test (modified)
+
+### Post-Review Fixes
+
+- Fixed 8 patch findings from parallel adversarial review (Blind Hunter, Edge Case Hunter, Acceptance Auditor). Two findings were independently converged on by multiple reviewers, which is why they're the two most significant: **(1)** `is_voyage_participant()` shipped without the `revoke execute` statements that `end_voyage()` in the same migration correctly got — the exact anon-membership-disclosure bug Story 2.1's code review already found, fixed, and live-verified for the sibling function it was modeled on. **(2)** Nothing anywhere in the app refetched `ActiveVoyageProvider`'s context after `start_voyage()`/`join_voyage()` succeeded, so this story's entire routing mechanism (landing on `active-voyage.tsx` to reach End Voyage) would never have engaged within a live session — only a full app relaunch would have surfaced it. Both are now fixed.
+- New forward-only migration `supabase/migrations/20260728010000_fix_end_voyage_review_findings.sql` adds the missing revokes and redefines `end_voyage()` with a race-free atomic status transition (`update ... where status = 'active'` as the operation that settles the race, not a separate locked read) — the original migration was left untouched per this project's established convention, since it's very likely CI already applied it via its own credentials even though the local CLI here remained blocked throughout.
+- `use-active-voyage.tsx`'s `refetch()` now has its own error handling and fails open (keeps the last-known-good `activeVoyage` on a transient error rather than clearing it) — this structurally closes the "successful end, failing refetch, false failure message" gap without needing any change to `active-voyage.tsx`'s own logic. `refetch` is also now `useCallback`-memoized (keyed on `userId`) so `voyage-joined.tsx`'s effect can correctly list it as a dependency without extra churn.
+- Full regression suite: 139/139 tests passing, up from the pre-review 133 (6 new: 1 `destination-picker` refetch assertion, 2 `voyage-joined` refetch assertions, 1 `use-active-voyage` refetch-rejection case, 2 `voyage-ended` malformed-param cases). `tsc --noEmit` clean. `npm run lint`: no new errors (one patch briefly introduced a `react-hooks/exhaustive-deps` warning, caught by re-running lint before considering the patch done, fixed by memoizing `refetch`'s identity rather than suppressing the warning).
+- **Still not live-verified against `voylo-dev`** (same Supabase CLI access blocker, now spanning four stories' worth of SQL across this session) — the new fix migration has the same disclosed limitation as the original.

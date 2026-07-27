@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 
 import { voyageRepository, type ActiveVoyage } from '@/repositories/voyage-repository';
 import { useAuth } from '@/shared/hooks/use-auth';
@@ -71,17 +71,27 @@ export function ActiveVoyageProvider({ children }: { children: ReactNode }) {
 
   // Lets active-voyage.tsx re-pull immediately after end_voyage() succeeds,
   // rather than waiting for some unrelated userId change to re-trigger the
-  // effect above.
-  const refetch = async () => {
+  // effect above. Callers (e.g. voyage-joined.tsx) fire this without awaiting
+  // or catching it, so it must never itself throw/reject -- unlike the mount
+  // effect above, a network failure here surfaces only as hasError, not a
+  // propagated rejection (code review finding).
+  // Stable identity (keyed only on userId) so callers can safely list it in
+  // their own effect dependency arrays without causing extra re-runs on every
+  // provider render.
+  const refetch = useCallback(async () => {
     if (!userId) return;
-    const { data, error } = await voyageRepository.getMyActiveVoyage();
-    if (error) {
+    try {
+      const { data, error } = await voyageRepository.getMyActiveVoyage();
+      if (error) {
+        setHasError(true);
+        return;
+      }
+      setActiveVoyage(data);
+      setHasError(false);
+    } catch {
       setHasError(true);
-      return;
     }
-    setActiveVoyage(data);
-    setHasError(false);
-  };
+  }, [userId]);
 
   return (
     <ActiveVoyageContext.Provider value={{ activeVoyage, isLoading, hasError, refetch }}>{children}</ActiveVoyageContext.Provider>
