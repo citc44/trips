@@ -4,7 +4,7 @@ baseline_commit: ce4f0ed
 
 # Story 2.5: Grant Organizer Status
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -26,6 +26,7 @@ so that no single person is a point of failure for managing the trip.
 - **No display-name field exists anywhere in this schema — confirmed with the user directly before writing this story.** Every prior story (2.3 onward) worked around this for generic copy/counts, but "pick a specific Voyager to grant Organizer status to" genuinely cannot work without distinguishing individuals. Asked the user directly: add a real `display_name` field + a one-time collection prompt now, rather than a placeholder identity scheme (email exposure, or a meaningless positional label). **This story therefore also adds a third one-time onboarding step** (after Trust Moment, Driver Attention Consent), which is larger than this story's own AC text implies — flagged prominently, not silently absorbed.
 - **No Organizer Action Sheet / bottom-sheet component exists yet** (Story 2.4's own interim-scope decision, still true). This story extends `active-voyage.tsx` — the same interim Live Map placeholder — with a minimal Voyager list and a "Grant Organizer" action per row, not a modal sheet. Remove Voyager (Story 2.6) will need the same list; building the real 3-row sheet is deferred until there's a concrete reason to unify all three actions into one component.
 - **No toast/snackbar component exists anywhere in this app yet.** AC1 explicitly calls for one ("quiet confirmation toast, no re-navigation"), and DESIGN.md already defines a `nudge-toast` token for exactly this purpose (reused for future v1.1 nudges too, per EXPERIENCE.md). This story builds a minimal version: tap-through-nothing, ~4s auto-dismiss, no swipe-to-dismiss gesture (EXPERIENCE.md mentions swipe-dismiss for nudge toasts generally, but wiring a new gesture handler for one instance is out of scope here — flagged as a judgment call, not a silent cut).
+- **The Voyager list on `active-voyage.tsx` is visible to every Voyager, not just Organizers** (only the Grant Organizer action itself is Organizer-gated). AC1's text only describes the Organizer's own flow, but a full roster is reasonable, likely-desired behavior consistent with EXPERIENCE.md's broader "group roster" framing — flagged here explicitly (caught in code review) rather than left as an undisclosed scope addition alongside the three above.
 
 ## Tasks / Subtasks
 
@@ -36,7 +37,7 @@ so that no single person is a point of failure for managing the trip.
 
 - [x] Task 2: Extend `resolveRoute()` with the new onboarding gate (AC: #1)
   - [x] Added `hasDisplayName: boolean`, new `'display-name'` branch positioned after `'driver-attention-consent'`, before `'home'`. `AppRoute` union updated.
-  - [x] `resolve-route.test.ts` updated exhaustively — every existing test extended with the new param, plus two new tests for the new branch and the full-chain `'home'` case. 5/5 passing.
+  - [x] `resolve-route.test.ts` updated exhaustively — every existing test extended with the new param (including the pre-existing `'home'` test, updated in place for the full 3-flag chain), plus one genuinely new test for the `'display-name'` branch itself. 5/5 passing (corrected from an initial "two new tests" miscount, caught in code review — one of the two was a modified existing test, not new).
   - [x] `_layout.tsx` wired: `hasDisplayName` derived (`!!profile?.displayName || profileHasError`), new `Stack.Protected guard={route === 'display-name'}` block registering `display-name.tsx`. **Also updated `join/[code].tsx`'s own two local `resolveRoute()` call sites (Story 2.3's fix)** — both needed the new `hasDisplayName` param and a new `display-name`-routing branch, or a user completing OTP + onboarding without a display name yet would have skipped this step entirely. Full suite re-run to confirm: 163/163 passing.
 
 - [x] Task 3: `display-name.tsx` onboarding screen (AC: #1)
@@ -45,7 +46,7 @@ so that no single person is a point of failure for managing the trip.
   - [x] On submit: calls `setDisplayName`, no manual navigation on success — `_layout.tsx`'s guard reacts to the updated profile state.
 
 - [x] Task 4: `profileRepository`/`useProfile` additions (AC: #1)
-  - [x] `displayName: string | null` added to `Profile`, mapped from `display_name`. 16/16 repository tests passing (5 new).
+  - [x] `displayName: string | null` added to `Profile`, mapped from `display_name`. 14/14 repository tests passing (4 new).
   - [x] `setDisplayName(name)` added to `profileRepository`.
   - [x] `setDisplayName` added to `useProfile()`, reusing `runMarkAction`'s existing stale-response guard via a closure (`() => profileRepository.setDisplayName(name)`) rather than changing `runMarkAction`'s signature. 16/16 hook tests passing (2 new).
 
@@ -108,6 +109,26 @@ so that no single person is a point of failure for managing the trip.
 - [Source: 2-3-join-voyage-via-code-link.md] — the display-name gap first surfaced here (deferred at the time); `resolveRoute()`-stays-pure precedent this story deliberately reconsiders for a structurally different case (see Dev Notes)
 - [Source: 2-4-end-voyage.md] — `is_voyage_participant()` (reused for Task 5's authorization check) and the organizer-authorization-check shape (reused for Task 6); the interim `active-voyage.tsx` placeholder this story extends; the Supabase CLI access caveat carried forward, now unresolved across five consecutive stories
 
+### Review Findings
+
+- [x] [Review][Defer] **AC1 is not actually satisfied on the newly-promoted Voyager's own device.** `handleGrantOrganizer()` in `active-voyage.tsx` only ever updates the *granting* Organizer's own screen (toast + re-fetched list); the target Voyager's `ActiveVoyageProvider` fetches `getMyActiveVoyage()` once per `userId` with no realtime subscription or polling, so their own device never learns about the new role until they relaunch the app — the opposite of AC1's "immediately gain... capabilities... no re-navigation." Not one of the three pre-disclosed interim-scope cuts. **User decision:** defer to Epic 3 — Live Map's real-time delivery mechanism (AD-2) will solve this properly once it exists; not worth building throwaway polling infra ahead of it.
+- [x] [Review][Patch] `set_display_name()` is missing the `revoke execute ... from public/anon` statements every other locked-down RPC in this project has. [supabase/migrations/20260729000000_add_display_name.sql] — fixed via `supabase/migrations/20260729020000_fix_grant_organizer_review_findings.sql` (new forward-only migration).
+- [x] [Review][Patch] No retry path if the initial Voyager-list fetch fails on mount. [src/app/active-voyage.tsx] — fixed: a "Retry" button appears when the list is empty and errored, re-triggering the fetch.
+- [x] [Review][Patch] Concurrent Grant Organizer taps on two different rows race on shared component state. [src/app/active-voyage.tsx] — fixed: `grantingUserId` scalar replaced with a `grantingUserIds: Set<string>`, keyed per row.
+- [x] [Review][Patch] `Toast`'s auto-dismiss timer restarts on every re-render. [src/shared/components/toast.tsx] — fixed: the latest `onDismiss` is held in a ref, and the dismiss effect depends only on `[message]`, not the caller's (often-unstable) callback identity.
+- [x] [Review][Patch] `join/[code].tsx`'s `handleGoHome` branch has no dedicated test for the new `hasDisplayName`/`'display-name'` routing branch. [src/app/__tests__/join-invitation.test.tsx] — fixed: added.
+- [x] [Review][Patch] `grant_organizer_status()`'s target-membership check is not atomic with its update. [supabase/migrations/20260729010000_grant_organizer_status.sql] — fixed in the same follow-up migration: the membership/active check is folded into the `UPDATE ... WHERE` clause itself (same fix shape as `end_voyage()`'s own prior-story fix), `ORG02` raised on zero rows affected.
+- [x] [Review][Patch] Dev Agent Record test-count inaccuracies. [Dev Agent Record → Task 4, Completion Notes, File List] — verified against the actual diffs and corrected throughout this file.
+- [x] [Review][Patch] Undisclosed scope addition: the Voyager list is visible to every Voyager, not just Organizers. [Story file → known interim-scope decisions] — added as a fourth disclosed interim-scope note.
+- [x] [Review][Patch] `Toast` has no accessibility affordances. [src/shared/components/toast.tsx] — fixed: `accessibilityRole="alert"` and `accessibilityLiveRegion="polite"` added.
+- [x] [Review][Patch] `Toast` is rendered outside `active-voyage.tsx`'s `SafeAreaView`. [src/app/active-voyage.tsx] — fixed: moved inside.
+- [x] [Review][Defer] No uniqueness constraint (global or per-Voyage) on `display_name` — two Voyagers can pick the same name, which partly defeats the entire stated purpose of adding this field (distinguishing individuals to grant status to). Deferred rather than patched: the correct scope for a uniqueness rule (global vs. per-account vs. per-Voyage, given `display_name` lives on the account-level `profiles` row, not per-Voyage) is a product decision, not a mechanical fix.
+- [x] [Review][Defer] No content moderation on display-name text — a Voyager can set their display name to anything up to 60 characters, including impersonating a co-Voyager, and it's broadcast to every other participant via `get_voyage_members()`. Real, but explicitly out of this story's scope per the reviewing agent's own assessment.
+- [x] [Review][Defer] The new onboarding gate retroactively reopens for every already-onboarded account (no default/backfill on `display_name`, so any existing user is routed to `/display-name` on their next load) — this is expected, correct behavior for a required new field with no default (the same thing happened when Driver Attention Consent was added after Trust Moment in Story 1.5), not a bug, but the story never explicitly said so. Documented here rather than code-patched.
+
+**Dismissed (noise / already disclosed):**
+- "Fifth consecutive story with zero live verification against the actual database" — already extensively disclosed in this story's own Debug Log and Completion Notes; not a new finding.
+
 ## Dev Agent Record
 
 ### Agent Model Used
@@ -126,21 +147,22 @@ Claude Sonnet 5
 - Task 1 complete: `profiles.display_name` + `set_display_name()`. Not live-verified (see Debug Log).
 - Task 2 complete: `resolveRoute()` extended with a new `'display-name'` branch — a deliberate architectural reversal of Story 2.3/2.4's "layer on top" guidance, justified in Dev Notes (this is an account-level onboarding gate, not session-scoped UI state). `_layout.tsx` and `join/[code].tsx`'s two local call sites all updated together.
 - Task 3 complete: `display-name.tsx` onboarding screen. 6/6 tests passing.
-- Task 4 complete: `Profile.displayName`, `profileRepository.setDisplayName`, `useProfile().setDisplayName`. 16/16 + 16/16 tests passing (5 + 2 new).
+- Task 4 complete: `Profile.displayName`, `profileRepository.setDisplayName`, `useProfile().setDisplayName`. 14/14 + 16/16 tests passing (4 + 2 new).
 - Task 5/6 complete: `get_voyage_members()` (narrow cross-table projection, first of its kind in this project) and `grant_organizer_status()` (idempotent, active-organizer authorization) in one migration.
 - Task 7 complete: `getVoyageMembers`/`grantOrganizerStatus` repository functions. 33/33 repository tests passing (7 new).
 - Task 8 complete: minimal `Toast` component + `NudgeToast`/`surfaceGlass`/`accentElectric`/`Rounded.md` design tokens. 3/3 tests passing.
 - Task 9 complete: `active-voyage.tsx` extended with the Voyager list and Grant Organizer action. 11/11 tests passing (5 new).
 - Task 10: live verification blocked by the ongoing Supabase CLI access issue, now spanning five consecutive stories — stated plainly, not glossed over.
-- Full regression suite: 168/168 tests passing, up from Story 2.4's 139 (29 new: 2 `resolve-route`, 6 `display-name`, 5 `profile-repository`, 2 `use-profile`, 7 `voyage-repository`, 3 `toast`, 5 `active-voyage`, 1 `join-invitation`; `use-active-voyage` and other existing suites unchanged in count). `tsc --noEmit` clean. `npm run lint`: no new errors.
+- Full regression suite: 168/168 tests passing, up from Story 2.4's 139 (29 new: 1 `resolve-route`, 6 `display-name`, 4 `profile-repository`, 2 `use-profile`, 7 `voyage-repository`, 3 `toast`, 5 `active-voyage`, 1 `join-invitation`; `use-active-voyage` and other existing suites unchanged in count — corrected from an initial miscount of two of these figures, caught in code review). `tsc --noEmit` clean. `npm run lint`: no new errors.
 - **Story 2.5 is code-complete but not live-verified**, the same disclosed limitation as the last four stories, now spanning five consecutive stories' worth of un-pushed SQL.
 
 ### File List
 
 - `supabase/migrations/20260729000000_add_display_name.sql` (new) — `profiles.display_name`, `set_display_name()`
 - `supabase/migrations/20260729010000_grant_organizer_status.sql` (new) — `get_voyage_members()`, `grant_organizer_status()`
+- `supabase/migrations/20260729020000_fix_grant_organizer_review_findings.sql` (new, code review patch) — missing revoke on `set_display_name()`, race-free `grant_organizer_status()`
 - `src/repositories/profile-repository.ts` — `displayName` field, `setDisplayName` added (modified)
-- `src/repositories/__tests__/profile-repository.test.ts` — 5 new tests (modified)
+- `src/repositories/__tests__/profile-repository.test.ts` — 4 new tests (corrected from initially-reported 5; modified)
 - `src/repositories/voyage-repository.ts` — `VoyageMember` type, `getVoyageMembers`, `grantOrganizerStatus` added (modified)
 - `src/repositories/__tests__/voyage-repository.test.ts` — 7 new tests (modified)
 - `src/shared/hooks/use-profile.tsx` — `setDisplayName` action added (modified)
@@ -149,11 +171,18 @@ Claude Sonnet 5
 - `src/shared/navigation/__tests__/resolve-route.test.ts` — extended exhaustively (modified)
 - `src/app/display-name.tsx` (new) — third onboarding step
 - `src/app/__tests__/display-name.test.tsx` (new)
-- `src/shared/components/toast.tsx` (new) — minimal nudge-toast component
+- `src/shared/components/toast.tsx` (new) — minimal nudge-toast component; code review patches: stable dismiss timer, accessibility affordances
 - `src/shared/components/__tests__/toast.test.tsx` (new)
 - `src/constants/design-tokens.ts` — `surfaceGlass`, `accentElectric`, `Rounded.md`, `NudgeToast` added (modified)
-- `src/app/active-voyage.tsx` — Voyager list + Grant Organizer action added (modified)
-- `src/app/__tests__/active-voyage.test.tsx` — 5 new tests (modified)
+- `src/app/active-voyage.tsx` — Voyager list + Grant Organizer action added; code review patches: retry action, per-row grant tracking, `Toast` moved inside `SafeAreaView` (modified)
+- `src/app/__tests__/active-voyage.test.tsx` — 5 + 2 new tests (modified)
 - `src/app/_layout.tsx` — `hasDisplayName` derivation, new `display-name` guard branch (modified)
 - `src/app/join/[code].tsx` — both local `resolveRoute()` call sites updated for the new `hasDisplayName` param/branch (modified)
-- `src/app/__tests__/join-invitation.test.tsx` — `mockProfile` helper extended, 1 new test (modified)
+- `src/app/__tests__/join-invitation.test.tsx` — `mockProfile` helper extended, 2 new tests (modified)
+
+### Post-Review Fixes
+
+- Fixed 10 patch findings from parallel adversarial review (Blind Hunter, Edge Case Hunter, Acceptance Auditor). One decision-needed item resolved by the user (AC1's target-device gap deferred to Epic 3) and two additional items deferred (display-name uniqueness, content moderation) — both real product-scope questions, not mechanically patchable.
+- Most consequential fixes: `set_display_name()` was missing the anon-revoke every other locked-down RPC in this project has (third time this exact pattern has been missed this session); `grant_organizer_status()` had the same check-then-act race `end_voyage()`'s own code review already found and fixed one migration earlier, now fixed the same way (fold the check into `UPDATE ... WHERE`); and `Toast`'s auto-dismiss timer silently restarted on any unrelated re-render due to an unstable inline callback identity — a real bug caught by direct code inspection during triage, now fixed with a ref-held latest-callback pattern inside the component itself (so future callers can't reintroduce it by passing an inline arrow function, which is the natural way to call it).
+- Full regression suite: 174/174 tests passing, up from the pre-review 168 (6 new: 3 `toast` timer/accessibility, 2 `active-voyage` retry/race, 1 `join-invitation` handleGoHome coverage). `tsc --noEmit` clean. `npm run lint`: no new errors.
+- **Still not live-verified against `voylo-dev`** (same Supabase CLI access blocker, now spanning five stories' worth of SQL plus this fix migration) — flagged again, unresolved.

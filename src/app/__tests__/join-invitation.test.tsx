@@ -119,6 +119,20 @@ test('the invalid-link recovery button goes straight Home when already authentic
   expect(mockPush).toHaveBeenCalledWith('/');
 });
 
+test('the invalid-link recovery button routes to display-name when authenticated, onboarded, but no display name set yet (code review finding)', async () => {
+  mockAuth({ user: { id: 'user-1' } });
+  mockProfile({ trustMomentSeenAt: '2026-01-01T00:00:00Z', driverConsentSeenAt: '2026-01-01T00:00:00Z', displayName: null });
+  mockGetVoyagePreview.mockResolvedValue({ data: null, error: { code: 'not_found', message: 'This invite link is not valid.' } });
+
+  const { getByTestId } = await renderScreen();
+  await waitFor(() => expect(getByTestId('invitation-invalid-home-button')).toBeTruthy());
+
+  await act(async () => {
+    fireEvent.press(getByTestId('invitation-invalid-home-button'));
+  });
+  expect(mockPush).toHaveBeenCalledWith('/display-name');
+});
+
 test('shows the "already wrapped up" state for an ended Voyage, with a CTA to start a new one', async () => {
   mockGetVoyagePreview.mockResolvedValue({ data: { destination: 'Lake Tahoe', status: 'ended', voyagerCount: 3 }, error: null });
 

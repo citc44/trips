@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { NudgeToast, Spacing, Typography } from '@/constants/design-tokens';
@@ -11,13 +11,24 @@ const AUTO_DISMISS_MS = 4000;
 // for future v1.1 nudges (long-stop, zero-contribution), not one-off to
 // Grant Organizer's confirmation.
 export function Toast({ testID, message, onDismiss }: { testID?: string; message: string; onDismiss: () => void }) {
+  // A ref, not a direct effect dependency: callers commonly pass an inline
+  // arrow function (e.g. onDismiss={() => setToastMessage(null)}), which is a
+  // new identity every render. Depending on it directly would restart the
+  // timer on any unrelated re-render while the toast is visible, silently
+  // extending its lifetime well past ~4s (code review finding). Only `message`
+  // changing should restart the window.
+  const onDismissRef = useRef(onDismiss);
   useEffect(() => {
-    const timeout = setTimeout(onDismiss, AUTO_DISMISS_MS);
+    onDismissRef.current = onDismiss;
+  }, [onDismiss]);
+
+  useEffect(() => {
+    const timeout = setTimeout(() => onDismissRef.current(), AUTO_DISMISS_MS);
     return () => clearTimeout(timeout);
-  }, [message, onDismiss]);
+  }, [message]);
 
   return (
-    <View testID={testID} style={styles.container}>
+    <View testID={testID} style={styles.container} accessibilityRole="alert" accessibilityLiveRegion="polite">
       <View style={styles.accentBar} />
       <Text style={styles.message}>{message}</Text>
     </View>

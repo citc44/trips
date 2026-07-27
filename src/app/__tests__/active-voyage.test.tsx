@@ -222,3 +222,63 @@ test('shows an inline error (not a dead end) when granting Organizer status fail
   await waitFor(() => expect(getByTestId('voyager-list-error')).toBeTruthy());
   expect(getByTestId('voyager-list-error').props.children).toBe('That person is not an active member of this Voyage.');
 });
+
+test('shows a retry action (not a dead end) when the initial Voyager-list fetch fails, and retrying re-fetches', async () => {
+  mockActiveVoyage('organizer');
+  mockGetVoyageMembers.mockResolvedValueOnce({ data: null, error: { code: 'MEM01', message: 'You are not a participant of this Voyage.' } });
+
+  const { getByTestId, getByText } = await render(<ActiveVoyageScreen />);
+
+  await waitFor(() => expect(getByTestId('voyager-list-error')).toBeTruthy());
+  expect(getByTestId('voyager-list-retry-button')).toBeTruthy();
+
+  mockGetVoyageMembers.mockResolvedValueOnce({ data: membersFixture, error: null });
+  await act(async () => {
+    fireEvent.press(getByTestId('voyager-list-retry-button'));
+  });
+
+  expect(mockGetVoyageMembers).toHaveBeenCalledTimes(2);
+  await waitFor(() => expect(getByText('Chintan')).toBeTruthy());
+});
+
+test('granting Organizer status on one row does not re-enable a different row still in flight', async () => {
+  mockActiveVoyage('organizer');
+  mockGetVoyageMembers.mockResolvedValue({
+    data: [
+      { userId: 'user-1', displayName: 'Chintan', role: 'organizer' as const, joinedAt: '2026-07-26T00:00:00Z' },
+      { userId: 'user-2', displayName: 'Meera', role: 'voyager' as const, joinedAt: '2026-07-26T00:05:00Z' },
+      { userId: 'user-3', displayName: 'Sam', role: 'voyager' as const, joinedAt: '2026-07-26T00:10:00Z' },
+    ],
+    error: null,
+  });
+
+  let resolveFirstGrant: (value: any) => void;
+  mockGrantOrganizerStatus.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        resolveFirstGrant = resolve;
+      }),
+  );
+  mockGrantOrganizerStatus.mockResolvedValueOnce({ error: null });
+
+  const { getByTestId } = await render(<ActiveVoyageScreen />);
+  await waitFor(() => expect(getByTestId('grant-organizer-button-user-2')).toBeTruthy());
+
+  // Row 1 (Meera) starts and stays in flight.
+  await act(async () => {
+    fireEvent.press(getByTestId('grant-organizer-button-user-2'));
+  });
+  expect(getByTestId('grant-organizer-button-user-2').props.accessibilityState?.disabled).toBe(true);
+
+  // Row 2 (Sam) starts and finishes while row 1 is still pending.
+  await act(async () => {
+    fireEvent.press(getByTestId('grant-organizer-button-user-3'));
+  });
+
+  // Row 1's button must still be disabled -- it hasn't resolved yet.
+  expect(getByTestId('grant-organizer-button-user-2').props.accessibilityState?.disabled).toBe(true);
+
+  await act(async () => {
+    resolveFirstGrant!({ error: null });
+  });
+});

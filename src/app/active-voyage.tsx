@@ -27,7 +27,11 @@ export default function ActiveVoyageScreen() {
 
   const [members, setMembers] = useState<VoyageMember[]>([]);
   const [membersError, setMembersError] = useState<string | null>(null);
-  const [grantingUserId, setGrantingUserId] = useState<string | null>(null);
+  // A Set, not a single scalar: granting Organizer status on one row must not
+  // affect another row's in-flight state -- a single grantingUserId let a
+  // second row's completion re-enable a still-pending first row's button
+  // (code review finding).
+  const [grantingUserIds, setGrantingUserIds] = useState<Set<string>>(new Set());
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const isMounted = useRef(true);
 
@@ -92,7 +96,7 @@ export default function ActiveVoyageScreen() {
   }
 
   async function handleGrantOrganizer(member: VoyageMember) {
-    setGrantingUserId(member.userId);
+    setGrantingUserIds((prev) => new Set(prev).add(member.userId));
     setMembersError(null);
 
     try {
@@ -110,7 +114,20 @@ export default function ActiveVoyageScreen() {
       setToastMessage(`${member.displayName ?? 'They'} is now an Organizer`);
       await loadMembers.current(activeVoyage!.voyage.id);
     } finally {
-      if (isMounted.current) setGrantingUserId(null);
+      if (isMounted.current) {
+        setGrantingUserIds((prev) => {
+          const next = new Set(prev);
+          next.delete(member.userId);
+          return next;
+        });
+      }
+    }
+  }
+
+  function handleRetryMembers() {
+    if (voyageId) {
+      setMembersError(null);
+      loadMembers.current(voyageId);
     }
   }
 
@@ -165,7 +182,7 @@ export default function ActiveVoyageScreen() {
                 <IgnitionButton
                   testID={`grant-organizer-button-${member.userId}`}
                   label="Grant Organizer"
-                  disabled={grantingUserId === member.userId}
+                  disabled={grantingUserIds.has(member.userId)}
                   onPress={() => handleGrantOrganizer(member)}
                   variant="secondary"
                 />
@@ -178,10 +195,19 @@ export default function ActiveVoyageScreen() {
             {membersError}
           </Text>
         ) : null}
+        {membersError && members.length === 0 ? (
+          <IgnitionButton
+            testID="voyager-list-retry-button"
+            label="Retry"
+            disabled={false}
+            onPress={handleRetryMembers}
+            variant="secondary"
+          />
+        ) : null}
+        {toastMessage ? (
+          <Toast testID="grant-organizer-toast" message={toastMessage} onDismiss={() => setToastMessage(null)} />
+        ) : null}
       </SafeAreaView>
-      {toastMessage ? (
-        <Toast testID="grant-organizer-toast" message={toastMessage} onDismiss={() => setToastMessage(null)} />
-      ) : null}
     </View>
   );
 }
