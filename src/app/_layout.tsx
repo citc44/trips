@@ -53,12 +53,16 @@ function AppNavigator() {
   // routing bug lived in exactly this file, hence the extra care). These four
   // `home`-scoped blocks stay mutually exclusive by construction, same
   // invariant resolve-route.ts's own doc comment already documents.
-  // hasActiveVoyage takes precedence over hasRemovalNotice/hasPendingJoin: a
-  // removed user's activeVoyage is always null (their membership was
-  // deactivated), so there's no real conflict, but the ordering documents the
-  // intent. hasRemovalNotice takes precedence over hasPendingJoin: a
-  // leftover pending join from before removal shouldn't silently suppress
-  // showing the user what happened to their last Voyage.
+  // hasActiveVoyage takes precedence over hasRemovalNotice/hasPendingJoin --
+  // deliberately, not just because a removed user's activeVoyage happens to
+  // be null: that's only true until they join or start a *different* Voyage
+  // before acknowledging the first removal. Once that happens, this
+  // precedence intentionally keeps them on their new, currently-active trip
+  // rather than interrupting it with a stale notice about a past one; the
+  // notice reappears (get_removal_notice() still has it) as soon as they no
+  // longer have an active Voyage. hasRemovalNotice takes precedence over
+  // hasPendingJoin: a leftover pending join from before removal shouldn't
+  // silently suppress showing the user what happened to their last Voyage.
   const hasActiveVoyage = !!activeVoyage;
   const hasRemovalNotice = !hasActiveVoyage && !!removalNotice;
   const hasPendingJoin = !hasActiveVoyage && !hasRemovalNotice && !!pendingJoinCode;

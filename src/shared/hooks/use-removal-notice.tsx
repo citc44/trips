@@ -62,19 +62,26 @@ export function RemovalNoticeProvider({ children }: { children: ReactNode }) {
     };
   }, [userId]);
 
-  // A one-shot dismissal, not a re-pull like use-active-voyage.tsx's refetch.
-  // Clears local state regardless of whether the server-side acknowledge call
-  // itself succeeds -- fails open (same philosophy as use-profile.tsx's
-  // seen-flag handling): if the RPC call fails, the notice may simply
-  // reappear on next load, which is a self-healing fallback, not a user
-  // permanently stuck on this screen over a transient network blip.
+  // Re-fetches rather than locally clearing to null (code review finding):
+  // get_removal_notice() only ever returns the single most recent
+  // unacknowledged removal, so a user removed from more than one Voyage has
+  // more than one pending notice -- clearing local state directly would hide
+  // any earlier ones until a future sign-out/sign-in cycle re-ran the
+  // fetch-on-userId effect above. The acknowledge call itself still fails
+  // open (same philosophy as use-profile.tsx's seen-flag handling): if it
+  // rejects, the notice may simply reappear on next load rather than leaving
+  // the user permanently stuck on this screen over a transient network blip.
   const acknowledge = useCallback(async () => {
     if (!removalNotice) return;
     try {
       await voyageRepository.acknowledgeRemoval(removalNotice.voyageId);
     } catch {
       // Swallowed on purpose -- see the fail-open rationale above.
-    } finally {
+    }
+    try {
+      const { data } = await voyageRepository.getRemovalNotice();
+      setRemovalNotice(data);
+    } catch {
       setRemovalNotice(null);
     }
   }, [removalNotice]);

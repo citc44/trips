@@ -86,9 +86,9 @@ test('exposes hasError (not stuck loading) when the fetch rejects', async () => 
   await waitFor(() => expect(getByTestId('probe').props.children).toBe('error'));
 });
 
-test('acknowledge calls the repository with the Voyage id and clears the local notice', async () => {
+test('acknowledge calls the repository with the Voyage id, then re-fetches and finds nothing left to show', async () => {
   mockUseAuth.mockReturnValue({ session: { user: { id: 'user-1' } } });
-  mockGetRemovalNotice.mockResolvedValue({ data: noticeFixture, error: null });
+  mockGetRemovalNotice.mockResolvedValueOnce({ data: noticeFixture, error: null });
   mockAcknowledgeRemoval.mockResolvedValue({ error: null });
 
   const { getByTestId } = await render(
@@ -100,17 +100,42 @@ test('acknowledge calls the repository with the Voyage id and clears the local n
 
   await waitFor(() => expect(getByTestId('probe').props.children).toBe('Lake Tahoe'));
 
+  mockGetRemovalNotice.mockResolvedValueOnce({ data: null, error: null });
   await act(async () => {
     await getByTestId('acknowledge').props.onPress();
   });
 
   expect(mockAcknowledgeRemoval).toHaveBeenCalledWith('voyage-1');
+  expect(mockGetRemovalNotice).toHaveBeenCalledTimes(2);
   await waitFor(() => expect(getByTestId('probe').props.children).toBe('none'));
 });
 
-test('acknowledge clears the local notice even if the repository call fails (fails open)', async () => {
+test('acknowledge re-fetches and surfaces an earlier notice from a different Voyage still pending (fixes the multi-removal gap)', async () => {
   mockUseAuth.mockReturnValue({ session: { user: { id: 'user-1' } } });
-  mockGetRemovalNotice.mockResolvedValue({ data: noticeFixture, error: null });
+  mockGetRemovalNotice.mockResolvedValueOnce({ data: noticeFixture, error: null });
+  mockAcknowledgeRemoval.mockResolvedValue({ error: null });
+
+  const { getByTestId } = await render(
+    <RemovalNoticeProvider>
+      <AcknowledgeProbe />
+      <Probe />
+    </RemovalNoticeProvider>,
+  );
+
+  await waitFor(() => expect(getByTestId('probe').props.children).toBe('Lake Tahoe'));
+
+  const earlierNotice = { voyageId: 'voyage-0', destination: 'Big Sur' };
+  mockGetRemovalNotice.mockResolvedValueOnce({ data: earlierNotice, error: null });
+  await act(async () => {
+    await getByTestId('acknowledge').props.onPress();
+  });
+
+  await waitFor(() => expect(getByTestId('probe').props.children).toBe('Big Sur'));
+});
+
+test('acknowledge still re-fetches (and clears if that also fails) even if the acknowledge call itself fails (fails open)', async () => {
+  mockUseAuth.mockReturnValue({ session: { user: { id: 'user-1' } } });
+  mockGetRemovalNotice.mockResolvedValueOnce({ data: noticeFixture, error: null });
   mockAcknowledgeRemoval.mockRejectedValue(new Error('network error'));
 
   const { getByTestId } = await render(
@@ -122,6 +147,7 @@ test('acknowledge clears the local notice even if the repository call fails (fai
 
   await waitFor(() => expect(getByTestId('probe').props.children).toBe('Lake Tahoe'));
 
+  mockGetRemovalNotice.mockRejectedValueOnce(new Error('network error'));
   await act(async () => {
     await getByTestId('acknowledge').props.onPress();
   });

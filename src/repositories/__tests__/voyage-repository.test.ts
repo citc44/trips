@@ -487,6 +487,14 @@ test('removeVoyager surfaces the last-organizer rejection as a normal typed erro
   expect(result).toEqual({ error: { code: 'REM02', message: 'A Voyage must always have at least one Organizer.' } });
 });
 
+test('removeVoyager surfaces the self-removal rejection as a normal typed error', async () => {
+  mockRpc.mockResolvedValue({ data: null, error: { code: 'REM04', message: 'An Organizer cannot remove themselves with this action.' } });
+
+  const result = await voyageRepository.removeVoyager('voyage-1', 'user-1');
+
+  expect(result).toEqual({ error: { code: 'REM04', message: 'An Organizer cannot remove themselves with this action.' } });
+});
+
 test('getRemovalNotice calls the get_removal_notice RPC with no arguments', async () => {
   mockRpc.mockResolvedValue({ data: [], error: null });
 

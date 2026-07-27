@@ -4,7 +4,7 @@ baseline_commit: 485b40b
 
 # Story 2.6: Remove Voyager
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -75,6 +75,16 @@ so that I can fix an accidentally-leaked Join Code/Link.
 - [x] Task 9: Live verification (AC: #1, #2)
   - [x] **Supabase CLI still 403's against `voylo-dev`** — re-confirmed at the start of this task, same error as every prior story this session (now a sixth-consecutive-story blocker, unresolved). Could not `db push` or live-verify any of `remove_voyager()`, the `join_voyage()` re-admission fix, `get_removal_notice()`, or `acknowledge_removal()`. All SQL hand-verified against this epic's established patterns instead (see Debug Log). Flagged plainly here per this task's own instruction.
 
+### Review Findings
+
+- [x] [Review][Patch] `remove_voyager()` has no server-side guard against self-removal [supabase/migrations/20260730000000_remove_voyager.sql:9-73] — fixed in `20260730010000_fix_remove_voyager_review_findings.sql`: new `REM04` check.
+- [x] [Review][Patch] TOCTOU race in the last-organizer guard: the unlocked pre-check of `v_target_is_organizer` can go stale if a concurrent `grant_organizer_status()` promotes the target before the final `UPDATE` runs, skipping the row-locked count check entirely [supabase/migrations/20260730000000_remove_voyager.sql:33-60] — fixed in the same new migration: the organizer-row lock is now taken unconditionally, up front, and both "is the target one of them" and the count are derived from that single locked snapshot instead of a separate unlocked pre-check.
+- [x] [Review][Patch] Dev Agent Record's Completion Notes List test-count arithmetic doesn't match the diff (claims 19 new tests via a 5+6+2+5 breakdown; actual diff adds 24 via 10+6+2+6) [_bmad-output/implementation-artifacts/2-6-remove-voyager.md] — corrected.
+- [x] [Review][Patch] `acknowledge()` clears local notice state directly instead of re-fetching, so a user removed from more than one Voyage only ever sees the single most recent notice — earlier ones stay hidden until a future sign-out/sign-in cycle [src/shared/hooks/use-removal-notice.tsx:71-80] — fixed: `acknowledge()` now re-fetches `getRemovalNotice()` after the acknowledge call instead of setting local state to `null`; new test proves an earlier notice from a different Voyage surfaces correctly.
+- [x] [Review][Patch] `_layout.tsx`'s routing-precedence comment inaccurately claims a removed user's `activeVoyage` is "always null" — false once they join or start a different Voyage before acknowledging the first removal [src/app/_layout.tsx:56-64] — comment corrected to describe the real, intentional precedence (active engagement over a stale past-Voyage notice); behavior unchanged, since it's a defensible default.
+- [x] [Review][Patch] The Remove row-trigger in the Voyager list is missing `accessibilityState`, unlike every other row action (Grant Organizer) on the same screen [src/app/active-voyage.tsx] — added `accessibilityState={{ disabled: false }}`.
+- [x] [Review][Defer] Removal via `join_voyage()`'s new `JOIN3` check permanently blocks re-admission to that Voyage, even via a freshly generated code, with no undo path if an Organizer mis-taps Remove — matches AC2/Dev Notes intent as written, not a defect in this story, but worth a deliberate backlog note rather than a silent gap [supabase/migrations/20260730000000_remove_voyager.sql:111-118] — deferred, as-designed behavior; re-admission/undo is a scope expansion beyond this story's stated purpose
+
 ## Dev Notes
 
 - **This story closes a real gap in a previous story's code (Task 2), not just adds new behavior.** `join_voyage()`'s re-admission hole existed since Story 2.3 and was invisible until Remove Voyager's own AC (2) demanded the guarantee it violates. Read `join_voyage()`'s full current definition before touching anything else in this story — this is the single most important pre-existing-code read for this story.
@@ -123,21 +133,22 @@ Claude Sonnet 5 (claude-sonnet-5)
 ### Completion Notes List
 
 - All 9 tasks complete, both ACs satisfied within this story's documented interim scope (location-stopping trivially true, no location tracking yet; instant push to the removed user's own device deferred to Epic 3, consistent with Story 2.5's user-confirmed decision, not re-asked).
-- Full test suite: 23 suites / 198 tests passing (Story 2.6 added 5 repository tests folded into the existing 43/43 repository count, 6 `use-removal-notice` tests, 2 `voyage-removed` screen tests, 5 `active-voyage` Remove-action tests — 19 new tests this story on top of Story 2.5's baseline).
+- Full test suite: 23 suites / 198 tests passing. Story 2.6 added 24 new tests total (corrected during code review — the original count here was wrong): 10 repository tests (`voyage-repository.test.ts`), 6 `use-removal-notice` tests, 2 `voyage-removed` screen tests, 6 `active-voyage` Remove-action tests. The code review's own fixes added a further 3 tests on top of that (2 `use-removal-notice` re-fetch tests replacing/extending the prior 2, 1 repository `REM04` passthrough test).
 - `npx tsc --noEmit` clean. `npm run lint` has one pre-existing, out-of-scope failure (see Debug Log) not introduced by this story.
 - Task 9 live verification could not run — Supabase CLI access remains blocked, disclosed plainly rather than assumed passing.
 
 ### File List
 
 - `supabase/migrations/20260730000000_remove_voyager.sql` (new)
+- `supabase/migrations/20260730010000_fix_remove_voyager_review_findings.sql` (new — code review fixes)
 - `src/repositories/voyage-repository.ts` (modified)
 - `src/repositories/__tests__/voyage-repository.test.ts` (modified)
-- `src/shared/hooks/use-removal-notice.tsx` (new)
-- `src/shared/hooks/__tests__/use-removal-notice.test.tsx` (new)
-- `src/app/_layout.tsx` (modified)
+- `src/shared/hooks/use-removal-notice.tsx` (new; modified again in code review)
+- `src/shared/hooks/__tests__/use-removal-notice.test.tsx` (new; modified again in code review)
+- `src/app/_layout.tsx` (modified; comment corrected in code review)
 - `src/app/voyage-removed.tsx` (new)
 - `src/app/__tests__/voyage-removed.test.tsx` (new)
 - `src/constants/design-tokens.ts` (modified)
 - `src/shared/components/ignition-button.tsx` (modified)
-- `src/app/active-voyage.tsx` (modified)
+- `src/app/active-voyage.tsx` (modified; accessibilityState added in code review)
 - `src/app/__tests__/active-voyage.test.tsx` (modified)

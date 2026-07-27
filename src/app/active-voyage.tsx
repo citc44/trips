@@ -256,6 +256,7 @@ export default function ActiveVoyageScreen() {
                     <Text
                       testID={`remove-voyager-button-${member.userId}`}
                       accessibilityRole="button"
+                      accessibilityState={{ disabled: false }}
                       onPress={() => setRemoveTarget(member)}
                       style={styles.removeLabel}
                     >
