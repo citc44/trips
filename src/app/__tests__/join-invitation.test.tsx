@@ -57,18 +57,21 @@ function mockAuth(session: { user: { id: string } } | null) {
   });
 }
 
-function mockProfile(overrides: { trustMomentSeenAt?: string | null; driverConsentSeenAt?: string | null } = {}) {
+function mockProfile(
+  overrides: { trustMomentSeenAt?: string | null; driverConsentSeenAt?: string | null; displayName?: string | null } = {},
+) {
   mockUseProfile.mockReturnValue({
     profile: {
       userId: 'user-1',
       trustMomentSeenAt: overrides.trustMomentSeenAt ?? null,
       driverConsentSeenAt: overrides.driverConsentSeenAt ?? null,
-      createdAt: 't',
+      displayName: overrides.displayName ?? null,
     } as any,
     isLoading: false,
     hasError: false,
     markTrustMomentSeen: jest.fn<(...args: any[]) => Promise<any>>(),
     markDriverConsentSeen: jest.fn<(...args: any[]) => Promise<any>>(),
+    setDisplayName: jest.fn<(...args: any[]) => Promise<any>>(),
   });
 }
 
@@ -104,7 +107,7 @@ test('shows an invalid-link message for an unknown code, with a way back to Home
 
 test('the invalid-link recovery button goes straight Home when already authenticated and onboarded', async () => {
   mockAuth({ user: { id: 'user-1' } });
-  mockProfile({ trustMomentSeenAt: '2026-01-01T00:00:00Z', driverConsentSeenAt: '2026-01-01T00:00:00Z' });
+  mockProfile({ trustMomentSeenAt: '2026-01-01T00:00:00Z', driverConsentSeenAt: '2026-01-01T00:00:00Z', displayName: 'Chintan' });
   mockGetVoyagePreview.mockResolvedValue({ data: null, error: { code: 'not_found', message: 'This invite link is not valid.' } });
 
   const { getByTestId } = await renderScreen();
@@ -161,7 +164,7 @@ test('tapping Join while unauthenticated sets the pending join code and pushes t
 
 test('tapping Join while already authenticated and fully onboarded pushes to voyage-joined', async () => {
   mockAuth({ user: { id: 'user-1' } });
-  mockProfile({ trustMomentSeenAt: '2026-01-01T00:00:00Z', driverConsentSeenAt: '2026-01-01T00:00:00Z' });
+  mockProfile({ trustMomentSeenAt: '2026-01-01T00:00:00Z', driverConsentSeenAt: '2026-01-01T00:00:00Z', displayName: 'Chintan' });
   mockGetVoyagePreview.mockResolvedValue({ data: { destination: 'Lake Tahoe', status: 'active', voyagerCount: 2 }, error: null });
 
   const { getByTestId } = await renderScreen();
@@ -172,6 +175,21 @@ test('tapping Join while already authenticated and fully onboarded pushes to voy
   });
 
   await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/voyage-joined'));
+});
+
+test('tapping Join while authenticated, Trust Moment and Driver Consent seen but no display name set, pushes to display-name (Story 2.5)', async () => {
+  mockAuth({ user: { id: 'user-1' } });
+  mockProfile({ trustMomentSeenAt: '2026-01-01T00:00:00Z', driverConsentSeenAt: '2026-01-01T00:00:00Z', displayName: null });
+  mockGetVoyagePreview.mockResolvedValue({ data: { destination: 'Lake Tahoe', status: 'active', voyagerCount: 2 }, error: null });
+
+  const { getByTestId } = await renderScreen();
+  await waitFor(() => expect(getByTestId('join-the-voyage-button')).toBeTruthy());
+
+  await act(async () => {
+    fireEvent.press(getByTestId('join-the-voyage-button'));
+  });
+
+  await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/display-name'));
 });
 
 test('tapping Join while authenticated but the Trust Moment has not been seen pushes to trust-moment', async () => {

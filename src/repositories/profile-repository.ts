@@ -7,12 +7,14 @@ export type Profile = {
   userId: string;
   trustMomentSeenAt: string | null;
   driverConsentSeenAt: string | null;
+  displayName: string | null;
 };
 
 type ProfileRow = {
   user_id: string;
   trust_moment_seen_at: string | null;
   driver_consent_seen_at: string | null;
+  display_name: string | null;
 };
 
 export type ProfileResult = { data: Profile | null; error: RepositoryError | null };
@@ -22,6 +24,7 @@ function toProfile(row: ProfileRow): Profile {
     userId: row.user_id,
     trustMomentSeenAt: row.trust_moment_seen_at,
     driverConsentSeenAt: row.driver_consent_seen_at,
+    displayName: row.display_name,
   };
 }
 
@@ -63,4 +66,16 @@ async function markDriverConsentSeen(): Promise<ProfileResult> {
   return { data: toProfile(data as ProfileRow), error: null };
 }
 
-export const profileRepository = { getProfile, markTrustMomentSeen, markDriverConsentSeen };
+async function setDisplayName(name: string): Promise<ProfileResult> {
+  // set_display_name() trims and length-caps server-side too, not just here --
+  // see its migration for the full rationale.
+  const { data, error } = await supabase.rpc('set_display_name', { p_display_name: name });
+
+  if (error) {
+    return { data: null, error: toRepositoryError(error) };
+  }
+
+  return { data: toProfile(data as ProfileRow), error: null };
+}
+
+export const profileRepository = { getProfile, markTrustMomentSeen, markDriverConsentSeen, setDisplayName };

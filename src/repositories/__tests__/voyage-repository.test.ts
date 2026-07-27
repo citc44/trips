@@ -386,3 +386,71 @@ test('endVoyage returns a typed error instead of a malformed Voyage if the RPC r
   expect(result.data).toBeNull();
   expect(result.error).not.toBeNull();
 });
+
+test('getVoyageMembers calls the get_voyage_members RPC with the Voyage id', async () => {
+  mockRpc.mockResolvedValue({ data: [], error: null });
+
+  await voyageRepository.getVoyageMembers('voyage-1');
+
+  expect(mockRpc).toHaveBeenCalledWith('get_voyage_members', { p_voyage_id: 'voyage-1' });
+});
+
+test('getVoyageMembers returns the mapped list of members', async () => {
+  mockRpc.mockResolvedValue({
+    data: [
+      { user_id: 'user-1', display_name: 'Chintan', role: 'organizer', joined_at: '2026-07-26T00:00:00Z' },
+      { user_id: 'user-2', display_name: 'Meera', role: 'voyager', joined_at: '2026-07-26T00:05:00Z' },
+    ],
+    error: null,
+  });
+
+  const result = await voyageRepository.getVoyageMembers('voyage-1');
+
+  expect(result).toEqual({
+    data: [
+      { userId: 'user-1', displayName: 'Chintan', role: 'organizer', joinedAt: '2026-07-26T00:00:00Z' },
+      { userId: 'user-2', displayName: 'Meera', role: 'voyager', joinedAt: '2026-07-26T00:05:00Z' },
+    ],
+    error: null,
+  });
+});
+
+test('getVoyageMembers returns an empty array (not an error) when the RPC resolves with no rows', async () => {
+  mockRpc.mockResolvedValue({ data: [], error: null });
+
+  const result = await voyageRepository.getVoyageMembers('voyage-1');
+
+  expect(result).toEqual({ data: [], error: null });
+});
+
+test('getVoyageMembers returns a typed { code, message } error on RPC failure (e.g. not a participant)', async () => {
+  mockRpc.mockResolvedValue({ data: null, error: { code: 'MEM01', message: 'You are not a participant of this Voyage.' } });
+
+  const result = await voyageRepository.getVoyageMembers('voyage-1');
+
+  expect(result).toEqual({ data: null, error: { code: 'MEM01', message: 'You are not a participant of this Voyage.' } });
+});
+
+test('grantOrganizerStatus calls the grant_organizer_status RPC with the Voyage and target user ids', async () => {
+  mockRpc.mockResolvedValue({ data: null, error: null });
+
+  await voyageRepository.grantOrganizerStatus('voyage-1', 'user-2');
+
+  expect(mockRpc).toHaveBeenCalledWith('grant_organizer_status', { p_voyage_id: 'voyage-1', p_target_user_id: 'user-2' });
+});
+
+test('grantOrganizerStatus returns no error on success', async () => {
+  mockRpc.mockResolvedValue({ data: null, error: null });
+
+  const result = await voyageRepository.grantOrganizerStatus('voyage-1', 'user-2');
+
+  expect(result).toEqual({ error: null });
+});
+
+test('grantOrganizerStatus surfaces the not-organizer rejection as a normal typed error', async () => {
+  mockRpc.mockResolvedValue({ data: null, error: { code: 'ORG01', message: 'Only an Organizer can grant Organizer status.' } });
+
+  const result = await voyageRepository.grantOrganizerStatus('voyage-1', 'user-2');
+
+  expect(result).toEqual({ error: { code: 'ORG01', message: 'Only an Organizer can grant Organizer status.' } });
+});

@@ -12,7 +12,7 @@ jest.mock('expo-router', () => ({
 }));
 
 jest.mock('@/repositories/voyage-repository', () => ({
-  voyageRepository: { endVoyage: jest.fn() },
+  voyageRepository: { endVoyage: jest.fn(), getVoyageMembers: jest.fn(), grantOrganizerStatus: jest.fn() },
 }));
 
 jest.mock('@/shared/hooks/use-active-voyage', () => ({
@@ -20,8 +20,15 @@ jest.mock('@/shared/hooks/use-active-voyage', () => ({
 }));
 
 const mockEndVoyage = voyageRepository.endVoyage as jest.MockedFunction<typeof voyageRepository.endVoyage>;
+const mockGetVoyageMembers = voyageRepository.getVoyageMembers as jest.MockedFunction<typeof voyageRepository.getVoyageMembers>;
+const mockGrantOrganizerStatus = voyageRepository.grantOrganizerStatus as jest.MockedFunction<typeof voyageRepository.grantOrganizerStatus>;
 const mockUseActiveVoyage = useActiveVoyage as jest.MockedFunction<typeof useActiveVoyage>;
 const mockRefetch = jest.fn<() => Promise<void>>();
+
+const membersFixture = [
+  { userId: 'user-1', displayName: 'Chintan', role: 'organizer' as const, joinedAt: '2026-07-26T00:00:00Z' },
+  { userId: 'user-2', displayName: 'Meera', role: 'voyager' as const, joinedAt: '2026-07-26T00:05:00Z' },
+];
 
 function mockActiveVoyage(role: 'organizer' | 'voyager') {
   mockUseActiveVoyage.mockReturnValue({
@@ -45,6 +52,7 @@ function mockActiveVoyage(role: 'organizer' | 'voyager') {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockGetVoyageMembers.mockResolvedValue({ data: membersFixture, error: null });
 });
 
 test('shows the destination and an End Voyage control for the Organizer', async () => {
@@ -149,4 +157,68 @@ test('shows the error inline on failure and stays on the confirm view (never a d
   expect(getByTestId('end-voyage-error').props.children).toBe('Only the Organizer can end this Voyage.');
   expect(getByTestId('keep-going-button')).toBeTruthy();
   expect(mockPush).not.toHaveBeenCalled();
+});
+
+test('fetches and shows the Voyager list with display names', async () => {
+  mockActiveVoyage('organizer');
+
+  const { getByText } = await render(<ActiveVoyageScreen />);
+
+  expect(mockGetVoyageMembers).toHaveBeenCalledWith('voyage-1');
+  await waitFor(() => expect(getByText('Chintan')).toBeTruthy());
+  expect(getByText('Meera')).toBeTruthy();
+});
+
+test('shows a Grant Organizer action for each non-organizer row when viewed by an Organizer', async () => {
+  mockActiveVoyage('organizer');
+
+  const { getByTestId, queryByTestId } = await render(<ActiveVoyageScreen />);
+
+  await waitFor(() => expect(getByTestId('grant-organizer-button-user-2')).toBeTruthy());
+  // No action on the row that's already an Organizer.
+  expect(queryByTestId('grant-organizer-button-user-1')).toBeNull();
+});
+
+test('shows no Grant Organizer actions at all when viewed by a plain Voyager', async () => {
+  mockActiveVoyage('voyager');
+
+  const { queryByTestId } = await render(<ActiveVoyageScreen />);
+
+  await waitFor(() => expect(mockGetVoyageMembers).toHaveBeenCalled());
+  expect(queryByTestId('grant-organizer-button-user-2')).toBeNull();
+});
+
+test('tapping Grant Organizer calls the repository, shows a quiet toast, and re-fetches -- no navigation', async () => {
+  mockActiveVoyage('organizer');
+  mockGrantOrganizerStatus.mockResolvedValue({ error: null });
+
+  const { getByTestId, getByText } = await render(<ActiveVoyageScreen />);
+
+  await waitFor(() => expect(getByTestId('grant-organizer-button-user-2')).toBeTruthy());
+
+  await act(async () => {
+    fireEvent.press(getByTestId('grant-organizer-button-user-2'));
+  });
+
+  expect(mockGrantOrganizerStatus).toHaveBeenCalledWith('voyage-1', 'user-2');
+  await waitFor(() => expect(getByText(/Meera is now an Organizer/)).toBeTruthy());
+  // Re-fetches to reflect the new role (getVoyageMembers called again beyond the initial mount fetch).
+  await waitFor(() => expect(mockGetVoyageMembers).toHaveBeenCalledTimes(2));
+  expect(mockPush).not.toHaveBeenCalled();
+});
+
+test('shows an inline error (not a dead end) when granting Organizer status fails', async () => {
+  mockActiveVoyage('organizer');
+  mockGrantOrganizerStatus.mockResolvedValue({ error: { code: 'ORG02', message: 'That person is not an active member of this Voyage.' } });
+
+  const { getByTestId } = await render(<ActiveVoyageScreen />);
+
+  await waitFor(() => expect(getByTestId('grant-organizer-button-user-2')).toBeTruthy());
+
+  await act(async () => {
+    fireEvent.press(getByTestId('grant-organizer-button-user-2'));
+  });
+
+  await waitFor(() => expect(getByTestId('voyager-list-error')).toBeTruthy());
+  expect(getByTestId('voyager-list-error').props.children).toBe('That person is not an active member of this Voyage.');
 });

@@ -40,8 +40,9 @@ function AppNavigator() {
   // onboarding step to an already-onboarded user (see use-profile.tsx).
   const hasSeenTrustMoment = !!profile?.trustMomentSeenAt || profileHasError;
   const hasSeenDriverConsent = !!profile?.driverConsentSeenAt || profileHasError;
+  const hasDisplayName = !!profile?.displayName || profileHasError;
 
-  const route = resolveRoute({ hasSession: !!session, hasSeenTrustMoment, hasSeenDriverConsent });
+  const route = resolveRoute({ hasSession: !!session, hasSeenTrustMoment, hasSeenDriverConsent, hasDisplayName });
 
   // The join-resume and active-Voyage decisions are layered on top of
   // resolveRoute()'s own 4-branch result, not folded into it -- resolveRoute()
@@ -67,6 +68,9 @@ function AppNavigator() {
       <Stack.Protected guard={route === 'home' && !hasActiveVoyage && !hasPendingJoin}>
         <Stack.Screen name="index" />
         <Stack.Screen name="settings" />
+      </Stack.Protected>
+      <Stack.Protected guard={route === 'display-name'}>
+        <Stack.Screen name="display-name" />
       </Stack.Protected>
       <Stack.Protected guard={route === 'driver-attention-consent'}>
         <Stack.Screen name="driver-attention-consent" />

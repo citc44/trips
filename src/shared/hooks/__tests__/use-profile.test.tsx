@@ -12,11 +12,13 @@ jest.mock('@/shared/hooks/use-auth', () => ({
 const mockGetProfile = jest.fn<(...args: any[]) => Promise<any>>();
 const mockMarkTrustMomentSeen = jest.fn<(...args: any[]) => Promise<any>>();
 const mockMarkDriverConsentSeen = jest.fn<(...args: any[]) => Promise<any>>();
+const mockSetDisplayName = jest.fn<(...args: any[]) => Promise<any>>();
 jest.mock('@/repositories/profile-repository', () => ({
   profileRepository: {
     getProfile: (...args: unknown[]) => mockGetProfile(...args),
     markTrustMomentSeen: (...args: unknown[]) => mockMarkTrustMomentSeen(...args),
     markDriverConsentSeen: (...args: unknown[]) => mockMarkDriverConsentSeen(...args),
+    setDisplayName: (...args: unknown[]) => mockSetDisplayName(...args),
   },
 }));
 
@@ -42,6 +44,16 @@ function DriverConsentProbe() {
 function DriverConsentActionsProbe() {
   const { markDriverConsentSeen } = useProfile();
   return <Text testID="mark-driver" onPress={() => markDriverConsentSeen()} />;
+}
+
+function DisplayNameProbe() {
+  const { profile } = useProfile();
+  return <Text testID="display-name-probe">{profile?.displayName ?? 'no-name'}</Text>;
+}
+
+function DisplayNameActionsProbe() {
+  const { setDisplayName } = useProfile();
+  return <Text testID="set-display-name" onPress={() => setDisplayName('Chintan')} />;
 }
 
 beforeEach(() => {
@@ -428,4 +440,58 @@ test('resets profile to null when the session goes away (e.g. sign-out)', async 
   );
 
   await waitFor(() => expect(getByTestId('probe').props.children).toBe('no-profile'));
+});
+
+test('setDisplayName calls the repository with the name and updates local state', async () => {
+  mockUseAuth.mockReturnValue({ session: { user: { id: 'user-1' } } });
+  mockGetProfile.mockResolvedValue({
+    data: { userId: 'user-1', trustMomentSeenAt: null, driverConsentSeenAt: null, displayName: null },
+    error: null,
+  });
+  mockSetDisplayName.mockResolvedValue({
+    data: { userId: 'user-1', trustMomentSeenAt: null, driverConsentSeenAt: null, displayName: 'Chintan' },
+    error: null,
+  });
+
+  const { getByTestId } = await render(
+    <ProfileProvider>
+      <DisplayNameActionsProbe />
+      <DisplayNameProbe />
+    </ProfileProvider>,
+  );
+
+  await waitFor(() => expect(getByTestId('display-name-probe').props.children).toBe('no-name'));
+
+  await act(async () => {
+    await getByTestId('set-display-name').props.onPress();
+  });
+
+  expect(mockSetDisplayName).toHaveBeenCalledWith('Chintan');
+  await waitFor(() => expect(getByTestId('display-name-probe').props.children).toBe('Chintan'));
+});
+
+test('setDisplayName returns an error without updating state when the repository call fails', async () => {
+  mockUseAuth.mockReturnValue({ session: { user: { id: 'user-1' } } });
+  mockGetProfile.mockResolvedValue({
+    data: { userId: 'user-1', trustMomentSeenAt: null, driverConsentSeenAt: null, displayName: null },
+    error: null,
+  });
+  mockSetDisplayName.mockResolvedValue({ data: null, error: { code: '22023', message: 'A display name is required.' } });
+
+  const { getByTestId } = await render(
+    <ProfileProvider>
+      <DisplayNameActionsProbe />
+      <DisplayNameProbe />
+    </ProfileProvider>,
+  );
+
+  await waitFor(() => expect(getByTestId('display-name-probe').props.children).toBe('no-name'));
+
+  let result: any;
+  await act(async () => {
+    result = await getByTestId('set-display-name').props.onPress();
+  });
+
+  expect(result).toEqual({ error: { code: '22023', message: 'A display name is required.' } });
+  expect(getByTestId('display-name-probe').props.children).toBe('no-name');
 });

@@ -8,10 +8,12 @@
 export const Colors = {
   surfaceMidnight: '#0A0D1C',
   surfaceDuskHigh: '#1E2547',
+  surfaceGlass: '#1E2547CC',
   inkPrimary: '#F7F6FF',
   inkSecondary: '#A6ADD1',
   borderHairline: '#2A3156',
   accentIgnition: '#FF5677',
+  accentElectric: '#2FE6C0',
   accentViolet: '#9B6BFF',
   error: '#FF4D5E',
 } as const;
@@ -77,9 +79,22 @@ export const Spacing = {
 
 export const Rounded = {
   sm: 10,
+  md: 18,
   xl: 36,
   full: 9999,
 } as const;
+
+/**
+ * nudge-toast component spec (DESIGN.md#components) -- reused for future
+ * v1.1 nudges (long-stop, zero-contribution) too, per EXPERIENCE.md, not
+ * one-off to Grant Organizer's confirmation.
+ */
+export const NudgeToast = {
+  background: Colors.surfaceGlass,
+  foreground: Colors.inkPrimary,
+  radius: Rounded.md,
+  accentBar: Colors.accentElectric,
+};
 
 /**
  * button-ignition component spec (DESIGN.md#components).

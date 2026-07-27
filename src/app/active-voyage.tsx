@@ -1,27 +1,58 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Colors, Spacing, Typography } from '@/constants/design-tokens';
-import { voyageRepository } from '@/repositories/voyage-repository';
+import { voyageRepository, type VoyageMember } from '@/repositories/voyage-repository';
 import { IgnitionButton } from '@/shared/components/ignition-button';
+import { Toast } from '@/shared/components/toast';
 import { useActiveVoyage } from '@/shared/hooks/use-active-voyage';
 import { screenStyles } from '@/shared/styles/screen';
 
 const GENERIC_ERROR = 'Something went wrong. Please try again.';
 
 // Interim placeholder for Live Map (Epic 3) -- see Story 2.4's Dev Notes.
-// Minimal: destination + an Organizer-only End Voyage control. No map, no
-// other Voyagers shown, no Fun Facts, no full 3-row Organizer Action Sheet
-// (Grant Organizer/Remove Voyager don't exist yet -- Stories 2.5/2.6). Only
-// reachable via _layout.tsx's `route === 'home' && hasActiveVoyage` guard, so
-// `activeVoyage` should always be populated when this renders.
+// Minimal: destination, an Organizer-only End Voyage control, and (Story 2.5)
+// a Voyager list with a Grant Organizer action per non-organizer row -- no
+// map, no Fun Facts, no full 3-row Organizer Action Sheet (Remove Voyager
+// doesn't exist yet -- Story 2.6). Only reachable via _layout.tsx's
+// `route === 'home' && hasActiveVoyage` guard, so `activeVoyage` should
+// always be populated when this renders.
 export default function ActiveVoyageScreen() {
   const { activeVoyage, refetch } = useActiveVoyage();
   const [showConfirm, setShowConfirm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [members, setMembers] = useState<VoyageMember[]>([]);
+  const [membersError, setMembersError] = useState<string | null>(null);
+  const [grantingUserId, setGrantingUserId] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const isMounted = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
+  const voyageId = activeVoyage?.voyage.id ?? null;
+
+  const loadMembers = useRef(async (id: string) => {
+    const { data, error: fetchError } = await voyageRepository.getVoyageMembers(id);
+    if (!isMounted.current) return;
+    if (fetchError || !data) {
+      setMembersError(fetchError?.message ?? GENERIC_ERROR);
+      return;
+    }
+    setMembers(data);
+  });
+
+  useEffect(() => {
+    if (!voyageId) return;
+    loadMembers.current(voyageId);
+  }, [voyageId]);
 
   if (!activeVoyage) {
     return null;
@@ -57,6 +88,29 @@ export default function ActiveVoyageScreen() {
     } catch {
       setError(GENERIC_ERROR);
       setIsSubmitting(false);
+    }
+  }
+
+  async function handleGrantOrganizer(member: VoyageMember) {
+    setGrantingUserId(member.userId);
+    setMembersError(null);
+
+    try {
+      const { error: grantError } = await voyageRepository.grantOrganizerStatus(activeVoyage!.voyage.id, member.userId);
+      if (!isMounted.current) return;
+      if (grantError) {
+        setMembersError(grantError.message);
+        return;
+      }
+      // Quiet, undramatic confirmation (EXPERIENCE.md: "Deliberately
+      // undramatic, in contrast to the 'wow' screens") -- no navigation, no
+      // screen change (AC1). Re-fetches (not an optimistic local update) to
+      // reflect the new role, matching this project's established caution
+      // about trusting optimistic state over the server.
+      setToastMessage(`${member.displayName ?? 'They'} is now an Organizer`);
+      await loadMembers.current(activeVoyage!.voyage.id);
+    } finally {
+      if (isMounted.current) setGrantingUserId(null);
     }
   }
 
@@ -100,7 +154,34 @@ export default function ActiveVoyageScreen() {
             variant="secondary"
           />
         ) : null}
+
+        <View style={styles.memberList}>
+          {members.map((member) => (
+            <View key={member.userId} style={styles.memberRow}>
+              <Text style={styles.memberName}>{member.displayName ?? 'Voyager'}</Text>
+              {member.role === 'organizer' ? (
+                <Text style={styles.memberRoleLabel}>Organizer</Text>
+              ) : isOrganizer ? (
+                <IgnitionButton
+                  testID={`grant-organizer-button-${member.userId}`}
+                  label="Grant Organizer"
+                  disabled={grantingUserId === member.userId}
+                  onPress={() => handleGrantOrganizer(member)}
+                  variant="secondary"
+                />
+              ) : null}
+            </View>
+          ))}
+        </View>
+        {membersError ? (
+          <Text testID="voyager-list-error" style={screenStyles.error}>
+            {membersError}
+          </Text>
+        ) : null}
       </SafeAreaView>
+      {toastMessage ? (
+        <Toast testID="grant-organizer-toast" message={toastMessage} onDismiss={() => setToastMessage(null)} />
+      ) : null}
     </View>
   );
 }
@@ -129,5 +210,28 @@ const styles = StyleSheet.create({
     fontFamily: Typography.body.fontFamily,
     fontSize: Typography.body.fontSize,
     lineHeight: Typography.body.lineHeight,
+  },
+  memberList: {
+    width: '100%',
+    gap: Spacing['3'],
+  },
+  memberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing['3'],
+  },
+  memberName: {
+    color: Colors.inkPrimary,
+    fontFamily: Typography.body.fontFamily,
+    fontSize: Typography.body.fontSize,
+  },
+  memberRoleLabel: {
+    color: Colors.inkSecondary,
+    fontFamily: Typography.label.fontFamily,
+    fontSize: Typography.label.fontSize,
+    fontWeight: Typography.label.fontWeight,
+    letterSpacing: Typography.label.letterSpacing,
+    textTransform: 'uppercase',
   },
 });

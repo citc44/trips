@@ -90,12 +90,15 @@ export default function JoinInvitationScreen() {
 
     const hasSeenTrustMoment = !!profile?.trustMomentSeenAt || profileHasError;
     const hasSeenDriverConsent = !!profile?.driverConsentSeenAt || profileHasError;
-    const nextRoute = resolveRoute({ hasSession: true, hasSeenTrustMoment, hasSeenDriverConsent });
+    const hasDisplayName = !!profile?.displayName || profileHasError;
+    const nextRoute = resolveRoute({ hasSession: true, hasSeenTrustMoment, hasSeenDriverConsent, hasDisplayName });
 
     if (nextRoute === 'trust-moment') {
       router.push('/trust-moment');
     } else if (nextRoute === 'driver-attention-consent') {
       router.push('/driver-attention-consent');
+    } else if (nextRoute === 'display-name') {
+      router.push('/display-name');
     } else {
       router.push('/voyage-joined');
     }
@@ -121,12 +124,15 @@ export default function JoinInvitationScreen() {
     }
     const hasSeenTrustMoment = !!profile?.trustMomentSeenAt || profileHasError;
     const hasSeenDriverConsent = !!profile?.driverConsentSeenAt || profileHasError;
-    const nextRoute = resolveRoute({ hasSession: true, hasSeenTrustMoment, hasSeenDriverConsent });
+    const hasDisplayName = !!profile?.displayName || profileHasError;
+    const nextRoute = resolveRoute({ hasSession: true, hasSeenTrustMoment, hasSeenDriverConsent, hasDisplayName });
 
     if (nextRoute === 'trust-moment') {
       router.push('/trust-moment');
     } else if (nextRoute === 'driver-attention-consent') {
       router.push('/driver-attention-consent');
+    } else if (nextRoute === 'display-name') {
+      router.push('/display-name');
     } else {
       router.push('/');
     }

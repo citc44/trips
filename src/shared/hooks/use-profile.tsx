@@ -9,6 +9,7 @@ type ProfileContextValue = {
   hasError: boolean;
   markTrustMomentSeen: () => Promise<{ error: RepositoryError | null }>;
   markDriverConsentSeen: () => Promise<{ error: RepositoryError | null }>;
+  setDisplayName: (name: string) => Promise<{ error: RepositoryError | null }>;
 };
 
 const ProfileContext = createContext<ProfileContextValue | undefined>(undefined);
@@ -130,8 +131,11 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   const markDriverConsentSeen = () =>
     runMarkAction(profileRepository.markDriverConsentSeen, 'Cannot mark driver consent seen without a session.');
 
+  const setDisplayName = (name: string) =>
+    runMarkAction(() => profileRepository.setDisplayName(name), 'Cannot set display name without a session.');
+
   return (
-    <ProfileContext.Provider value={{ profile, isLoading, hasError, markTrustMomentSeen, markDriverConsentSeen }}>
+    <ProfileContext.Provider value={{ profile, isLoading, hasError, markTrustMomentSeen, markDriverConsentSeen, setDisplayName }}>
       {children}
     </ProfileContext.Provider>
   );

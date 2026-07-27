@@ -52,6 +52,26 @@ type EndedVoyageRow = VoyageRow & { voyager_count: number };
 
 type EndedVoyageResult = { data: EndedVoyage | null; error: RepositoryError | null };
 
+export type VoyageMember = {
+  userId: string;
+  displayName: string | null;
+  role: 'organizer' | 'voyager';
+  joinedAt: string;
+};
+
+type VoyageMemberRow = {
+  user_id: string;
+  display_name: string | null;
+  role: 'organizer' | 'voyager';
+  joined_at: string;
+};
+
+type VoyageMembersResult = { data: VoyageMember[] | null; error: RepositoryError | null };
+
+function toVoyageMember(row: VoyageMemberRow): VoyageMember {
+  return { userId: row.user_id, displayName: row.display_name, role: row.role, joinedAt: row.joined_at };
+}
+
 function toVoyage(row: VoyageRow): Voyage {
   return {
     id: row.id,
@@ -178,4 +198,40 @@ async function endVoyage(voyageId: string): Promise<EndedVoyageResult> {
   return { data: { ...toVoyage(row), voyagerCount: Number(row.voyager_count) }, error: null };
 }
 
-export const voyageRepository = { startVoyage, getVoyagePreview, joinVoyage, getMyActiveVoyage, endVoyage };
+async function getVoyageMembers(voyageId: string): Promise<VoyageMembersResult> {
+  // get_voyage_members() is table-returning, same PostgREST array shape as
+  // the other set-returning RPCs -- an empty array is a valid "no members"
+  // result (shouldn't happen in practice, AD-9/the organizer insert guarantee
+  // at least one, but not treated as an error either way).
+  const { data, error } = await supabase.rpc('get_voyage_members', { p_voyage_id: voyageId });
+
+  if (error) {
+    return { data: null, error: toRepositoryError(error) };
+  }
+
+  const rows = (data as VoyageMemberRow[] | null) ?? [];
+  return { data: rows.map(toVoyageMember), error: null };
+}
+
+async function grantOrganizerStatus(voyageId: string, targetUserId: string): Promise<{ error: RepositoryError | null }> {
+  // grant_organizer_status() enforces organizer-only authorization and is
+  // idempotent server-side -- see its migration for the full rationale. No
+  // meaningful data payload on success, just { error: null }.
+  const { error } = await supabase.rpc('grant_organizer_status', { p_voyage_id: voyageId, p_target_user_id: targetUserId });
+
+  if (error) {
+    return { error: toRepositoryError(error) };
+  }
+
+  return { error: null };
+}
+
+export const voyageRepository = {
+  startVoyage,
+  getVoyagePreview,
+  joinVoyage,
+  getMyActiveVoyage,
+  endVoyage,
+  getVoyageMembers,
+  grantOrganizerStatus,
+};
