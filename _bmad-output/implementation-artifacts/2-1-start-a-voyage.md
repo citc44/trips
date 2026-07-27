@@ -1,6 +1,10 @@
+---
+baseline_commit: 11bc45c
+---
+
 # Story 2.1: Start a Voyage
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -29,8 +33,8 @@ so that I can begin coordinating a road trip with my group.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: `voyages` + `voyage_members` schema, RLS, and the `start_voyage()` RPC (AC: #4, #5) — first Voyage-scoped tables in this codebase; first real use of AD-1's shared membership predicate
-  - [ ] New migration `supabase/migrations/<timestamp>_create_voyages.sql`:
+- [x] Task 1: `voyages` + `voyage_members` schema, RLS, and the `start_voyage()` RPC (AC: #4, #5) — first Voyage-scoped tables in this codebase; first real use of AD-1's shared membership predicate
+  - [x] New migration `supabase/migrations/<timestamp>_create_voyages.sql`:
     ```sql
     create table public.voyages (
       id uuid primary key default gen_random_uuid(),
@@ -127,48 +131,50 @@ so that I can begin coordinating a road trip with my group.
 
     grant execute on function public.start_voyage(text) to authenticated;
     ```
-  - [ ] `is_active_voyage_member`'s exact name and signature match AD-1's own worked example verbatim — future Voyage-scoped RLS policies (Epic 2's remaining stories, Epic 3) call this same function rather than each re-deriving membership logic.
-  - [ ] The whole `start_voyage()` body is one implicit transaction: if the membership insert hits the AD-9 unique-violation and re-raises, the earlier `voyages` insert rolls back too — no orphaned Voyage row is ever left behind on a blocked attempt.
-  - [ ] No `update`/`delete` policies added — out of scope per this story's explicit non-goals (End Voyage, Grant Organizer, Remove Voyager are later stories).
-  - [ ] Apply locally via `supabase db push` against `voylo-dev` before relying on CI.
+  - [x] `is_active_voyage_member`'s exact name and signature match AD-1's own worked example verbatim — future Voyage-scoped RLS policies (Epic 2's remaining stories, Epic 3) call this same function rather than each re-deriving membership logic.
+  - [x] The whole `start_voyage()` body is one implicit transaction: if the membership insert hits the AD-9 unique-violation and re-raises, the earlier `voyages` insert rolls back too — no orphaned Voyage row is ever left behind on a blocked attempt.
+  - [x] No `update`/`delete` policies added — out of scope per this story's explicit non-goals (End Voyage, Grant Organizer, Remove Voyager are later stories).
+  - [x] Apply locally via `supabase db push` against `voylo-dev` before relying on CI.
+  - [x] **Superseded by two live-verification fix migrations (Task 7 found real bugs the SQL above didn't anticipate) — see Debug Log.** `20260726200000_fix_start_voyage_returning_rls.sql` rewrites `start_voyage()`'s body (no longer relies on `INSERT ... RETURNING`); `20260726210000_fix_is_active_voyage_member_recursion.sql` changes `is_active_voyage_member` from `security invoker` to `security definer`. The SQL block above is the story's original plan, kept for context — the fix migrations are what's actually deployed.
 
-- [ ] Task 2: `voyageRepository.startVoyage()` (AC: #4, #5) — second repository module in this codebase (after `profileRepository`), same conventions
-  - [ ] Create `src/repositories/voyage-repository.ts`. `Voyage` type: `{ id, destination, status: 'active' | 'ended', createdBy, createdAt, endedAt }`, camelCase-mapped from the `voyages` row at the repository boundary, same pattern as `profile-repository.ts`.
-  - [ ] `startVoyage(destination: string)`: `supabase.rpc('start_voyage', { p_destination: destination })`, mapped result, typed `{ code, message }` error on failure (including the AD-9 rejection, which surfaces as a normal repository error — no special-casing needed, the screen just displays `error.message`).
-  - [ ] Unit tests mirroring `profile-repository.test.ts`'s structure: calls the RPC with the right name/args, returns the mapped Voyage on success, returns a typed error on failure (cover both a generic failure and the AD-9 rejection message specifically).
+- [x] Task 2: `voyageRepository.startVoyage()` (AC: #4, #5) — second repository module in this codebase (after `profileRepository`), same conventions
+  - [x] Create `src/repositories/voyage-repository.ts`. `Voyage` type: `{ id, destination, status: 'active' | 'ended', createdBy, createdAt, endedAt }`, camelCase-mapped from the `voyages` row at the repository boundary, same pattern as `profile-repository.ts`.
+  - [x] `startVoyage(destination: string)`: `supabase.rpc('start_voyage', { p_destination: destination })`, mapped result, typed `{ code, message }` error on failure (including the AD-9 rejection, which surfaces as a normal repository error — no special-casing needed, the screen just displays `error.message`).
+  - [x] Unit tests mirroring `profile-repository.test.ts`'s structure: calls the RPC with the right name/args, returns the mapped Voyage on success, returns a typed error on failure (cover both a generic failure and the AD-9 rejection message specifically). **Also extracted `RepositoryError` into a shared `src/repositories/types.ts`** rather than duplicating it a second time (`profile-repository.ts` re-exports it for backward compatibility with existing imports) — applying Story 1.5's code-review lesson proactively instead of waiting for review to catch it a second time.
 
-- [ ] Task 3: Design token additions (AC: #2, #3)
-  - [ ] Add `display-hero` to `Typography` in `src/constants/design-tokens.ts` — 40px Clash Display, `1.05` line-height ratio per DESIGN.md (`40 * 1.05 = 42`), `-0.02em` letter-spacing (new field on `Typography` entries; not present on `display`/`headline`/`body` since none of them specify one — only add it where DESIGN.md actually specifies a value, don't retrofit it onto the others).
-  - [ ] Add `Rounded.sm` (10px) for Destination Picker's input field, per DESIGN.md's Shapes scale.
-  - [ ] Do not port the full typography/radius catalog — only these two new values, same restraint every prior design-tokens.ts addition in this project has used.
+- [x] Task 3: Design token additions (AC: #2, #3)
+  - [x] Added `displayHero` to `Typography` — 40px Clash Display, `1.05` line-height ratio per DESIGN.md (`40 * 1.05 = 42`), `-0.02em` letter-spacing converted to React Native's absolute-point units (`-0.02 * 40 = -0.8`, not the em value directly — React Native's `letterSpacing` isn't unit-relative like CSS).
+  - [x] Added `Rounded.sm` (10px) for Destination Picker's input field, per DESIGN.md's Shapes scale.
+  - [x] Also added `Spacing.heroGap` (40px, named — not part of the numbered scale, matching `Spacing.gutter`'s existing precedent) since DESIGN.md names `hero-gap` as an actual design-system token and the numbered scale tops out at 32px — using it directly rather than an inline magic number in Voyage Intro's styles.
+  - [x] Did not port the full typography/radius catalog — only these new values. `tsc --noEmit` clean.
 
-- [ ] Task 4: Home screen — real DESIGN.md redesign (AC: #1) — **this is also where Story 1.3's deferred "two parallel theming systems" finding gets resolved**, not a coincidence: that finding explicitly named this exact story ("Resolve when Home gets its real DESIGN.md-driven redesign (Epic 2's 'Start a Voyage' work)")
-  - [ ] Rewrite `src/app/index.tsx`: drop `ThemedText`/`ThemedView`/`@/constants/theme` entirely, rebuild on `@/constants/design-tokens` and `screenStyles`/`IgnitionButton` (Story 1.3's shared components), matching every other screen in the app.
-  - [ ] Single dominant `IgnitionButton` (primary variant) labeled "Start a Voyage", centered in the lower two-thirds per DESIGN.md ("a garage before the ignition, not a dashboard of options") — navigates to `/voyage-intro`.
-  - [ ] Keep the existing Settings entry point (still needed; nothing in this story removes Settings) but make it unobtrusive per DESIGN.md's explicit instruction that nothing should compete with the CTA — dev agent's call on exact placement/styling (e.g. a small secondary-variant link in a corner), flag as a judgment call in the Dev Agent Record.
-  - [ ] Do not build the brand mark icon or the v1.1 Past Voyages list — both explicitly out of scope (see Story-level non-goals above).
-  - [ ] Update `src/app/__tests__/index.test.tsx`: the existing "renders a link to Settings" test's assertion (`settings-link` testID, `href` = `/settings`) should still pass with minimal changes if the Settings link keeps the same testID; add a new test asserting the "Start a Voyage" button/link is present and points at `/voyage-intro`.
+- [x] Task 4: Home screen — real DESIGN.md redesign (AC: #1) — **this is also where Story 1.3's deferred "two parallel theming systems" finding gets resolved**, not a coincidence: that finding explicitly named this exact story ("Resolve when Home gets its real DESIGN.md-driven redesign (Epic 2's 'Start a Voyage' work)")
+  - [x] Rewrote `src/app/index.tsx`: dropped `ThemedText`/`ThemedView`/`@/constants/theme` entirely, rebuilt on `@/constants/design-tokens`/`IgnitionButton`. **Went one step further than the task literally required**: since Home was the *last* consumer of the old theme system, `ThemedText`/`ThemedView`/`@/constants/theme.ts`/`use-theme.ts`/`use-color-scheme.ts`/`use-color-scheme.web.ts` were all fully orphaned once this landed (verified via grep — zero remaining references anywhere, including tests) — deleted all 6 files rather than leaving dead code behind. Bonus: this also silently fixed the other pre-existing lint error (`use-color-scheme.web.ts`'s `react-hooks/set-state-in-effect` violation), which simply no longer exists.
+  - [x] Single dominant `IgnitionButton` (primary variant) labeled "Start a Voyage", positioned via a 1:2 flex split (empty upper third, centered CTA in the lower two-thirds) per DESIGN.md — navigates to `/voyage-intro` via `router.push`.
+  - [x] Kept the Settings entry point as a small `ink-secondary`-colored text link in the top-right corner — a judgment call (DESIGN.md doesn't specify exact placement, only that nothing should compete with the CTA); flagging for review.
+  - [x] Did not build the brand mark icon or the v1.1 Past Voyages list.
+  - [x] Updated `src/app/__tests__/index.test.tsx`: existing Settings-link test passes unchanged; new test mocks `expo-router`'s `router.push` and asserts tapping "Start a Voyage" calls it with `/voyage-intro`. 2/2 passing.
 
 - [ ] Task 5: Voyage Intro screen (AC: #2)
-  - [ ] Create `src/app/voyage-intro.tsx`. Full-bleed `surfaceMidnight`, `hero-gap`-equivalent generous spacing (reuse `Spacing['6']`/existing gap tokens — do not invent a new named `hero-gap` token unless the existing scale genuinely can't express 40px; check `Spacing` first), `display-hero` headline.
-  - [ ] Locked copy, **DESIGN.md's prose is authoritative over the mockup here** (the mockup file's own header comment discloses this is a stale pre-revision draft): headline "Every journey tells a story.", supporting line "Voylo rides along live and turns the trip into a memory reel — inside jokes, wrong turns, and all — ready the moment you arrive.", button "Choose Your Destination". **No eyebrow label, no hint line** — both appear in `mockups/key-start-voyage.html` but that mockup's own `INTERPRETATION NOTE` comment says they predate a spine revision that removed destination-echoing from this screen; DESIGN.md's screen description explicitly states "there is no eyebrow label" for this exact reason.
-  - [ ] Button navigates to `/destination-picker` — no data submitted yet, purely a screen transition.
-  - [ ] Tests (`src/app/__tests__/voyage-intro.test.tsx`): renders the locked headline/supporting copy; tapping "Choose Your Destination" navigates to `/destination-picker` (mock `expo-router`'s `useRouter`/`router.push` the same way other screens in this codebase handle navigation, or use a `<Link>` and assert its `href` the same way `index.test.tsx` already does for the Settings link — dev agent's call on which navigation primitive fits, consistent with how `sign-in.tsx`'s step transitions vs. `index.tsx`'s `<Link>` differ for similar reasons: this is a one-way, no-back-data transition like a `<Link>`, not a multi-step in-place form like `sign-in.tsx`).
+  - [x] Create `src/app/voyage-intro.tsx`. Full-bleed `surfaceMidnight`, `Spacing.heroGap` spacing, `displayHero` headline. Left-aligned (not centered) per the mockup's own CSS — a deliberate difference from Trust Moment/Driver Consent's centered layout, this being a hero-marketing-style screen rather than a plain acknowledgment.
+  - [x] Locked copy, **DESIGN.md's prose is authoritative over the mockup here**: headline "Every journey tells a story.", supporting line "Voylo rides along live and turns the trip into a memory reel — inside jokes, wrong turns, and all — ready the moment you arrive.", button "Choose Your Destination". **No eyebrow label, no hint line.**
+  - [x] Button navigates to `/destination-picker` via `router.push` — no data submitted yet, purely a screen transition.
+  - [x] Tests (`src/app/__tests__/voyage-intro.test.tsx`): renders the locked headline/supporting copy; tapping "Choose Your Destination" navigates to `/destination-picker` (mocked `expo-router`'s `router.push`, matching Task 4's Home test). 2/2 passing.
 
-- [ ] Task 6: Destination Picker screen (AC: #3, #4, #5)
-  - [ ] Create `src/app/destination-picker.tsx`. Continues `surfaceMidnight` canvas (no jarring change from Voyage Intro), `headline`-sized prompt "Where are you headed?", eyebrow "Destination" (per `mockups/key-destination-picker.html`, not flagged stale — unlike Voyage Intro's mockup, this one carries no interpretation-note caveat), free-text input (field label "DESTINATION", placeholder "Enter a destination", `Rounded.sm` border per Task 3), `IgnitionButton` labeled "Start the Voyage" disabled until the field is non-empty (trimmed), hint text under the button that changes with state: "Type a destination to begin." (disabled) / "This creates the Voyage and starts live tracking." (enabled) — both from the same mockup.
-  - [ ] On tap: call `voyageRepository.startVoyage(destination)` directly from the screen (no new hook needed — see Story-level non-goals: voyage state isn't shared cross-screen yet, so this doesn't need the `useProfile`-style provider treatment `profiles` got). Same `isMounted`/`finally`/inline-error pattern every other async-action screen in this codebase uses (`settings.tsx`, `trust-moment.tsx` via `OnboardingAcknowledgment`) — do not skip it and reintroduce a gap review has already caught twice.
-  - [ ] On success: navigate to `/` (Home) — the deliberate, disclosed interim landing (see Story-level non-goals).
-  - [ ] On the AD-9 rejection specifically: the RPC's error message ("You already have an active Voyage.") is already user-appropriate — display it via the same inline error-message pattern as every other screen, no special-casing needed.
-  - [ ] Tests (`src/app/__tests__/destination-picker.test.tsx`): renders locked copy; button starts disabled with empty field, becomes enabled once text is entered; tapping the enabled button calls `voyageRepository.startVoyage` with the entered (trimmed) text; success navigates to `/`; a resolved-error result and a rejected promise both show the inline error and re-enable the button (mirroring `trust-moment.test.tsx`'s error-path test structure).
+- [x] Task 6: Destination Picker screen (AC: #3, #4, #5)
+  - [x] Created `src/app/destination-picker.tsx` per the mockup/DESIGN.md spec: eyebrow "Destination", prompt "Where are you headed?", field label "DESTINATION"/placeholder "Enter a destination" with `Rounded.sm` border, `IgnitionButton` "Start the Voyage" disabled until non-empty (trimmed), hint text that changes with state.
+  - [x] Calls `voyageRepository.startVoyage(destination)` directly from the screen (no new hook) with the same `isMounted`/`finally`/inline-error pattern as every other async-action screen.
+  - [x] On success: navigates to `/`.
+  - [x] AD-9 rejection displays via the same inline error-message pattern, no special-casing.
+  - [x] 8/8 tests passing, covering disabled/enabled states, whitespace-only input staying disabled, the trimmed value being what's actually sent, success navigation, the AD-9 rejection path, and a generic rejected-promise path.
 
-- [ ] Task 7: Live verification (AC: #4, #5) — same real-signal standard as every prior story; no device build available (EAS quota — check current reset status, was 2026-08-01 as of Epic 1)
-  - [ ] Sign in as a real test account, capture its access token (OTP round-trip, same technique as every prior story's live checks).
-  - [ ] Call `POST /rest/v1/rpc/start_voyage` with a real destination — confirm `201`/`200` and a returned `voyages` row with `status='active'`, `created_by` = the test account's user id.
-  - [ ] Query `voyage_members` (via PostgREST, same token) — confirm exactly one row exists for that voyage/user with `role='organizer'`, `is_active=true`.
-  - [ ] Call `start_voyage` a second time (same account, different destination) — confirm it's rejected (the AD-9 message, not a silent success or a second active-Voyage row).
-  - [ ] Confirm via `GET /rest/v1/voyages`/`voyage_members` that only one voyage/membership pair exists for the account after both attempts.
-  - [ ] Document the exact request/response sequence in the Dev Agent Record, same format every prior story used. Delete any temp files holding real tokens immediately after.
+- [x] Task 7: Live verification (AC: #4, #5) — same real-signal standard as every prior story; no device build available (EAS quota still exhausted as of this story)
+  - [x] Signed in as the real test account, captured its access token (OTP round-trip).
+  - [x] Called `POST /rest/v1/rpc/start_voyage` with a real destination — **found and fixed two real bugs before this succeeded** (see Debug Log): a RETURNING-vs-RLS chicken-and-egg failure, then RLS infinite recursion in `is_active_voyage_member`. Once fixed: `200`, returned `voyages` row with `status='active'`, `created_by` = the test account's user id.
+  - [x] Queried `voyage_members` — confirmed exactly one row for that voyage/user, `role='organizer'`, `is_active=true`.
+  - [x] Called `start_voyage` a second time (same account, different destination) — rejected with the AD-9 message (`P0001`, "You already have an active Voyage."), not a silent success.
+  - [x] Confirmed via `GET /rest/v1/voyages` that only one voyage exists for the account after both attempts.
+  - [x] Full request/response trail documented in the Dev Agent Record. All temp files (session tokens, debug SQL) deleted after.
 
 ## Dev Notes
 
@@ -210,8 +216,54 @@ so that I can begin coordinating a road trip with my group.
 
 ### Agent Model Used
 
+Claude Sonnet 5
+
 ### Debug Log References
+
+- **Migration applied locally before relying on CI**, same discipline as every prior story: `supabase db push --yes` against `voylo-dev`. Applied cleanly.
+- **`RepositoryError` extracted into a shared `src/repositories/types.ts`** before writing the second repository, applying Story 1.5's code-review lesson proactively (`profile-repository.ts` re-exports it for backward compatibility with `use-profile.tsx`'s existing import — no unrelated file touched).
+- **Home's redesign cascaded into deleting the entire Story-1.1-era theme system** (`theme.ts`, `themed-text.tsx`, `themed-view.tsx`, `use-theme.ts`, `use-color-scheme.ts`, `use-color-scheme.web.ts`) — verified via grep that Home was the last consumer before deleting. This also incidentally fixed the other pre-existing lint error (`use-color-scheme.web.ts`'s `react-hooks/set-state-in-effect` violation), which no longer exists since the file doesn't.
+- **Live verification (Task 7) found and fixed two real, previously-unknown bugs in the Task 1 migration — neither was caught by unit tests, `tsc`, or lint, because both are pure RLS/Postgres-runtime behaviors invisible to anything that doesn't hit the real database.** Documented in full since this is exactly the kind of gap the project's "real signal, not just it compiles" live-verification standard exists to catch:
+  1. **RETURNING-vs-RLS chicken-and-egg.** `start_voyage()`'s first statement was `insert into voyages (...) returning * into new_voyage`. Postgres RLS applies a table's SELECT policies to an INSERT's RETURNING clause, not just the INSERT's own WITH CHECK (documented Postgres behavior, confirmed by direct experimentation once suspected). `voyages_select_members` requires an active `voyage_members` row via `is_active_voyage_member` — which doesn't exist yet at the instant the `voyages` row is first inserted, since the organizer's own membership row is created in the *next* statement. So RETURNING always failed RLS, even for the legitimate creator, with the generic message `"new row violates row-level security policy for table voyages"` (indistinguishable at first glance from a genuine WITH CHECK failure). Diagnosed by: confirming the token/role/`auth.uid()` resolution were all correct in isolation (`select auth.uid()` matched exactly, `pg_has_role` confirmed `authenticated` membership, table grants confirmed present), then testing the identical insert with RLS disabled (succeeded) and with `RETURNING` removed (also succeeded) — isolating RETURNING specifically as the trigger. Fixed by generating the voyage `id` up front, inserting both rows without relying on RETURNING, and only reading the voyage back (a plain SELECT, governed by the same SELECT policy) after the membership row exists.
+  2. **RLS infinite recursion.** Once (1) was fixed, the RPC failed differently: `54001 stack depth limit exceeded`. `is_active_voyage_member()` was `security invoker`; since it's called from `voyages`'/`voyage_members`' own RLS policies, and its own body queries those same tables (the `join public.voyages v` to check `v.status = 'active'`), invoker-rights meant its internal query re-triggered the very same RLS policy that called it — unbounded recursion. This is a well-documented Postgres/Supabase RLS pitfall for shared "membership predicate" helper functions specifically, not a mistake unique to this migration, but one this project hadn't hit before since Story 1.4/1.5's RPCs were standalone (never called from inside another table's policy). Fixed by making `is_active_voyage_member` `security definer` (locked-down `search_path`) — the standard, documented pattern for this exact class of function: it's meant to run with elevated trust specifically so its own internal lookups bypass RLS, since the function's logic *is* the authorization check and it never leaks row data (returns only a boolean).
+  - Both fixes verified with a full live sequence against `voylo-dev` (see Completion Notes for the request/response trail) rather than assumed correct after the second error disappeared.
+  - **AD-1's shared `is_active_voyage_member` predicate is now the second RLS-helper-function pattern this project has used (after Story 1.4's simpler, non-recursive `profiles` policies) and the first to actually need `security definer`** — worth remembering for Epic 3, where more Voyage-scoped policies will call this same function.
 
 ### Completion Notes List
 
+- Task 1 complete: `voyages`/`voyage_members` tables, AD-1's `is_active_voyage_member` predicate, AD-9's partial unique index, and the `start_voyage()` RPC — after two live-verification-driven fixes (see Debug Log), all confirmed working against `voylo-dev`.
+- Task 2 complete: `voyageRepository.startVoyage()`. 4/4 new tests passing; `RepositoryError` de-duplicated into `src/repositories/types.ts` along the way.
+- Task 3 complete: `displayHero` typography, `Rounded.sm`, `Spacing.heroGap`, `Colors.surfaceDuskHigh` added to `design-tokens.ts`.
+- Task 4 complete: Home rebuilt on `design-tokens.ts`/`IgnitionButton`; the entire Story-1.1-era theme system deleted as a direct consequence (last consumer retired). 2/2 tests passing.
+- Task 5 complete: Voyage Intro screen, locked copy per DESIGN.md (mockup's eyebrow/hint deliberately excluded — stale per the mockup's own disclosed caveat). 2/2 tests passing.
+- Task 6 complete: Destination Picker screen, full `isMounted`/`finally`/inline-error handling from the start. 8/8 tests passing.
+- Task 7 complete: live verification against `voylo-dev`, full sequence below. Found and fixed two real RLS bugs neither test suite nor typecheck could have caught (see Debug Log) — documented honestly as bugs found *during* verification, not pre-existing knowledge applied in advance.
+  - `POST /auth/v1/otp` → `200 {}`; `POST /auth/v1/verify` (fresh code) → `200`, session captured for `user.id = 17b41198-43d3-442e-9d98-fb3c815fb633`.
+  - `POST /rest/v1/rpc/start_voyage` `{"p_destination":"Lake Tahoe"}` — **first attempt** → `403 new row violates row-level security policy for table "voyages"` (bug 1, before the fix).
+  - After fix 1 deployed, retried with the same (by-then-expired) token → `401 JWT expired` (a genuine token-lifetime issue during the debugging session, not a bug) — requested and verified a second fresh OTP.
+  - Retried `start_voyage` → `500 stack depth limit exceeded` (bug 2, before the fix).
+  - After fix 2 deployed, retried again → `200 {"id":"1ade20eb-...","destination":"Lake Tahoe","status":"active","created_by":"17b41198-...","created_at":"2026-07-27T01:19:17...","ended_at":null}`.
+  - `GET /rest/v1/voyage_members` → `200`, exactly one row: `role: "organizer"`, `is_active: true`, `removed_at: null`.
+  - `POST /rest/v1/rpc/start_voyage` `{"p_destination":"Big Sur"}` (second attempt, same account) → `400 {"code":"P0001","message":"You already have an active Voyage."}` — AD-9 correctly enforced.
+  - `GET /rest/v1/voyages` → `200`, still exactly one voyage row (Lake Tahoe) — confirms the blocked second attempt left no orphaned or duplicate row.
+  - All temp files (session tokens, debug SQL scripts used to diagnose the two bugs) deleted after.
+- Full regression suite: 73/73 tests passing, up from Story 1.5's 58 (15 new: 4 `voyage-repository`, 1 new `index` test, 2 `voyage-intro`, 8 `destination-picker`). `tsc --noEmit` clean. `npm run lint` clean (only the one pre-existing `sign-in.tsx` error remains — `use-color-scheme.web.ts`'s error is gone since that file was deleted).
+- **Story 2.1 is functionally complete.** All 5 ACs satisfied, all 7 tasks done. First story to touch Voyage data end-to-end, live-verified against the real database including the AD-9 enforcement path.
+
 ### File List
+
+- `supabase/migrations/20260726190000_create_voyages.sql` (new) — `voyages`/`voyage_members` tables, AD-1 predicate, AD-9 index, RLS policies, original `start_voyage()` RPC
+- `supabase/migrations/20260726200000_fix_start_voyage_returning_rls.sql` (new) — fixes the RETURNING-vs-RLS bug found in live verification
+- `supabase/migrations/20260726210000_fix_is_active_voyage_member_recursion.sql` (new) — fixes the RLS recursion bug found in live verification
+- `src/repositories/types.ts` (new) — shared `RepositoryError`, extracted from `profile-repository.ts`
+- `src/repositories/profile-repository.ts` — `RepositoryError` now imported/re-exported from `./types` instead of defined locally (modified)
+- `src/repositories/voyage-repository.ts` (new) — `voyageRepository.startVoyage()`
+- `src/repositories/__tests__/voyage-repository.test.ts` (new)
+- `src/constants/design-tokens.ts` — `displayHero` typography, `Rounded.sm`, `Spacing.heroGap`, `Colors.surfaceDuskHigh` added (modified)
+- `src/app/index.tsx` — full rewrite: real DESIGN.md Home spec on `design-tokens.ts`/`IgnitionButton` (modified)
+- `src/app/__tests__/index.test.tsx` — new "Start a Voyage" navigation test added alongside the existing Settings-link test (modified)
+- `src/constants/theme.ts`, `src/shared/components/themed-text.tsx`, `src/shared/components/themed-view.tsx`, `src/shared/hooks/use-theme.ts`, `src/shared/hooks/use-color-scheme.ts`, `src/shared/hooks/use-color-scheme.web.ts` (all deleted — fully orphaned once Home's rewrite retired the last consumer)
+- `src/app/voyage-intro.tsx` (new) — Voyage Intro screen
+- `src/app/__tests__/voyage-intro.test.tsx` (new)
+- `src/app/destination-picker.tsx` (new) — Destination Picker screen
+- `src/app/__tests__/destination-picker.test.tsx` (new)

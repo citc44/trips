@@ -1,12 +1,13 @@
 import { supabase } from '@/lib/supabase';
+import type { RepositoryError } from '@/repositories/types';
+
+export type { RepositoryError } from '@/repositories/types';
 
 export type Profile = {
   userId: string;
   trustMomentSeenAt: string | null;
   driverConsentSeenAt: string | null;
 };
-
-export type RepositoryError = { code: string; message: string };
 
 type ProfileRow = {
   user_id: string;

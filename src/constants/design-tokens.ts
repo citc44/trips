@@ -7,6 +7,7 @@
 
 export const Colors = {
   surfaceMidnight: '#0A0D1C',
+  surfaceDuskHigh: '#1E2547',
   inkPrimary: '#F7F6FF',
   inkSecondary: '#A6ADD1',
   borderHairline: '#2A3156',
@@ -16,6 +17,14 @@ export const Colors = {
 } as const;
 
 export const Typography = {
+  // -0.02em @ 40px = -0.8 (React Native's letterSpacing is absolute points, not em).
+  displayHero: {
+    fontFamily: 'Clash Display',
+    fontSize: 40,
+    fontWeight: '600',
+    lineHeight: 42,
+    letterSpacing: -0.8,
+  },
   display: {
     fontFamily: 'Clash Display',
     fontSize: 28,
@@ -44,9 +53,13 @@ export const Spacing = {
   '5': 24,
   '6': 32,
   gutter: 20,
+  // Named token (not part of the numbered scale), per DESIGN.md's hero-gap: the
+  // generous, cinematic whitespace around Voyage Intro/Join-screen copy.
+  heroGap: 40,
 } as const;
 
 export const Rounded = {
+  sm: 10,
   full: 9999,
 } as const;
 
