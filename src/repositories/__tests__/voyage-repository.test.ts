@@ -253,3 +253,136 @@ test('joinVoyage returns a typed error instead of a malformed Voyage if the RPC 
   expect(result.data).toBeNull();
   expect(result.error).not.toBeNull();
 });
+
+test('getMyActiveVoyage calls the get_my_active_voyage RPC with no arguments', async () => {
+  mockRpc.mockResolvedValue({ data: [], error: null });
+
+  await voyageRepository.getMyActiveVoyage();
+
+  expect(mockRpc).toHaveBeenCalledWith('get_my_active_voyage');
+});
+
+test('getMyActiveVoyage returns the mapped active Voyage and role when one exists', async () => {
+  mockRpc.mockResolvedValue({
+    data: [
+      {
+        id: 'voyage-1',
+        destination: 'Lake Tahoe',
+        status: 'active',
+        created_by: 'user-1',
+        created_at: '2026-07-26T00:00:00Z',
+        ended_at: null,
+        join_code: 'ABCD2345',
+        my_role: 'organizer',
+      },
+    ],
+    error: null,
+  });
+
+  const result = await voyageRepository.getMyActiveVoyage();
+
+  expect(result).toEqual({
+    data: {
+      voyage: {
+        id: 'voyage-1',
+        destination: 'Lake Tahoe',
+        status: 'active',
+        createdBy: 'user-1',
+        createdAt: '2026-07-26T00:00:00Z',
+        endedAt: null,
+        joinCode: 'ABCD2345',
+      },
+      role: 'organizer',
+    },
+    error: null,
+  });
+});
+
+test('getMyActiveVoyage returns null data (not an error) when the caller has no active Voyage', async () => {
+  mockRpc.mockResolvedValue({ data: [], error: null });
+
+  const result = await voyageRepository.getMyActiveVoyage();
+
+  expect(result).toEqual({ data: null, error: null });
+});
+
+test('getMyActiveVoyage returns a typed { code, message } error on RPC failure', async () => {
+  mockRpc.mockResolvedValue({ data: null, error: { code: 'unknown', message: 'Network error.' } });
+
+  const result = await voyageRepository.getMyActiveVoyage();
+
+  expect(result).toEqual({ data: null, error: { code: 'unknown', message: 'Network error.' } });
+});
+
+test('endVoyage calls the end_voyage RPC with the Voyage id', async () => {
+  mockRpc.mockResolvedValue({
+    data: [
+      {
+        id: 'voyage-1',
+        destination: 'Lake Tahoe',
+        status: 'ended',
+        created_by: 'user-1',
+        created_at: '2026-07-26T00:00:00Z',
+        ended_at: '2026-07-26T05:30:00Z',
+        join_code: 'ABCD2345',
+        voyager_count: 3,
+      },
+    ],
+    error: null,
+  });
+
+  await voyageRepository.endVoyage('voyage-1');
+
+  expect(mockRpc).toHaveBeenCalledWith('end_voyage', { p_voyage_id: 'voyage-1' });
+});
+
+test('endVoyage returns the mapped, ended Voyage including the Voyager count', async () => {
+  mockRpc.mockResolvedValue({
+    data: [
+      {
+        id: 'voyage-1',
+        destination: 'Lake Tahoe',
+        status: 'ended',
+        created_by: 'user-1',
+        created_at: '2026-07-26T00:00:00Z',
+        ended_at: '2026-07-26T05:30:00Z',
+        join_code: 'ABCD2345',
+        voyager_count: 3,
+      },
+    ],
+    error: null,
+  });
+
+  const result = await voyageRepository.endVoyage('voyage-1');
+
+  expect(result).toEqual({
+    data: {
+      id: 'voyage-1',
+      destination: 'Lake Tahoe',
+      status: 'ended',
+      createdBy: 'user-1',
+      createdAt: '2026-07-26T00:00:00Z',
+      endedAt: '2026-07-26T05:30:00Z',
+      joinCode: 'ABCD2345',
+      voyagerCount: 3,
+    },
+    error: null,
+  });
+});
+
+test('endVoyage surfaces the not-organizer rejection as a normal typed error', async () => {
+  mockRpc.mockResolvedValue({ data: null, error: { code: 'END03', message: 'Only the Organizer can end this Voyage.' } });
+
+  const result = await voyageRepository.endVoyage('voyage-1');
+
+  expect(result).toEqual({ data: null, error: { code: 'END03', message: 'Only the Organizer can end this Voyage.' } });
+});
+
+test('endVoyage returns a typed error instead of a malformed Voyage if the RPC resolves with no error but no usable data', async () => {
+  mockRpc.mockResolvedValue({ data: [], error: null });
+
+  const result = await voyageRepository.endVoyage('voyage-1');
+
+  expect(result.data).toBeNull();
+  expect(result.error).not.toBeNull();
+});

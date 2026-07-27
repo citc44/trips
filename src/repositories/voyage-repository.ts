@@ -37,6 +37,21 @@ type VoyagePreviewRow = {
 
 type VoyagePreviewResult = { data: VoyagePreview | null; error: RepositoryError | null };
 
+export type ActiveVoyage = {
+  voyage: Voyage;
+  role: 'organizer' | 'voyager';
+};
+
+type ActiveVoyageRow = VoyageRow & { my_role: 'organizer' | 'voyager' };
+
+type ActiveVoyageResult = { data: ActiveVoyage | null; error: RepositoryError | null };
+
+export type EndedVoyage = Voyage & { voyagerCount: number };
+
+type EndedVoyageRow = VoyageRow & { voyager_count: number };
+
+type EndedVoyageResult = { data: EndedVoyage | null; error: RepositoryError | null };
+
 function toVoyage(row: VoyageRow): Voyage {
   return {
     id: row.id,
@@ -122,4 +137,45 @@ async function joinVoyage(joinCode: string): Promise<VoyageResult> {
   return { data: toVoyage(row), error: null };
 }
 
-export const voyageRepository = { startVoyage, getVoyagePreview, joinVoyage };
+async function getMyActiveVoyage(): Promise<ActiveVoyageResult> {
+  // get_my_active_voyage() is table-returning (set-returning), same PostgREST
+  // array shape as get_voyage_preview(). An empty array is the valid "no
+  // active Voyage" case, not an error -- AD-9 guarantees at most one row.
+  const { data, error } = await supabase.rpc('get_my_active_voyage');
+
+  if (error) {
+    return { data: null, error: toRepositoryError(error) };
+  }
+
+  const rows = data as ActiveVoyageRow[] | null;
+  const row = rows?.[0];
+  if (!row) {
+    return { data: null, error: null };
+  }
+
+  return { data: { voyage: toVoyage(row), role: row.my_role }, error: null };
+}
+
+async function endVoyage(voyageId: string): Promise<EndedVoyageResult> {
+  // end_voyage() is table-returning (extends the plain Voyage shape with a
+  // Voyager count for the Voyage Ended summary), so PostgREST returns an
+  // array, same as get_voyage_preview()/get_my_active_voyage(). Enforces
+  // organizer-only authorization and releases AD-9's lock for every member
+  // server-side -- see its migration for the full rationale. No client-side
+  // multi-step write.
+  const { data, error } = await supabase.rpc('end_voyage', { p_voyage_id: voyageId });
+
+  if (error) {
+    return { data: null, error: toRepositoryError(error) };
+  }
+
+  const rows = data as EndedVoyageRow[] | null;
+  const row = rows?.[0];
+  if (!row?.id) {
+    return { data: null, error: { code: 'unknown', message: 'Failed to end Voyage.' } };
+  }
+
+  return { data: { ...toVoyage(row), voyagerCount: Number(row.voyager_count) }, error: null };
+}
+
+export const voyageRepository = { startVoyage, getVoyagePreview, joinVoyage, getMyActiveVoyage, endVoyage };

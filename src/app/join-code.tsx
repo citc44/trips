@@ -1,7 +1,7 @@
 import * as Clipboard from 'expo-clipboard';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Linking from 'expo-linking';
-import { Redirect, useLocalSearchParams } from 'expo-router';
+import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Share, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -83,6 +83,7 @@ export default function JoinCodeScreen() {
           ) : null}
         </LinearGradient>
         <IgnitionButton testID="share-button" label="Share" disabled={false} onPress={handleShare} variant="secondary" />
+        <IgnitionButton testID="join-code-continue-button" label="Continue" disabled={false} onPress={() => router.push('/')} />
       </SafeAreaView>
     </View>
   );

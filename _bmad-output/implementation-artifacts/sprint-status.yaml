@@ -60,7 +60,7 @@ development_status:
   2-1-start-a-voyage: done
   2-2-generate-share-join-code-link: done
   2-3-join-voyage-via-code-link: done
-  2-4-end-voyage: backlog
+  2-4-end-voyage: review
   2-5-grant-organizer-status: backlog
   2-6-remove-voyager: backlog
   epic-2-retrospective: optional

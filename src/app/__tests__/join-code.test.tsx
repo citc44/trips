@@ -13,11 +13,13 @@ jest.mock('react-native/Libraries/Share/Share', () => ({
   default: { share: (...args: unknown[]) => mockShare(...args) },
 }));
 
+const mockPush = jest.fn();
 const mockUseLocalSearchParams = jest.fn();
 jest.mock('expo-router', () => {
   const actual = jest.requireActual('expo-router') as object;
   return {
     ...actual,
+    router: { push: (...args: unknown[]) => mockPush(...args) },
     useLocalSearchParams: () => mockUseLocalSearchParams(),
   };
 });
@@ -63,4 +65,14 @@ test('tapping share opens the OS share sheet with a message containing the link'
   const shareArg = mockShare.mock.calls[0][0] as { message: string };
   expect(shareArg.message).toContain('ABCD2345');
   expect(shareArg.message).toContain('Lake Tahoe');
+});
+
+test('tapping Continue routes to Home', async () => {
+  const { getByTestId } = await render(<JoinCodeScreen />);
+
+  await act(async () => {
+    fireEvent.press(getByTestId('join-code-continue-button'));
+  });
+
+  expect(mockPush).toHaveBeenCalledWith('/');
 });
