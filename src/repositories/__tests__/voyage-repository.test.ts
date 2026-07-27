@@ -245,6 +245,14 @@ test('joinVoyage surfaces the invalid-code rejection as a normal typed error', a
   expect(result).toEqual({ data: null, error: { code: 'JOIN1', message: 'This invite link is not valid.' } });
 });
 
+test('joinVoyage surfaces the removed-user rejection as a normal typed error (Story 2.6: old Join Code/Link no longer re-admits a removed Voyager)', async () => {
+  mockRpc.mockResolvedValue({ data: null, error: { code: 'JOIN3', message: 'This invite is no longer valid for you.' } });
+
+  const result = await voyageRepository.joinVoyage('ABCD2345');
+
+  expect(result).toEqual({ data: null, error: { code: 'JOIN3', message: 'This invite is no longer valid for you.' } });
+});
+
 test('joinVoyage returns a typed error instead of a malformed Voyage if the RPC resolves with no error but no usable data', async () => {
   mockRpc.mockResolvedValue({ data: { id: null }, error: null });
 
@@ -453,4 +461,76 @@ test('grantOrganizerStatus surfaces the not-organizer rejection as a normal type
   const result = await voyageRepository.grantOrganizerStatus('voyage-1', 'user-2');
 
   expect(result).toEqual({ error: { code: 'ORG01', message: 'Only an Organizer can grant Organizer status.' } });
+});
+
+test('removeVoyager calls the remove_voyager RPC with the Voyage and target user ids', async () => {
+  mockRpc.mockResolvedValue({ data: null, error: null });
+
+  await voyageRepository.removeVoyager('voyage-1', 'user-2');
+
+  expect(mockRpc).toHaveBeenCalledWith('remove_voyager', { p_voyage_id: 'voyage-1', p_target_user_id: 'user-2' });
+});
+
+test('removeVoyager returns no error on success', async () => {
+  mockRpc.mockResolvedValue({ data: null, error: null });
+
+  const result = await voyageRepository.removeVoyager('voyage-1', 'user-2');
+
+  expect(result).toEqual({ error: null });
+});
+
+test('removeVoyager surfaces the last-organizer rejection as a normal typed error', async () => {
+  mockRpc.mockResolvedValue({ data: null, error: { code: 'REM02', message: 'A Voyage must always have at least one Organizer.' } });
+
+  const result = await voyageRepository.removeVoyager('voyage-1', 'user-1');
+
+  expect(result).toEqual({ error: { code: 'REM02', message: 'A Voyage must always have at least one Organizer.' } });
+});
+
+test('getRemovalNotice calls the get_removal_notice RPC with no arguments', async () => {
+  mockRpc.mockResolvedValue({ data: [], error: null });
+
+  await voyageRepository.getRemovalNotice();
+
+  expect(mockRpc).toHaveBeenCalledWith('get_removal_notice');
+});
+
+test('getRemovalNotice returns the mapped notice when one exists', async () => {
+  mockRpc.mockResolvedValue({ data: [{ voyage_id: 'voyage-1', destination: 'Lake Tahoe' }], error: null });
+
+  const result = await voyageRepository.getRemovalNotice();
+
+  expect(result).toEqual({ data: { voyageId: 'voyage-1', destination: 'Lake Tahoe' }, error: null });
+});
+
+test('getRemovalNotice returns null data (not an error) when there is no unacknowledged removal', async () => {
+  mockRpc.mockResolvedValue({ data: [], error: null });
+
+  const result = await voyageRepository.getRemovalNotice();
+
+  expect(result).toEqual({ data: null, error: null });
+});
+
+test('getRemovalNotice returns a typed { code, message } error on RPC failure', async () => {
+  mockRpc.mockResolvedValue({ data: null, error: { code: 'unknown', message: 'Network error.' } });
+
+  const result = await voyageRepository.getRemovalNotice();
+
+  expect(result).toEqual({ data: null, error: { code: 'unknown', message: 'Network error.' } });
+});
+
+test('acknowledgeRemoval calls the acknowledge_removal RPC with the Voyage id', async () => {
+  mockRpc.mockResolvedValue({ data: null, error: null });
+
+  await voyageRepository.acknowledgeRemoval('voyage-1');
+
+  expect(mockRpc).toHaveBeenCalledWith('acknowledge_removal', { p_voyage_id: 'voyage-1' });
+});
+
+test('acknowledgeRemoval returns no error on success', async () => {
+  mockRpc.mockResolvedValue({ data: null, error: null });
+
+  const result = await voyageRepository.acknowledgeRemoval('voyage-1');
+
+  expect(result).toEqual({ error: null });
 });

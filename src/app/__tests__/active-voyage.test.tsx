@@ -3,6 +3,7 @@ import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 import { voyageRepository } from '@/repositories/voyage-repository';
 import { useActiveVoyage } from '@/shared/hooks/use-active-voyage';
+import { useAuth } from '@/shared/hooks/use-auth';
 
 import ActiveVoyageScreen from '../active-voyage';
 
@@ -12,17 +13,23 @@ jest.mock('expo-router', () => ({
 }));
 
 jest.mock('@/repositories/voyage-repository', () => ({
-  voyageRepository: { endVoyage: jest.fn(), getVoyageMembers: jest.fn(), grantOrganizerStatus: jest.fn() },
+  voyageRepository: { endVoyage: jest.fn(), getVoyageMembers: jest.fn(), grantOrganizerStatus: jest.fn(), removeVoyager: jest.fn() },
 }));
 
 jest.mock('@/shared/hooks/use-active-voyage', () => ({
   useActiveVoyage: jest.fn(),
 }));
 
+jest.mock('@/shared/hooks/use-auth', () => ({
+  useAuth: jest.fn(),
+}));
+
 const mockEndVoyage = voyageRepository.endVoyage as jest.MockedFunction<typeof voyageRepository.endVoyage>;
 const mockGetVoyageMembers = voyageRepository.getVoyageMembers as jest.MockedFunction<typeof voyageRepository.getVoyageMembers>;
 const mockGrantOrganizerStatus = voyageRepository.grantOrganizerStatus as jest.MockedFunction<typeof voyageRepository.grantOrganizerStatus>;
+const mockRemoveVoyager = voyageRepository.removeVoyager as jest.MockedFunction<typeof voyageRepository.removeVoyager>;
 const mockUseActiveVoyage = useActiveVoyage as jest.MockedFunction<typeof useActiveVoyage>;
+const mockUseAuth = useAuth as jest.MockedFunction<typeof useAuth>;
 const mockRefetch = jest.fn<() => Promise<void>>();
 
 const membersFixture = [
@@ -53,6 +60,13 @@ function mockActiveVoyage(role: 'organizer' | 'voyager') {
 beforeEach(() => {
   jest.clearAllMocks();
   mockGetVoyageMembers.mockResolvedValue({ data: membersFixture, error: null });
+  mockUseAuth.mockReturnValue({
+    session: { user: { id: 'user-1' } } as any,
+    isLoading: false,
+    signInWithEmail: jest.fn<(...args: any[]) => Promise<any>>(),
+    verifyCode: jest.fn<(...args: any[]) => Promise<any>>(),
+    signOut: jest.fn<(...args: any[]) => Promise<any>>(),
+  });
 });
 
 test('shows the destination and an End Voyage control for the Organizer', async () => {
@@ -281,4 +295,102 @@ test('granting Organizer status on one row does not re-enable a different row st
   await act(async () => {
     resolveFirstGrant!({ error: null });
   });
+});
+
+test('shows a Remove action for each non-self row when viewed by an Organizer', async () => {
+  mockActiveVoyage('organizer');
+
+  const { getByTestId, queryByTestId } = await render(<ActiveVoyageScreen />);
+
+  await waitFor(() => expect(getByTestId('remove-voyager-button-user-2')).toBeTruthy());
+  // No Remove action on the viewer's own row (user-1, the Organizer viewing).
+  expect(queryByTestId('remove-voyager-button-user-1')).toBeNull();
+});
+
+test('shows no Remove actions at all when viewed by a plain Voyager', async () => {
+  mockActiveVoyage('voyager');
+  mockUseAuth.mockReturnValue({
+    session: { user: { id: 'user-2' } } as any,
+    isLoading: false,
+    signInWithEmail: jest.fn<(...args: any[]) => Promise<any>>(),
+    verifyCode: jest.fn<(...args: any[]) => Promise<any>>(),
+    signOut: jest.fn<(...args: any[]) => Promise<any>>(),
+  });
+
+  const { queryByTestId } = await render(<ActiveVoyageScreen />);
+
+  await waitFor(() => expect(mockGetVoyageMembers).toHaveBeenCalled());
+  expect(queryByTestId('remove-voyager-button-user-1')).toBeNull();
+});
+
+test('tapping Remove swaps to the confirm view with the plain, calm copy', async () => {
+  mockActiveVoyage('organizer');
+
+  const { getByTestId, getByText } = await render(<ActiveVoyageScreen />);
+
+  await waitFor(() => expect(getByTestId('remove-voyager-button-user-2')).toBeTruthy());
+  await act(async () => {
+    fireEvent.press(getByTestId('remove-voyager-button-user-2'));
+  });
+
+  expect(getByText('Remove Meera from this Voyage?')).toBeTruthy();
+  expect(getByTestId('confirm-remove-voyager-button')).toBeTruthy();
+  expect(getByTestId('keep-voyager-button')).toBeTruthy();
+});
+
+test('tapping the cancel action swaps back without calling removeVoyager', async () => {
+  mockActiveVoyage('organizer');
+
+  const { getByTestId, queryByTestId } = await render(<ActiveVoyageScreen />);
+
+  await waitFor(() => expect(getByTestId('remove-voyager-button-user-2')).toBeTruthy());
+  await act(async () => {
+    fireEvent.press(getByTestId('remove-voyager-button-user-2'));
+  });
+  await act(async () => {
+    fireEvent.press(getByTestId('keep-voyager-button'));
+  });
+
+  expect(queryByTestId('confirm-remove-voyager-button')).toBeNull();
+  expect(mockRemoveVoyager).not.toHaveBeenCalled();
+});
+
+test('confirming Remove calls removeVoyager, re-fetches the member list, and shows no toast or navigation', async () => {
+  mockActiveVoyage('organizer');
+  mockRemoveVoyager.mockResolvedValue({ error: null });
+
+  const { getByTestId, queryByTestId } = await render(<ActiveVoyageScreen />);
+
+  await waitFor(() => expect(getByTestId('remove-voyager-button-user-2')).toBeTruthy());
+  await act(async () => {
+    fireEvent.press(getByTestId('remove-voyager-button-user-2'));
+  });
+  await act(async () => {
+    fireEvent.press(getByTestId('confirm-remove-voyager-button'));
+  });
+
+  expect(mockRemoveVoyager).toHaveBeenCalledWith('voyage-1', 'user-2');
+  await waitFor(() => expect(mockGetVoyageMembers).toHaveBeenCalledTimes(2));
+  expect(queryByTestId('confirm-remove-voyager-button')).toBeNull();
+  expect(mockPush).not.toHaveBeenCalled();
+  expect(queryByTestId('grant-organizer-toast')).toBeNull();
+});
+
+test('shows an inline error (not a dead end) when removing a Voyager fails', async () => {
+  mockActiveVoyage('organizer');
+  mockRemoveVoyager.mockResolvedValue({ error: { code: 'REM02', message: 'A Voyage must always have at least one Organizer.' } });
+
+  const { getByTestId } = await render(<ActiveVoyageScreen />);
+
+  await waitFor(() => expect(getByTestId('remove-voyager-button-user-2')).toBeTruthy());
+  await act(async () => {
+    fireEvent.press(getByTestId('remove-voyager-button-user-2'));
+  });
+  await act(async () => {
+    fireEvent.press(getByTestId('confirm-remove-voyager-button'));
+  });
+
+  await waitFor(() => expect(getByTestId('remove-voyager-error')).toBeTruthy());
+  expect(getByTestId('remove-voyager-error').props.children).toBe('A Voyage must always have at least one Organizer.');
+  expect(getByTestId('keep-voyager-button')).toBeTruthy();
 });

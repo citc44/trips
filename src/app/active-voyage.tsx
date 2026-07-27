@@ -8,6 +8,7 @@ import { voyageRepository, type VoyageMember } from '@/repositories/voyage-repos
 import { IgnitionButton } from '@/shared/components/ignition-button';
 import { Toast } from '@/shared/components/toast';
 import { useActiveVoyage } from '@/shared/hooks/use-active-voyage';
+import { useAuth } from '@/shared/hooks/use-auth';
 import { screenStyles } from '@/shared/styles/screen';
 
 const GENERIC_ERROR = 'Something went wrong. Please try again.';
@@ -21,6 +22,7 @@ const GENERIC_ERROR = 'Something went wrong. Please try again.';
 // always be populated when this renders.
 export default function ActiveVoyageScreen() {
   const { activeVoyage, refetch } = useActiveVoyage();
+  const { session } = useAuth();
   const [showConfirm, setShowConfirm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,6 +35,11 @@ export default function ActiveVoyageScreen() {
   // (code review finding).
   const [grantingUserIds, setGrantingUserIds] = useState<Set<string>>(new Set());
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  // Holds the row pending confirmation, not just a userId -- the confirm
+  // copy needs the display name and the request needs the id.
+  const [removeTarget, setRemoveTarget] = useState<VoyageMember | null>(null);
+  const [isRemoving, setIsRemoving] = useState(false);
+  const [removeError, setRemoveError] = useState<string | null>(null);
   const isMounted = useRef(true);
 
   useEffect(() => {
@@ -131,6 +138,62 @@ export default function ActiveVoyageScreen() {
     }
   }
 
+  async function handleRemoveVoyager() {
+    if (!removeTarget) return;
+    setIsRemoving(true);
+    setRemoveError(null);
+
+    try {
+      const { error: removeErr } = await voyageRepository.removeVoyager(activeVoyage!.voyage.id, removeTarget.userId);
+      if (!isMounted.current) return;
+      if (removeErr) {
+        setRemoveError(removeErr.message);
+        return;
+      }
+      // Re-fetches (not an optimistic local removal), same discipline as
+      // Grant Organizer -- no toast here, EXPERIENCE.md only calls for one on
+      // Grant Organizer's side.
+      setRemoveTarget(null);
+      await loadMembers.current(activeVoyage!.voyage.id);
+    } finally {
+      if (isMounted.current) {
+        setIsRemoving(false);
+      }
+    }
+  }
+
+  if (removeTarget) {
+    return (
+      <View style={screenStyles.container}>
+        <SafeAreaView style={screenStyles.safeArea}>
+          <Text style={styles.confirmTitle}>Remove {removeTarget.displayName ?? 'them'} from this Voyage?</Text>
+          <IgnitionButton
+            testID="confirm-remove-voyager-button"
+            label="Remove"
+            disabled={isRemoving}
+            onPress={handleRemoveVoyager}
+            variant="destructive"
+          />
+          <IgnitionButton
+            testID="keep-voyager-button"
+            label="Never mind"
+            disabled={isRemoving}
+            onPress={() => {
+              setRemoveTarget(null);
+              setRemoveError(null);
+            }}
+            variant="secondary"
+          />
+          {removeError ? (
+            <Text testID="remove-voyager-error" style={screenStyles.error}>
+              {removeError}
+            </Text>
+          ) : null}
+        </SafeAreaView>
+      </View>
+    );
+  }
+
   if (showConfirm) {
     return (
       <View style={screenStyles.container}>
@@ -173,22 +236,36 @@ export default function ActiveVoyageScreen() {
         ) : null}
 
         <View style={styles.memberList}>
-          {members.map((member) => (
-            <View key={member.userId} style={styles.memberRow}>
-              <Text style={styles.memberName}>{member.displayName ?? 'Voyager'}</Text>
-              {member.role === 'organizer' ? (
-                <Text style={styles.memberRoleLabel}>Organizer</Text>
-              ) : isOrganizer ? (
-                <IgnitionButton
-                  testID={`grant-organizer-button-${member.userId}`}
-                  label="Grant Organizer"
-                  disabled={grantingUserIds.has(member.userId)}
-                  onPress={() => handleGrantOrganizer(member)}
-                  variant="secondary"
-                />
-              ) : null}
-            </View>
-          ))}
+          {members.map((member) => {
+            const isSelf = member.userId === session?.user.id;
+            return (
+              <View key={member.userId} style={styles.memberRow}>
+                <Text style={styles.memberName}>{member.displayName ?? 'Voyager'}</Text>
+                <View style={styles.memberRowActions}>
+                  {member.role === 'organizer' ? <Text style={styles.memberRoleLabel}>Organizer</Text> : null}
+                  {member.role !== 'organizer' && isOrganizer ? (
+                    <IgnitionButton
+                      testID={`grant-organizer-button-${member.userId}`}
+                      label="Grant Organizer"
+                      disabled={grantingUserIds.has(member.userId)}
+                      onPress={() => handleGrantOrganizer(member)}
+                      variant="secondary"
+                    />
+                  ) : null}
+                  {isOrganizer && !isSelf ? (
+                    <Text
+                      testID={`remove-voyager-button-${member.userId}`}
+                      accessibilityRole="button"
+                      onPress={() => setRemoveTarget(member)}
+                      style={styles.removeLabel}
+                    >
+                      Remove
+                    </Text>
+                  ) : null}
+                </View>
+              </View>
+            );
+          })}
         </View>
         {membersError ? (
           <Text testID="voyager-list-error" style={screenStyles.error}>
@@ -252,6 +329,11 @@ const styles = StyleSheet.create({
     fontFamily: Typography.body.fontFamily,
     fontSize: Typography.body.fontSize,
   },
+  memberRowActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing['3'],
+  },
   memberRoleLabel: {
     color: Colors.inkSecondary,
     fontFamily: Typography.label.fontFamily,
@@ -259,5 +341,11 @@ const styles = StyleSheet.create({
     fontWeight: Typography.label.fontWeight,
     letterSpacing: Typography.label.letterSpacing,
     textTransform: 'uppercase',
+  },
+  removeLabel: {
+    color: Colors.error,
+    fontFamily: Typography.body.fontFamily,
+    fontSize: Typography.body.fontSize,
+    padding: Spacing['3'],
   },
 });

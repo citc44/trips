@@ -1,7 +1,7 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { ButtonIgnition, Colors, Spacing, Typography } from '@/constants/design-tokens';
+import { ButtonDestructive, ButtonIgnition, Colors, Spacing, Typography } from '@/constants/design-tokens';
 
 export function IgnitionButton({
   testID,
@@ -14,7 +14,7 @@ export function IgnitionButton({
   label: string;
   disabled: boolean;
   onPress: () => void;
-  variant?: 'primary' | 'secondary';
+  variant?: 'primary' | 'secondary' | 'destructive';
 }) {
   if (variant === 'secondary') {
     return (
@@ -27,6 +27,21 @@ export function IgnitionButton({
       >
         {label}
       </Text>
+    );
+  }
+
+  if (variant === 'destructive') {
+    return (
+      <Pressable
+        testID={testID}
+        accessibilityRole="button"
+        accessibilityState={{ disabled }}
+        disabled={disabled}
+        onPress={onPress}
+        style={[styles.destructiveButton, disabled && styles.destructiveButtonDisabled]}
+      >
+        <Text style={[styles.destructiveLabel, disabled && styles.disabledLabel]}>{label}</Text>
+      </Pressable>
     );
   }
 
@@ -72,5 +87,23 @@ const styles = StyleSheet.create({
   },
   disabledLabel: {
     color: Colors.inkSecondary,
+  },
+  destructiveButton: {
+    width: '100%',
+    minHeight: ButtonDestructive.minHeight,
+    borderRadius: ButtonDestructive.radius,
+    borderWidth: 1,
+    borderColor: ButtonDestructive.borderColor,
+    backgroundColor: ButtonDestructive.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  destructiveButtonDisabled: {
+    opacity: 0.5,
+  },
+  destructiveLabel: {
+    color: ButtonDestructive.foreground,
+    fontSize: Typography.body.fontSize,
+    fontWeight: '600',
   },
 });

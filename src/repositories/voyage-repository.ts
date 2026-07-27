@@ -72,6 +72,18 @@ function toVoyageMember(row: VoyageMemberRow): VoyageMember {
   return { userId: row.user_id, displayName: row.display_name, role: row.role, joinedAt: row.joined_at };
 }
 
+export type RemovalNotice = {
+  voyageId: string;
+  destination: string;
+};
+
+type RemovalNoticeRow = {
+  voyage_id: string;
+  destination: string;
+};
+
+type RemovalNoticeResult = { data: RemovalNotice | null; error: RepositoryError | null };
+
 function toVoyage(row: VoyageRow): Voyage {
   return {
     id: row.id,
@@ -226,6 +238,48 @@ async function grantOrganizerStatus(voyageId: string, targetUserId: string): Pro
   return { error: null };
 }
 
+async function removeVoyager(voyageId: string, targetUserId: string): Promise<{ error: RepositoryError | null }> {
+  // remove_voyager() enforces organizer-only authorization and the
+  // last-Organizer guard server-side -- see its migration for the full
+  // rationale. No meaningful data payload on success, just { error: null }.
+  const { error } = await supabase.rpc('remove_voyager', { p_voyage_id: voyageId, p_target_user_id: targetUserId });
+
+  if (error) {
+    return { error: toRepositoryError(error) };
+  }
+
+  return { error: null };
+}
+
+async function getRemovalNotice(): Promise<RemovalNoticeResult> {
+  // get_removal_notice() is table-returning, same PostgREST array shape as
+  // the other set-returning RPCs. An empty array is the valid "nothing to
+  // acknowledge" case, not an error.
+  const { data, error } = await supabase.rpc('get_removal_notice');
+
+  if (error) {
+    return { data: null, error: toRepositoryError(error) };
+  }
+
+  const rows = data as RemovalNoticeRow[] | null;
+  const row = rows?.[0];
+  if (!row) {
+    return { data: null, error: null };
+  }
+
+  return { data: { voyageId: row.voyage_id, destination: row.destination }, error: null };
+}
+
+async function acknowledgeRemoval(voyageId: string): Promise<{ error: RepositoryError | null }> {
+  const { error } = await supabase.rpc('acknowledge_removal', { p_voyage_id: voyageId });
+
+  if (error) {
+    return { error: toRepositoryError(error) };
+  }
+
+  return { error: null };
+}
+
 export const voyageRepository = {
   startVoyage,
   getVoyagePreview,
@@ -234,4 +288,7 @@ export const voyageRepository = {
   endVoyage,
   getVoyageMembers,
   grantOrganizerStatus,
+  removeVoyager,
+  getRemovalNotice,
+  acknowledgeRemoval,
 };

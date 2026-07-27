@@ -127,3 +127,17 @@ export const JoinCodeCard = {
   glowOpacity: 0.25,
   glowRadius: 40,
 };
+
+/**
+ * button-destructive component spec (DESIGN.md#components): surface-dusk-high
+ * background, error foreground, error hairline at ~33% alpha. `55` is a CSS
+ * hex-alpha suffix (0x55 / 255 ~= 0.33), not a 33% literal -- same convention
+ * as JoinCodeCard's `40` above.
+ */
+export const ButtonDestructive = {
+  background: Colors.surfaceDuskHigh,
+  foreground: Colors.error,
+  borderColor: `${Colors.error}55`,
+  radius: Rounded.full,
+  minHeight: ButtonIgnition.minHeight,
+};
