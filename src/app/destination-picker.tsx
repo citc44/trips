@@ -32,7 +32,7 @@ export default function DestinationPickerScreen() {
     try {
       const { data, error: startError } = await voyageRepository.startVoyage(trimmedDestination);
       if (!isMounted.current) return;
-      if (startError || !data) {
+      if (startError || !data || !data.joinCode) {
         setError(startError?.message ?? GENERIC_ERROR);
         return;
       }

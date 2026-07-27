@@ -51,6 +51,15 @@ export const Typography = {
     lineHeight: 32,
     letterSpacing: -0.32,
   },
+  // +0.04em @ 13px = 0.52; 1.3 line-height ratio @ 13px = 16.9 (React Native's
+  // letterSpacing/lineHeight are absolute points, not em/ratio).
+  label: {
+    fontFamily: 'General Sans',
+    fontSize: 13,
+    fontWeight: '600',
+    lineHeight: 17,
+    letterSpacing: 0.52,
+  },
 } as const;
 
 export const Spacing = {
@@ -92,12 +101,14 @@ export const ButtonIgnition = {
  * existed anywhere in this codebase to copy (IgnitionButton's own `glow` isn't
  * actually implemented, only described in prose) -- shadowColor/shadowOpacity/
  * shadowRadius (iOS) + elevation (Android) is a reasonable native approximation
- * of the web mockup's `0 0 40px accent-violet at 40%` box-shadow glow.
+ * of the web mockup's `0 0 40px accent-violet40` box-shadow glow. `40` there is
+ * a CSS hex-alpha suffix (0x40 / 255 ~= 0.25), not a 40% literal.
  */
 export const JoinCodeCard = {
   gradient: [Colors.surfaceDuskHigh, Colors.surfaceMidnight] as const,
   radius: Rounded.xl,
+  borderColor: Colors.borderHairline,
   glowColor: Colors.accentViolet,
-  glowOpacity: 0.4,
+  glowOpacity: 0.25,
   glowRadius: 40,
 };

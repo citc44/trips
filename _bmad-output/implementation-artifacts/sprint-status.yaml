@@ -58,7 +58,7 @@ development_status:
 
   epic-2: in-progress
   2-1-start-a-voyage: done
-  2-2-generate-share-join-code-link: review
+  2-2-generate-share-join-code-link: done
   2-3-join-voyage-via-code-link: backlog
   2-4-end-voyage: backlog
   2-5-grant-organizer-status: backlog
