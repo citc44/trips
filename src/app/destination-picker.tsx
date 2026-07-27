@@ -60,6 +60,7 @@ export default function DestinationPickerScreen() {
             style={styles.input}
             placeholder="Enter a destination"
             placeholderTextColor={Colors.inkSecondary}
+            maxLength={200}
             value={destination}
             onChangeText={setDestination}
             editable={!isSubmitting}

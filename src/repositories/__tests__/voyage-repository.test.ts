@@ -75,3 +75,12 @@ test('startVoyage surfaces the AD-9 rejection as a normal typed error', async ()
 
   expect(result).toEqual({ data: null, error: { code: 'P0001', message: 'You already have an active Voyage.' } });
 });
+
+test('startVoyage returns a typed error instead of a malformed Voyage if the RPC resolves with no error but no usable data', async () => {
+  mockRpc.mockResolvedValue({ data: { id: null, destination: null }, error: null });
+
+  const result = await voyageRepository.startVoyage('Lake Tahoe');
+
+  expect(result.data).toBeNull();
+  expect(result.error).not.toBeNull();
+});

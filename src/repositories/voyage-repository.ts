@@ -47,7 +47,15 @@ async function startVoyage(destination: string): Promise<VoyageResult> {
     return { data: null, error: toRepositoryError(error) };
   }
 
-  return { data: toVoyage(data as VoyageRow), error: null };
+  // Defensive: never trust "no error" alone as "definitely valid data" -- the
+  // RPC's own `select ... into strict` guards against this server-side, but a
+  // repository shouldn't rely solely on that (code review finding).
+  const row = data as VoyageRow | null;
+  if (!row?.id) {
+    return { data: null, error: { code: 'unknown', message: 'Failed to create Voyage.' } };
+  }
+
+  return { data: toVoyage(row), error: null };
 }
 
 export const voyageRepository = { startVoyage };
