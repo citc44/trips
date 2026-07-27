@@ -75,11 +75,18 @@ async function startVoyage(destination: string): Promise<VoyageResult> {
   return { data: toVoyage(row), error: null };
 }
 
+// Join codes are generated from an uppercase-only alphabet (Story 2.2); normalizing
+// here (not just trusting the caller) protects against any future manual-entry path
+// where a user might type/paste a code in the wrong case (code review finding).
+function normalizeJoinCode(joinCode: string): string {
+  return joinCode.trim().toUpperCase();
+}
+
 async function getVoyagePreview(joinCode: string): Promise<VoyagePreviewResult> {
   // get_voyage_preview() is a table-returning (set-returning) Postgres function,
   // so PostgREST returns an array, unlike start_voyage()'s single-row RPC. An
   // empty array is the valid "invalid/unknown code" case, not an error.
-  const { data, error } = await supabase.rpc('get_voyage_preview', { p_join_code: joinCode });
+  const { data, error } = await supabase.rpc('get_voyage_preview', { p_join_code: normalizeJoinCode(joinCode) });
 
   if (error) {
     return { data: null, error: toRepositoryError(error) };
@@ -101,7 +108,7 @@ async function joinVoyage(joinCode: string): Promise<VoyageResult> {
   // join_voyage() enforces AD-9 and the invalid/ended-code cases server-side and
   // surfaces a clear error on rejection -- see its migration for the full
   // rationale. No client-side multi-step write.
-  const { data, error } = await supabase.rpc('join_voyage', { p_join_code: joinCode });
+  const { data, error } = await supabase.rpc('join_voyage', { p_join_code: normalizeJoinCode(joinCode) });
 
   if (error) {
     return { data: null, error: toRepositoryError(error) };

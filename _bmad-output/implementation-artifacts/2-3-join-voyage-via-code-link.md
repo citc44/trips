@@ -4,7 +4,7 @@ baseline_commit: 15421bb
 
 # Story 2.3: Join Voyage via Code/Link
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -142,12 +142,38 @@ Claude Sonnet 5
 ### File List
 
 - `supabase/migrations/20260727040000_join_voyage.sql` (new) — `get_voyage_preview()` + `join_voyage()`
-- `src/repositories/voyage-repository.ts` — `VoyagePreview` type, `getVoyagePreview`, `joinVoyage` added (modified)
-- `src/repositories/__tests__/voyage-repository.test.ts` — 10 new tests (modified)
+- `supabase/migrations/20260727050000_fix_join_voyage_review_findings.sql` (new, code review patch) — non-reserved error codes, race-free idempotent-rejoin check
+- `src/repositories/voyage-repository.ts` — `VoyagePreview` type, `getVoyagePreview`, `joinVoyage`, join-code normalization added (modified)
+- `src/repositories/__tests__/voyage-repository.test.ts` — 12 new tests (modified)
 - `src/shared/hooks/use-pending-join.tsx` (new) — `PendingJoinProvider`/`usePendingJoin`
 - `src/shared/hooks/__tests__/use-pending-join.test.tsx` (new)
-- `src/app/join/[code].tsx` (new) — Join Invitation screen
+- `src/app/join/[code].tsx` (new) — Join Invitation screen; code review patches: explicit resolveRoute()-driven navigation, invalid-code recovery button, state reset on code change
 - `src/app/__tests__/join-invitation.test.tsx` (new)
-- `src/app/voyage-joined.tsx` (new) — interim post-join confirmation / pending-join resolver
+- `src/app/voyage-joined.tsx` (new) — interim post-join confirmation / pending-join resolver; code review patch: code-keyed start latch
 - `src/app/__tests__/voyage-joined.test.tsx` (new)
 - `src/app/_layout.tsx` — `PendingJoinProvider` wired in, `home` block split, `join/[code]` registered unconditionally (modified)
+
+### Post-Review Fixes
+
+- Fixed 7 patch findings from parallel adversarial review (Blind Hunter, Edge Case Hunter, Acceptance Auditor). Most significant: the original design assumed tapping "Join the Voyage" while already authenticated would auto-navigate via `_layout.tsx`'s guard-flip mechanism — it doesn't, because `join/[code]` is deliberately registered *outside* every `Stack.Protected` block (for deep-link reachability), and that mechanism only auto-redirects when the *currently-focused* screen's own guard changes. Two independent reviewers converged on this same root cause via different reachable scenarios (fully-onboarded tap vs. mid-onboarding tap). Fixed by explicitly recomputing the target route via `resolveRoute()` (the same pure function `_layout.tsx` already uses) in a `useEffect`, and pushing there directly once `pendingJoinCode` commits — correct regardless of onboarding stage, and now test-covered (new tests assert the actual `router.push` calls, closing the coverage gap the original design's Debug Log had flagged as unavoidable).
+- Full regression suite: 108/108 tests passing, up from the pre-review 101 (7 new: 2 repository normalization, 5 navigation/dead-end/state-reset across `join-invitation.test.tsx` and `voyage-joined.test.tsx`). `tsc --noEmit` clean. `npm run lint`: no new errors (one patch briefly introduced a `react-hooks/set-state-in-effect` violation, caught by re-running lint before considering the patch done, fixed via the same microtask-deferral pattern already established in `use-profile.tsx`).
+- **Still not live-verified against `voylo-dev`** (same Supabase CLI access blocker) — the new fix migration (`20260727050000`) has the same disclosed limitation as the original.
+
+### Review Findings
+
+- [x] [Review][Patch] Tapping Join while already authenticated and fully onboarded never navigates anywhere — AC2 is silently broken for the most common real-world path [src/app/join/[code].tsx] — fixed: an explicit `useEffect` recomputes the current route via the same `resolveRoute()` `_layout.tsx` uses and pushes to `/voyage-joined` once `pendingJoinCode` commits, instead of relying on the guard-flip auto-redirect (which only fires for the currently-focused screen's *own* guard — `join/[code]` has none, by design, so it never applied here).
+- [x] [Review][Patch] Tapping Join while authenticated but mid-onboarding (trust-moment/driver-consent not yet seen) also never navigates anywhere — same root cause, different reachable state [src/app/join/[code].tsx] — fixed by the same effect above: pushes to `/trust-moment` or `/driver-attention-consent` as appropriate.
+- [x] [Review][Patch] "Invalid join code" screen is a dead end with no way back to Home, unlike the sibling "ended" state's CTA and Task 6's own task text [src/app/join/[code].tsx] — fixed: added a "Continue" button routing to sign-in/trust-moment/driver-consent/Home depending on current auth+onboarding state (there's no single universal "Home" for every state).
+- [x] [Review][Patch] SQL error codes `P0003`/`P0004` reuse Postgres's reserved P0-class meanings (`too_many_rows`/`assert_failure`) for unrelated app errors — currently harmless (client only reads `.message`) but a landmine for future `.code`-based branching [supabase/migrations/20260727040000_join_voyage.sql] — fixed via `supabase/migrations/20260727050000_fix_join_voyage_review_findings.sql`, switched to custom non-reserved codes `JOIN1`/`JOIN2`.
+- [x] [Review][Patch] Idempotent-rejoin check has a TOCTOU race under a double-tap/concurrent call — the separate `select exists(...)` pre-check can race a second concurrent call, producing the exact "You already have an active Voyage" error the check exists to prevent [supabase/migrations/20260727040000_join_voyage.sql] — fixed in the same migration: removed the pre-check, always attempt the insert, and distinguish idempotent-rejoin from a real AD-9 conflict *inside* the `unique_violation` handler against the actual conflicting row — race-free since it's resolved against real, committed state.
+- [x] [Review][Patch] No case normalization on join codes before querying — landmine for any future manual-entry path (codes are uppercase-only by construction) [src/repositories/voyage-repository.ts] — fixed: both `getVoyagePreview`/`joinVoyage` now trim + uppercase the code before calling their RPC.
+- [x] [Review][Patch] `join/[code].tsx`'s preview-fetch effect doesn't reset prior state when the `code` param changes on an already-mounted instance — stale "invalid"/destination could briefly show for the new code [src/app/join/[code].tsx] — fixed: resets loading/notFound/preview state (deferred via a microtask, matching `use-profile.tsx`'s established `react-hooks/set-state-in-effect`-safe pattern) at the start of each fetch.
+- [x] [Review][Patch] `voyage-joined.tsx`'s `hasStarted` latch isn't keyed to the specific pending code — a second, different join code arriving while this screen is still mounted is silently dropped, no error, no retry [src/app/voyage-joined.tsx] — fixed: the latch is now `useRef<string | null>`, keyed to the specific code it started for, so a different pending code correctly triggers a fresh join attempt.
+- [x] [Review][Defer] No rate limiting on `get_voyage_preview` (anonymous enumeration of any known join code's destination/status/Voyager count) [supabase/migrations/20260727040000_join_voyage.sql] — deferred, pre-existing pattern: no custom rate-limiting exists anywhere else in this app either (relies on Supabase's platform-level protections); building one is a cross-cutting concern beyond this story's scope.
+
+**Dismissed (noise / handled elsewhere / already disclosed):**
+- `voyage-joined.tsx`'s defensive `<Redirect href="/" />` "racing" the framework's own redirect when `Continue` clears `pendingJoinCode` — analyzed directly: this path clears state while `voyage-joined` **is** the currently-focused, guarded screen, the same proven mechanism the rest of the existing onboarding cascade already relies on (unlike the broken `join/[code]` cases above, which involve an *unguarded* screen). Not an actual bug.
+- No `limit 1` / undefended uniqueness assumption in `join_voyage()`'s lookup — relies on the already-enforced `voyages_join_code_key` unique constraint from Story 2.2; guarding against a constraint violation that cannot occur while that constraint exists is over-engineering.
+- `voyage-joined.tsx`'s generic (non-differentiated) error recovery on an AD-9 conflict — inherent to this story's own already-disclosed interim-scope gap (no Live Map exists yet, so there's nowhere better to send a user with a conflicting active Voyage regardless of how the error is worded).
+- No `when others` catch-all exception handler in `join_voyage()`'s membership insert — would be inconsistent with `start_voyage()`, the established precedent this function explicitly mirrors, which doesn't have one either; not introduced by this story.
+- Lack of automated coverage for the guard-based navigation mechanism itself — this is the same, already-disclosed RNTL/`NavigationContainer` limitation from the Debug Log, not a new gap; the fix for the two navigation findings above adds an explicitly-testable `useEffect`, which is covered by new tests as part of applying that patch.

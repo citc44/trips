@@ -8,6 +8,8 @@ import { voyageRepository, type VoyagePreview } from '@/repositories/voyage-repo
 import { IgnitionButton } from '@/shared/components/ignition-button';
 import { useAuth } from '@/shared/hooks/use-auth';
 import { usePendingJoin } from '@/shared/hooks/use-pending-join';
+import { useProfile } from '@/shared/hooks/use-profile';
+import { resolveRoute } from '@/shared/navigation/resolve-route';
 import { screenStyles } from '@/shared/styles/screen';
 
 // Note: this is /join/<code> -- the invitee's landing screen -- distinct from
@@ -21,7 +23,8 @@ import { screenStyles } from '@/shared/styles/screen';
 export default function JoinInvitationScreen() {
   const { code } = useLocalSearchParams<{ code: string }>();
   const { session } = useAuth();
-  const { setPendingJoinCode } = usePendingJoin();
+  const { profile, hasError: profileHasError } = useProfile();
+  const { pendingJoinCode, setPendingJoinCode } = usePendingJoin();
 
   const [preview, setPreview] = useState<VoyagePreview | null>(null);
   const [notFound, setNotFound] = useState(false);
@@ -35,33 +38,97 @@ export default function JoinInvitationScreen() {
   }, []);
 
   useEffect(() => {
+    // Resolved via a microtask (not called synchronously in the effect body)
+    // so this stays inside a promise callback, matching use-profile.tsx's
+    // established pattern and satisfying the react-hooks/set-state-in-effect
+    // rule -- needed here (unlike the mount-only effect above) because `code`
+    // can change on an already-mounted instance, and without resetting first,
+    // a stale "invalid"/destination from the previous code could briefly show
+    // for the new one (code review finding).
+    Promise.resolve().then(() => {
+      if (!isMounted.current) return;
+      setIsLoading(true);
+      setNotFound(false);
+      setPreview(null);
+    });
+
     voyageRepository
       .getVoyagePreview(code)
       .then(({ data, error }) => {
         if (!isMounted.current) return;
         if (error || !data) {
           setNotFound(true);
+          setPreview(null);
         } else {
           setPreview(data);
+          setNotFound(false);
         }
         setIsLoading(false);
       })
       .catch(() => {
         if (!isMounted.current) return;
         setNotFound(true);
+        setPreview(null);
         setIsLoading(false);
       });
   }, [code]);
 
+  // `join/[code]` is registered outside every `Stack.Protected` block on
+  // purpose (so a deep link can always reach it) -- which means, unlike
+  // sign-in/trust-moment/driver-attention-consent, its own guard never flips,
+  // so nothing in the framework automatically moves the user off of it once
+  // authenticated. Explicitly navigate to whatever `resolveRoute()` (the same
+  // pure function `_layout.tsx` uses) says is next, once `pendingJoinCode` has
+  // actually committed -- guaranteed to be a currently-registered screen since
+  // it's computed from the same live inputs `_layout.tsx`'s own guard uses
+  // (code review finding: the original design wrongly assumed the guard-flip
+  // auto-redirect that drives the rest of the onboarding cascade applied here
+  // too, which left both an already-onboarded tap AND a mid-onboarding tap
+  // stranded with no navigation at all).
+  useEffect(() => {
+    if (!session || pendingJoinCode !== code) return;
+
+    const hasSeenTrustMoment = !!profile?.trustMomentSeenAt || profileHasError;
+    const hasSeenDriverConsent = !!profile?.driverConsentSeenAt || profileHasError;
+    const nextRoute = resolveRoute({ hasSession: true, hasSeenTrustMoment, hasSeenDriverConsent });
+
+    if (nextRoute === 'trust-moment') {
+      router.push('/trust-moment');
+    } else if (nextRoute === 'driver-attention-consent') {
+      router.push('/driver-attention-consent');
+    } else {
+      router.push('/voyage-joined');
+    }
+  }, [session, pendingJoinCode, code, profile, profileHasError]);
+
   function handleJoin() {
     setPendingJoinCode(code);
-    // Authenticated + already onboarded: _layout.tsx's `route === 'home' &&
-    // pendingJoinCode` guard flips and redirects to voyage-joined on its own,
-    // same mechanism as the existing onboarding cascade -- no push needed.
-    // Unauthenticated: nothing else moves the user off this (unguarded)
-    // screen, so an explicit push is required.
     if (!session) {
       router.push('/sign-in');
+    }
+    // Authenticated: the effect above navigates once pendingJoinCode commits.
+  }
+
+  // Used by the "invalid code" recovery button: there's no universal "Home" to
+  // fall back to -- an unauthenticated user has no Home at all, and an
+  // authenticated-but-mid-onboarding user still needs to finish that first.
+  // Same resolveRoute()-driven approach as the join effect above, just without
+  // a pendingJoinCode/voyage-joined destination since no join is in progress.
+  function handleGoHome() {
+    if (!session) {
+      router.push('/sign-in');
+      return;
+    }
+    const hasSeenTrustMoment = !!profile?.trustMomentSeenAt || profileHasError;
+    const hasSeenDriverConsent = !!profile?.driverConsentSeenAt || profileHasError;
+    const nextRoute = resolveRoute({ hasSession: true, hasSeenTrustMoment, hasSeenDriverConsent });
+
+    if (nextRoute === 'trust-moment') {
+      router.push('/trust-moment');
+    } else if (nextRoute === 'driver-attention-consent') {
+      router.push('/driver-attention-consent');
+    } else {
+      router.push('/');
     }
   }
 
@@ -76,6 +143,13 @@ export default function JoinInvitationScreen() {
           <Text testID="invitation-invalid" style={screenStyles.headline}>
             This invite link isn&apos;t valid.
           </Text>
+          <IgnitionButton
+            testID="invitation-invalid-home-button"
+            label="Continue"
+            disabled={false}
+            onPress={handleGoHome}
+            variant="secondary"
+          />
         </SafeAreaView>
       </View>
     );

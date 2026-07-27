@@ -115,6 +115,14 @@ test('getVoyagePreview calls the get_voyage_preview RPC with the join code', asy
   expect(mockRpc).toHaveBeenCalledWith('get_voyage_preview', { p_join_code: 'ABCD2345' });
 });
 
+test('getVoyagePreview normalizes the join code to trimmed uppercase before calling the RPC', async () => {
+  mockRpc.mockResolvedValue({ data: [{ destination: 'Lake Tahoe', status: 'active', voyager_count: 2 }], error: null });
+
+  await voyageRepository.getVoyagePreview(' abcd2345 ');
+
+  expect(mockRpc).toHaveBeenCalledWith('get_voyage_preview', { p_join_code: 'ABCD2345' });
+});
+
 test('getVoyagePreview returns the mapped preview from the RPC row', async () => {
   mockRpc.mockResolvedValue({ data: [{ destination: 'Lake Tahoe', status: 'active', voyager_count: 2 }], error: null });
 
@@ -151,6 +159,25 @@ test('getVoyagePreview returns a typed { code, message } error on RPC failure', 
   const result = await voyageRepository.getVoyagePreview('ABCD2345');
 
   expect(result).toEqual({ data: null, error: { code: 'unknown', message: 'Network error.' } });
+});
+
+test('joinVoyage normalizes the join code to trimmed uppercase before calling the RPC', async () => {
+  mockRpc.mockResolvedValue({
+    data: {
+      id: 'voyage-1',
+      destination: 'Lake Tahoe',
+      status: 'active',
+      created_by: 'user-1',
+      created_at: '2026-07-26T00:00:00Z',
+      ended_at: null,
+      join_code: 'ABCD2345',
+    },
+    error: null,
+  });
+
+  await voyageRepository.joinVoyage(' abcd2345 ');
+
+  expect(mockRpc).toHaveBeenCalledWith('join_voyage', { p_join_code: 'ABCD2345' });
 });
 
 test('joinVoyage calls the join_voyage RPC with the join code', async () => {
@@ -211,11 +238,11 @@ test('joinVoyage surfaces the AD-9 rejection as a normal typed error', async () 
 });
 
 test('joinVoyage surfaces the invalid-code rejection as a normal typed error', async () => {
-  mockRpc.mockResolvedValue({ data: null, error: { code: 'P0003', message: 'This invite link is not valid.' } });
+  mockRpc.mockResolvedValue({ data: null, error: { code: 'JOIN1', message: 'This invite link is not valid.' } });
 
   const result = await voyageRepository.joinVoyage('BADCODE1');
 
-  expect(result).toEqual({ data: null, error: { code: 'P0003', message: 'This invite link is not valid.' } });
+  expect(result).toEqual({ data: null, error: { code: 'JOIN1', message: 'This invite link is not valid.' } });
 });
 
 test('joinVoyage returns a typed error instead of a malformed Voyage if the RPC resolves with no error but no usable data', async () => {

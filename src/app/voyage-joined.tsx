@@ -23,7 +23,11 @@ export default function VoyageJoinedScreen() {
   const [destination, setDestination] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const hasStarted = useRef(false);
+  // Keyed to the specific code it started for (not a plain boolean latch) --
+  // a second, different pendingJoinCode arriving while this screen is still
+  // mounted (e.g. a second invite link tapped before the first join finishes)
+  // must still trigger a fresh join attempt (code review finding).
+  const startedFor = useRef<string | null>(null);
   const isMounted = useRef(true);
 
   useEffect(() => {
@@ -33,8 +37,11 @@ export default function VoyageJoinedScreen() {
   }, []);
 
   useEffect(() => {
-    if (!pendingJoinCode || hasStarted.current) return;
-    hasStarted.current = true;
+    if (!pendingJoinCode || startedFor.current === pendingJoinCode) return;
+    startedFor.current = pendingJoinCode;
+    setIsLoading(true);
+    setError(null);
+    setDestination(null);
 
     voyageRepository
       .joinVoyage(pendingJoinCode)

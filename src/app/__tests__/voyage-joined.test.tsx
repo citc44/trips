@@ -119,3 +119,31 @@ test('does not call joinVoyage twice across re-renders', async () => {
 
   expect(mockJoinVoyage).toHaveBeenCalledTimes(1);
 });
+
+test('starts a fresh join when the pending code changes to a different value while still mounted', async () => {
+  mockUsePendingJoin.mockReturnValue({
+    pendingJoinCode: 'ABCD2345',
+    setPendingJoinCode: jest.fn(),
+    clearPendingJoinCode: mockClearPendingJoinCode,
+  });
+  mockJoinVoyage.mockResolvedValue({
+    data: { id: 'v1', destination: 'Lake Tahoe', status: 'active', createdBy: 'u1', createdAt: 't', endedAt: null, joinCode: 'ABCD2345' },
+    error: null,
+  });
+
+  const { rerender } = await render(<VoyageJoinedScreen />);
+  await waitFor(() => expect(mockJoinVoyage).toHaveBeenCalledWith('ABCD2345'));
+
+  mockUsePendingJoin.mockReturnValue({
+    pendingJoinCode: 'WXYZ6789',
+    setPendingJoinCode: jest.fn(),
+    clearPendingJoinCode: mockClearPendingJoinCode,
+  });
+
+  await act(async () => {
+    rerender(<VoyageJoinedScreen />);
+  });
+
+  await waitFor(() => expect(mockJoinVoyage).toHaveBeenCalledWith('WXYZ6789'));
+  expect(mockJoinVoyage).toHaveBeenCalledTimes(2);
+});
