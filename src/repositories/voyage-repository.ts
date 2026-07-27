@@ -23,6 +23,20 @@ type VoyageRow = {
 
 type VoyageResult = { data: Voyage | null; error: RepositoryError | null };
 
+export type VoyagePreview = {
+  destination: string;
+  status: 'active' | 'ended';
+  voyagerCount: number;
+};
+
+type VoyagePreviewRow = {
+  destination: string;
+  status: 'active' | 'ended';
+  voyager_count: number;
+};
+
+type VoyagePreviewResult = { data: VoyagePreview | null; error: RepositoryError | null };
+
 function toVoyage(row: VoyageRow): Voyage {
   return {
     id: row.id,
@@ -61,4 +75,44 @@ async function startVoyage(destination: string): Promise<VoyageResult> {
   return { data: toVoyage(row), error: null };
 }
 
-export const voyageRepository = { startVoyage };
+async function getVoyagePreview(joinCode: string): Promise<VoyagePreviewResult> {
+  // get_voyage_preview() is a table-returning (set-returning) Postgres function,
+  // so PostgREST returns an array, unlike start_voyage()'s single-row RPC. An
+  // empty array is the valid "invalid/unknown code" case, not an error.
+  const { data, error } = await supabase.rpc('get_voyage_preview', { p_join_code: joinCode });
+
+  if (error) {
+    return { data: null, error: toRepositoryError(error) };
+  }
+
+  const rows = data as VoyagePreviewRow[] | null;
+  const row = rows?.[0];
+  if (!row) {
+    return { data: null, error: { code: 'not_found', message: 'This invite link is not valid.' } };
+  }
+
+  return {
+    data: { destination: row.destination, status: row.status, voyagerCount: Number(row.voyager_count) },
+    error: null,
+  };
+}
+
+async function joinVoyage(joinCode: string): Promise<VoyageResult> {
+  // join_voyage() enforces AD-9 and the invalid/ended-code cases server-side and
+  // surfaces a clear error on rejection -- see its migration for the full
+  // rationale. No client-side multi-step write.
+  const { data, error } = await supabase.rpc('join_voyage', { p_join_code: joinCode });
+
+  if (error) {
+    return { data: null, error: toRepositoryError(error) };
+  }
+
+  const row = data as VoyageRow | null;
+  if (!row?.id) {
+    return { data: null, error: { code: 'unknown', message: 'Failed to join Voyage.' } };
+  }
+
+  return { data: toVoyage(row), error: null };
+}
+
+export const voyageRepository = { startVoyage, getVoyagePreview, joinVoyage };
