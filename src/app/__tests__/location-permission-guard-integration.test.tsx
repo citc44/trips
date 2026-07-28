@@ -35,7 +35,7 @@ jest.mock('expo-location', () => ({
   requestBackgroundPermissionsAsync: (...args: unknown[]) => mockRequestBackgroundPermissionsAsync(...args),
 }));
 
-const guardObservations: Array<{ status: string; hasCompletedPriming: boolean; needsLocationPermission: boolean }> = [];
+const guardObservations: { status: string; hasCompletedPriming: boolean; needsLocationPermission: boolean }[] = [];
 
 // Mirrors _layout.tsx's own `needsLocationPermission` expression exactly
 // (with hasActiveVoyage hardcoded true, since that half isn't this test's

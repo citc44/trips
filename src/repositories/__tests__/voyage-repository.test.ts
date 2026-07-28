@@ -403,11 +403,11 @@ test('getVoyageMembers calls the get_voyage_members RPC with the Voyage id', asy
   expect(mockRpc).toHaveBeenCalledWith('get_voyage_members', { p_voyage_id: 'voyage-1' });
 });
 
-test('getVoyageMembers returns the mapped list of members', async () => {
+test('getVoyageMembers returns the mapped list of members, including player_color', async () => {
   mockRpc.mockResolvedValue({
     data: [
-      { user_id: 'user-1', display_name: 'Chintan', role: 'organizer', joined_at: '2026-07-26T00:00:00Z' },
-      { user_id: 'user-2', display_name: 'Meera', role: 'voyager', joined_at: '2026-07-26T00:05:00Z' },
+      { user_id: 'user-1', display_name: 'Chintan', role: 'organizer', joined_at: '2026-07-26T00:00:00Z', player_color: 'coral' },
+      { user_id: 'user-2', display_name: 'Meera', role: 'voyager', joined_at: '2026-07-26T00:05:00Z', player_color: 'teal' },
     ],
     error: null,
   });
@@ -416,8 +416,8 @@ test('getVoyageMembers returns the mapped list of members', async () => {
 
   expect(result).toEqual({
     data: [
-      { userId: 'user-1', displayName: 'Chintan', role: 'organizer', joinedAt: '2026-07-26T00:00:00Z' },
-      { userId: 'user-2', displayName: 'Meera', role: 'voyager', joinedAt: '2026-07-26T00:05:00Z' },
+      { userId: 'user-1', displayName: 'Chintan', role: 'organizer', joinedAt: '2026-07-26T00:00:00Z', playerColor: 'coral' },
+      { userId: 'user-2', displayName: 'Meera', role: 'voyager', joinedAt: '2026-07-26T00:05:00Z', playerColor: 'teal' },
     ],
     error: null,
   });

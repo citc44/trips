@@ -16,6 +16,32 @@ export const Colors = {
   accentElectric: '#2FE6C0',
   accentViolet: '#9B6BFF',
   error: '#FF4D5E',
+  // Player-marker colors (Story 3.2): first-come-first-served from this
+  // fixed 8-hue pool, assigned once per Voyager for the whole Voyage --
+  // never reused for brand chrome, buttons, or any static UI (DESIGN.md's
+  // "Don't" column).
+  playerCoral: '#FF6B6B',
+  playerTeal: '#2FE6C0',
+  playerViolet: '#9B6BFF',
+  playerGold: '#FFC247',
+  playerSky: '#4FB4FF',
+  playerLime: '#B4E61D',
+  playerPink: '#FF8FD8',
+  playerSlate: '#8C9AC4',
+} as const;
+
+// Maps the short token name stored on voyage_members.player_color to its hex
+// value -- the DB never stores a hex, only the name (see Story 3.2's
+// migration comment for why).
+export const PlayerColors = {
+  coral: Colors.playerCoral,
+  teal: Colors.playerTeal,
+  violet: Colors.playerViolet,
+  gold: Colors.playerGold,
+  sky: Colors.playerSky,
+  lime: Colors.playerLime,
+  pink: Colors.playerPink,
+  slate: Colors.playerSlate,
 } as const;
 
 export const Typography = {
@@ -80,6 +106,7 @@ export const Spacing = {
 export const Rounded = {
   sm: 10,
   md: 18,
+  lg: 28,
   xl: 36,
   full: 9999,
 } as const;
@@ -140,4 +167,48 @@ export const ButtonDestructive = {
   borderColor: `${Colors.error}55`,
   radius: Rounded.full,
   minHeight: ButtonIgnition.minHeight,
+};
+
+/**
+ * hud-card component spec (DESIGN.md#components): the Live Map's top/bottom
+ * dock chrome. `85` is a CSS hex-alpha suffix (0x85 / 255 ~= 52%, i.e. the
+ * "scrimOpacityMin: 85%" spec value expressed the same hex-alpha way this
+ * codebase already uses for JoinCodeCard's glow/ButtonDestructive's border --
+ * not a literal 85% opacity.
+ */
+export const HudCard = {
+  background: Colors.surfaceGlass,
+  radius: Rounded.lg,
+  borderColor: Colors.borderHairline,
+  blurAmount: 20,
+};
+
+/**
+ * map-marker component spec (DESIGN.md#components): 40px avatar circle, 3px
+ * player-color ring, 48px tap region (well above the accessibility-floor
+ * minimum), fading comet-trail. ringColor is resolved per-Voyager from
+ * PlayerColors above, not a single static value.
+ */
+export const MapMarker = {
+  size: 40,
+  hitRegion: 48,
+  radius: Rounded.full,
+  ringWidth: 3,
+  fill: Colors.surfaceDuskHigh,
+  trailFadeDurationMs: 600,
+  trailLengthMs: 8000,
+};
+
+/**
+ * status-pill component spec (DESIGN.md#components). Story 3.2 only ever
+ * renders the `riding` variant (interim-scope decision -- Story 3.4 owns the
+ * real Driving/Riding mechanism); `driving`'s glow-alpha `55` is the same
+ * hex-alpha convention as ButtonDestructive/HudCard above.
+ */
+export const StatusPill = {
+  minHeight: 48,
+  minWidth: 48,
+  radius: Rounded.full,
+  riding: { background: Colors.surfaceDuskHigh, foreground: Colors.inkPrimary, borderColor: Colors.borderHairline },
+  driving: { background: Colors.accentElectric, foreground: Colors.surfaceMidnight, glowColor: `${Colors.accentElectric}55` },
 };

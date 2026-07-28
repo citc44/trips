@@ -52,11 +52,14 @@ type EndedVoyageRow = VoyageRow & { voyager_count: number };
 
 type EndedVoyageResult = { data: EndedVoyage | null; error: RepositoryError | null };
 
+export type PlayerColor = 'coral' | 'teal' | 'violet' | 'gold' | 'sky' | 'lime' | 'pink' | 'slate';
+
 export type VoyageMember = {
   userId: string;
   displayName: string | null;
   role: 'organizer' | 'voyager';
   joinedAt: string;
+  playerColor: PlayerColor | null;
 };
 
 type VoyageMemberRow = {
@@ -64,12 +67,19 @@ type VoyageMemberRow = {
   display_name: string | null;
   role: 'organizer' | 'voyager';
   joined_at: string;
+  player_color: PlayerColor | null;
 };
 
 type VoyageMembersResult = { data: VoyageMember[] | null; error: RepositoryError | null };
 
 function toVoyageMember(row: VoyageMemberRow): VoyageMember {
-  return { userId: row.user_id, displayName: row.display_name, role: row.role, joinedAt: row.joined_at };
+  return {
+    userId: row.user_id,
+    displayName: row.display_name,
+    role: row.role,
+    joinedAt: row.joined_at,
+    playerColor: row.player_color,
+  };
 }
 
 export type RemovalNotice = {
