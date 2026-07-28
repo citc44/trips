@@ -4,7 +4,7 @@ baseline_commit: aa00c3e924f4b7fc51fcdb1ef4038a163becb0da
 
 # Story 3.1: OS Location Permission
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -55,9 +55,19 @@ so that the app can show me and my group on a live map.
   - [x] `_layout.tsx`'s own precedence-explaining comment block updated to describe the new branch. `tsc --noEmit` clean.
 
 - [x] Task 5: Live verification (AC: #1, #2)
-  - [x] **Attempted and confirmed blocked.** No EAS CLI available in this environment (`npx eas whoami` fails to resolve an executable) and no physical iOS/Android device attached. Background location and the plugin's native config genuinely cannot be exercised in Expo Go, and no dev build could be produced or installed here — consistent with AD-8's own note, same disclosure standard as every Epic 2 story's Supabase-CLI blocker. The iOS/Android on-device flow, the platform-divergent background-permission behavior, and the "fires once per device" persistence across app restarts are all UNVERIFIED and need a real device + dev build before this ships.
-  - [ ] Confirm the "fires once per device" behavior: force-quit and reopen the app after granting/denying — the priming screen must not reappear (gate correctly reads OS status as no longer `undetermined`).
-  - [ ] If a dev build isn't available/buildable in this environment, say so plainly in the Dev Agent Record, same standard as every prior story's Supabase-CLI disclosure.
+  - [x] **Attempted and confirmed blocked.** No EAS CLI available in this environment (`npx eas whoami` fails to resolve an executable) and no physical iOS/Android device attached. Background location and the plugin's native config genuinely cannot be exercised in Expo Go, and no dev build could be produced or installed here — consistent with AD-8's own note, same disclosure standard as every Epic 2 story's Supabase-CLI blocker. The "confirm on a real iOS/Android device" and "confirm fires once per device across a real restart" subtasks are covered by this same disclosure, not separately actionable in this environment.
+
+### Review Findings
+
+- [x] [Review][Patch] Premature guard eviction: `refetch()` called before `setFlowState('explainer')` in both denial branches updates the shared `status` out of `'undetermined'`, which flips `_layout.tsx`'s `needsLocationPermission` guard false and unmounts `location-permission.tsx` (via `Stack.Protected`) before the Explainer state ever renders — confirmed empirically with an instrumented render-order test (not just theoretical), directly threatening AC2's "choosing less shows a full-bleed explainer" for the majority of real denial paths [src/app/location-permission.tsx:24-46] — fixed: `refetch()` moved out of `handleAllowLocation`'s denial branches entirely, now called only from the Explainer's own dismiss actions (`handleOpenSettings`/`handleContinueAnyway`), after `markPrimingComplete()` already makes the guard safe. A new integration test (`location-permission-guard-integration.test.tsx`), using the real provider and screen together, proves the guard never reads "would-evict" before the Explainer renders.
+- [x] [Review][Patch] No error handling around `requestForegroundPermissionsAsync()`/`requestBackgroundPermissionsAsync()` in `handleAllowLocation` — a rejection leaves `flowState` stuck at `'requesting'` (Allow button permanently disabled) with no error UI and no retry path, a dead end inconsistent with this app's established "never a dead end" discipline [src/app/location-permission.tsx:24-46] — fixed: wrapped in try/catch, resets to `'priming'` with an inline `location-permission-error` message on failure, re-enabling the Allow button as a natural retry path.
+- [x] [Review][Patch] No unmount guard (`isMounted` ref) around the async work in `handleAllowLocation` — every other screen in this codebase with in-flight async work (`active-voyage.tsx`, `destination-picker.tsx`, `voyage-joined.tsx`) uses this pattern; this screen is the one outlier missing it [src/app/location-permission.tsx:24-46] — fixed: added the same `isMounted` ref pattern.
+- [x] [Review][Patch] No guard against a double-tap on "Allow Location" before the `disabled` state commits, which could fire concurrent duplicate permission-request calls [src/app/location-permission.tsx:94-99] — fixed: `handleAllowLocation` now no-ops unless `flowState === 'priming'`.
+- [x] [Review][Patch] `Task 5`'s own checklist had two lingering unchecked sub-bullets after the parent bullet's disclosure already superseded them — internal inconsistency between the prose claim of completeness and the checkbox state, now corrected directly above
+- [x] [Review][Decision→Defer] A user whose OS permission is already `'denied'` before ever reaching an active Voyage in this app skips the priming/explainer flow entirely (`needsLocationPermission` only fires on `status === 'undetermined'`) — they're never told their marker won't render. User decision: defer to backlog rather than expand the guard to include `'denied'`, since doing so (without new persisted state, which this story deliberately avoided) would make the explainer re-show every app launch while denied, conflicting with the "fires once per device, not a nag" design. Revisit once Story 3.2's map exists and can show a persistent, non-nagging in-map indicator instead of a one-time screen [src/app/_layout.tsx:89] — deferred, reason: avoid reintroducing per-session nagging without a real persisted-state redesign
+- [x] [Review][Defer] No `accessibilityLabel`/explicit accessibility attributes on the priming/explainer screen's buttons — matches the existing cross-cutting deferred item from Story 1.3's retrospective ("a dedicated accessibility pass across all button variants... rather than fixing piecemeal per screen"), not a new gap specific to this story [src/app/location-permission.tsx] — deferred, folds into the existing Story 1.3 accessibility-pass deferred item
+- [x] [Review][Defer] Explainer copy doesn't differentiate "foreground fully denied" from "foreground granted, background/Always declined" — both get the same "needs Always-allow" framing, slightly overstating the gap for a fully-denied user. Minor UX nuance, not a hard AC violation [src/app/location-permission.tsx:63-67] — deferred, not blocking
+- [x] [Review][Defer] `ARCHITECTURE-SPINE.md`'s Stack table still says `expo-location` is "compatible with Expo SDK 56," already known stale (per this story's own Dev Agent Record) but the source doc itself was never corrected [architecture/ARCHITECTURE-SPINE.md] — deferred, documentation-maintenance item outside this story's own file set
 
 ## Dev Notes
 
@@ -100,11 +110,13 @@ Claude Sonnet 5 (claude-sonnet-5)
 - `npx eas whoami` fails to resolve an executable in this environment, and no physical iOS/Android device is attached — Task 5's live device verification could not be performed. Documented plainly rather than assumed passing, same standard as every Epic 2 story's Supabase-CLI disclosure.
 - `ARCHITECTURE-SPINE.md`'s Stack table says `expo-location` is "compatible with Expo SDK 56" — stale; `npx expo install expo-location` resolved a version against the repo's actual Expo `~57.0.8`, which is what was trusted, not the stale doc line (flagged explicitly in the story's own Task 1 guidance before implementation started).
 - Deliberately did not add any DB column or `AsyncStorage` flag for "has this device seen the priming screen" — reused `expo-location`'s own OS-persisted permission status (`undetermined` → `granted`/`denied`) as that memory directly, per the architecture's established device-vs-account-state boundary (see story Dev Notes).
+- **Code review found a genuine guard-eviction race** (`refetch()` called before `setFlowState('explainer')` let `_layout.tsx`'s routing guard unmount this screen before the Explainer ever rendered). Two adversarial reviewers disagreed on whether this was real; settled it empirically with an instrumented render-order test (not by argument) before accepting the finding — confirmed the race, then fixed it and kept the instrumented test as a permanent regression guard (`location-permission-guard-integration.test.tsx`).
 
 ### Completion Notes List
 
 - All 5 tasks complete. AC1 (priming screen before the native OS dialog) and AC2 (Always Allow enables background; anything less shows the full-bleed explainer with a Settings link) are both implemented and unit-tested; the "marker doesn't render for others" half of AC2 is explicitly out of this story's scope (no map exists yet — Story 3.2's job), per the story's own documented interim-scope decision.
-- Full test suite: 25 suites / 212 tests passing. This story added 12 new tests: 6 for `useLocationPermission()`, 6 for `location-permission.tsx`.
+- Code review (2026-07-28) found and fixed a real guard-eviction race, added error handling/unmount-safety/double-tap guards to `handleAllowLocation`, and corrected an internal Task 5 checklist inconsistency. One finding (pre-existing OS-denied users skipping the explainer entirely) was deferred by user decision rather than patched, since fixing it without new persisted state would reintroduce per-session nagging.
+- Full test suite: 26 suites / 215 tests passing. Story implementation added 12 tests; code review added 3 more (1 error-handling, 1 double-tap, 1 integration regression test) and revised 4 existing ones to assert the corrected `refetch()` timing.
 - `npx tsc --noEmit` clean. `npm run lint` has one pre-existing, out-of-scope failure in `src/app/sign-in.tsx` (Story 1.3, `react-hooks/refs`) — untouched by this story.
 - Task 5 live verification is UNVERIFIED — no EAS CLI or physical device available in this environment. The on-device priming/request/explainer flow, the iOS-vs-Android background-permission divergence, and the "fires once per device" persistence across app restarts all still need hands-on confirmation on a real dev build before this ships.
 
@@ -114,6 +126,7 @@ Claude Sonnet 5 (claude-sonnet-5)
 - `app.json` (modified — `expo-location` config plugin added)
 - `src/shared/hooks/use-location-permission.tsx` (new)
 - `src/shared/hooks/__tests__/use-location-permission.test.tsx` (new)
-- `src/app/location-permission.tsx` (new)
-- `src/app/__tests__/location-permission.test.tsx` (new)
+- `src/app/location-permission.tsx` (new; modified again in code review — error handling, unmount guard, double-tap guard, refetch-timing fix)
+- `src/app/__tests__/location-permission.test.tsx` (new; modified again in code review)
+- `src/app/__tests__/location-permission-guard-integration.test.tsx` (new — code review, permanent regression test for the guard-eviction race)
 - `src/app/_layout.tsx` (modified — new provider wrapper, `isLoading` gate extended a fourth time, `hasActiveVoyage` branch split by `needsLocationPermission`)
