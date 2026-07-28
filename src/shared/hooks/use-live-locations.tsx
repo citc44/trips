@@ -13,6 +13,12 @@ type LiveLocationsState = {
   trails: Record<string, TrailPoint[]>;
   isLoading: boolean;
   hasError: boolean;
+  // Story 3.5 AC1: the Realtime channel's own live connection health -- "can
+  // we reach the server," not the device's generic network state. Starts
+  // `true` (optimistic) so the normal, near-instant subscribe handshake on
+  // every mount never flashes a false "reconnecting" note; only flips to
+  // `false` on an actual CHANNEL_ERROR/TIMED_OUT/CLOSED signal.
+  isConnected: boolean;
 };
 
 // Not a Context/Provider like use-active-voyage.tsx/use-profile.tsx -- this
@@ -23,6 +29,7 @@ export function useLiveLocations(voyageId: string | null): LiveLocationsState {
   const [locations, setLocations] = useState<Record<string, LiveLocation>>({});
   const [trails, setTrails] = useState<Record<string, TrailPoint[]>>({});
   const [hasError, setHasError] = useState(false);
+  const [isConnected, setIsConnected] = useState(true);
   // Derived isLoading (compared against the live voyageId), same pattern
   // use-active-voyage.tsx/use-profile.tsx established -- avoids ever needing
   // a synchronous setIsLoading(true) reset at the top of the effect body,
@@ -42,6 +49,7 @@ export function useLiveLocations(voyageId: string | null): LiveLocationsState {
         setLocations({});
         setTrails({});
         setHasError(false);
+        setIsConnected(true);
         setResolvedForVoyageId(null);
       });
       return () => {
@@ -50,6 +58,15 @@ export function useLiveLocations(voyageId: string | null): LiveLocationsState {
     }
 
     let isMounted = true;
+    // Reset for this Voyage -- otherwise a previous Voyage's disconnected
+    // state could carry over and show a false "reconnecting" note until this
+    // new channel's own first status callback fires. Deferred via a
+    // microtask (not called synchronously in the effect body), same
+    // react-hooks/set-state-in-effect workaround already used by the
+    // null-voyageId branch above.
+    Promise.resolve().then(() => {
+      if (isMounted) setIsConnected(true);
+    });
     // Closure-local accumulators, not React state read via a functional
     // setState(prev => ...) updater -- scoped fresh to this exact effect run
     // (i.e. reset on every voyageId change), so they can never leak a
@@ -92,10 +109,17 @@ export function useLiveLocations(voyageId: string | null): LiveLocationsState {
       setResolvedForVoyageId(voyageId);
     });
 
-    const { unsubscribe } = locationRepository.subscribeToLocations(voyageId, (location) => {
-      if (!isMounted) return;
-      mergeIn(location);
-    });
+    const { unsubscribe } = locationRepository.subscribeToLocations(
+      voyageId,
+      (location) => {
+        if (!isMounted) return;
+        mergeIn(location);
+      },
+      (status) => {
+        if (!isMounted) return;
+        setIsConnected(status === 'connected');
+      },
+    );
 
     return () => {
       isMounted = false;
@@ -103,5 +127,5 @@ export function useLiveLocations(voyageId: string | null): LiveLocationsState {
     };
   }, [voyageId]);
 
-  return { locations, trails, isLoading, hasError };
+  return { locations, trails, isLoading, hasError, isConnected };
 }

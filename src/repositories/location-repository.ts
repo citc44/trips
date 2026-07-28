@@ -73,13 +73,29 @@ function channelName(voyageId: string): string {
 // is required for this migration's Realtime-authorization RLS policies to
 // be consulted at all -- an un-flagged channel bypasses that authorization
 // entirely, so this must never be omitted.
-function subscribeToLocations(voyageId: string, onLocation: (location: LiveLocation) => void): { unsubscribe: () => void } {
+//
+// onStatusChange (Story 3.5) surfaces the channel's own connection health --
+// this is "can we reach the server" for AC1's reconnecting-note purposes,
+// more accurate than a generic device-network check since it reflects this
+// app's actual backend reachability, not just the device's network
+// interface state.
+function subscribeToLocations(
+  voyageId: string,
+  onLocation: (location: LiveLocation) => void,
+  onStatusChange?: (status: 'connected' | 'disconnected') => void,
+): { unsubscribe: () => void } {
   const channel = supabase
     .channel(channelName(voyageId), { config: { private: true } })
     .on('broadcast', { event: BROADCAST_EVENT }, (message: { payload: unknown }) => {
       onLocation(toLiveLocation(message.payload as LiveLocationRow));
     })
-    .subscribe();
+    .subscribe((status: string) => {
+      if (status === 'SUBSCRIBED') {
+        onStatusChange?.('connected');
+      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+        onStatusChange?.('disconnected');
+      }
+    });
 
   return {
     unsubscribe: () => {

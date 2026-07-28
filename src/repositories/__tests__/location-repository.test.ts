@@ -115,6 +115,29 @@ test('subscribeToLocations returns an unsubscribe that removes the channel', () 
   expect(mockRemoveChannel).toHaveBeenCalledTimes(1);
 });
 
+test('subscribeToLocations reports a connected status on SUBSCRIBED', () => {
+  const onStatusChange = jest.fn();
+  locationRepository.subscribeToLocations('voyage-1', jest.fn(), onStatusChange);
+
+  expect(onStatusChange).toHaveBeenCalledWith('connected');
+});
+
+test.each(['CHANNEL_ERROR', 'TIMED_OUT', 'CLOSED'])('subscribeToLocations reports a disconnected status on %s', (status) => {
+  mockSubscribe.mockImplementation((callback?: (status: string) => void) => {
+    callback?.(status);
+    return { on: mockOn, subscribe: mockSubscribe, send: mockSend };
+  });
+  const onStatusChange = jest.fn();
+
+  locationRepository.subscribeToLocations('voyage-1', jest.fn(), onStatusChange);
+
+  expect(onStatusChange).toHaveBeenCalledWith('disconnected');
+});
+
+test('subscribeToLocations does not throw when onStatusChange is omitted', () => {
+  expect(() => locationRepository.subscribeToLocations('voyage-1', jest.fn())).not.toThrow();
+});
+
 test('createBroadcastChannel creates a private channel scoped to the Voyage and subscribes', () => {
   locationRepository.createBroadcastChannel('voyage-1');
 

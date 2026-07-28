@@ -14,10 +14,23 @@ import { useActiveVoyage } from '@/shared/hooks/use-active-voyage';
 import { useAuth } from '@/shared/hooks/use-auth';
 import { useLiveLocations, type TrailPoint } from '@/shared/hooks/use-live-locations';
 import { useLocationTracking } from '@/shared/hooks/use-location-tracking';
+import { outbox } from '@/shared/services/outbox/outbox';
 import { screenStyles } from '@/shared/styles/screen';
 
 const GENERIC_ERROR = 'Something went wrong. Please try again.';
 const DEFAULT_ZOOM = 13;
+
+// None of endVoyage/grantOrganizerStatus/removeVoyager's own RPCs ever
+// legitimately return this code themselves -- every real business/conflict
+// error carries a specific errcode (END03, ORG01, REM02, etc.). `'unknown'`
+// only appears via toRepositoryError()'s own fallback, which fires when
+// supabase-js didn't have a real Postgres error to report -- exactly what a
+// genuine network-level failure looks like. Same classifier the outbox
+// service itself uses (src/shared/services/outbox/outbox.ts) -- kept in
+// sync deliberately, not by import, since this is a one-line check.
+function isNetworkFailure(error: { code: string }): boolean {
+  return error.code === 'unknown';
+}
 
 function formatElapsed(createdAt: string, now: number): string {
   const totalSeconds = Math.max(0, Math.floor((now - new Date(createdAt).getTime()) / 1000));
@@ -138,7 +151,7 @@ export default function ActiveVoyageScreen() {
   const { session } = useAuth();
   const voyageId = activeVoyage?.voyage.id ?? null;
 
-  const { locations, trails, hasError: hasLocationsError } = useLiveLocations(voyageId);
+  const { locations, trails, hasError: hasLocationsError, isConnected } = useLiveLocations(voyageId);
   useLocationTracking(voyageId);
 
   const [showConfirm, setShowConfirm] = useState(false);
@@ -215,6 +228,68 @@ export default function ActiveVoyageScreen() {
     loadMembers.current(voyageId);
   }, [voyageId]);
 
+  // Reassigned after every render (in an effect with no dependency array, not
+  // synchronously during render -- react-hooks/refs forbids writing a ref's
+  // .current during render, the same rule this file's own marker-pulse
+  // Animated.Value already had to work around) so it always closes over the
+  // latest `members`/`voyageId`. The separate effect below only calls this
+  // stable ref, so it doesn't need those values in its own dependency array.
+  const flushOutbox = useRef(async () => {});
+  useEffect(() => {
+    flushOutbox.current = async () => {
+      const result = await outbox.flush();
+      if (!isMounted.current) return;
+
+      for (const { item, data } of result.succeeded) {
+        if (item.kind === 'end_voyage') {
+          const endedData = data as { destination: string; createdAt: string; endedAt: string | null; voyagerCount: number };
+          await refetch();
+          router.push({
+            pathname: '/voyage-ended',
+            params: {
+              destination: endedData.destination,
+              createdAt: endedData.createdAt,
+              endedAt: endedData.endedAt ?? '',
+              voyagerCount: String(endedData.voyagerCount),
+            },
+          });
+        } else if (item.kind === 'grant_organizer_status') {
+          // The outbox only carries the target user's id, not their display
+          // name -- look it up from the (possibly stale, pre-refresh) members
+          // list, falling back gracefully if they've since fallen out of it.
+          const grantedMember = members.find((m) => m.userId === item.payload.targetUserId);
+          setToastMessage(`${grantedMember?.displayName ?? 'A Voyager'} is now an Organizer`);
+          if (voyageId) await loadMembers.current(voyageId);
+        } else if (item.kind === 'remove_voyager') {
+          setToastMessage('A queued Voyager removal finished.');
+          if (voyageId) await loadMembers.current(voyageId);
+        }
+      }
+
+      for (const { message } of result.conflicts) {
+        setToastMessage(message);
+      }
+    };
+  });
+
+  // Unconditional on mount -- covers items persisted from a previous app
+  // session, regardless of what isConnected happens to read at that exact
+  // instant (flush() itself degrades gracefully if genuinely offline, same
+  // as any other attempt). In the common case (isConnected starts `true`)
+  // this overlaps with the effect below and briefly double-attempts a
+  // flush -- harmless, since a flush on an already-empty/already-flushed
+  // queue is a cheap no-op.
+  useEffect(() => {
+    flushOutbox.current();
+  }, []);
+
+  // Fires on every reconnect (AC2: "flushes... on reconnect").
+  useEffect(() => {
+    if (isConnected) {
+      flushOutbox.current();
+    }
+  }, [isConnected]);
+
   const markers = useMemo(
     () => members.filter((member) => locations[member.userId]).map((member) => ({ member, location: locations[member.userId] })),
     [members, locations],
@@ -232,8 +307,19 @@ export default function ActiveVoyageScreen() {
 
     try {
       const { data, error: endError } = await voyageRepository.endVoyage(activeVoyage!.voyage.id);
-      if (endError || !data) {
-        setError(endError?.message ?? GENERIC_ERROR);
+      if (endError) {
+        if (isNetworkFailure(endError)) {
+          await outbox.enqueue({ kind: 'end_voyage', payload: { voyageId: activeVoyage!.voyage.id } });
+          setError("Queued -- this will finish once you're back online.");
+          setIsSubmitting(false);
+          return;
+        }
+        setError(endError.message);
+        setIsSubmitting(false);
+        return;
+      }
+      if (!data) {
+        setError(GENERIC_ERROR);
         setIsSubmitting(false);
         return;
       }
@@ -248,7 +334,8 @@ export default function ActiveVoyageScreen() {
         },
       });
     } catch {
-      setError(GENERIC_ERROR);
+      await outbox.enqueue({ kind: 'end_voyage', payload: { voyageId: activeVoyage!.voyage.id } });
+      setError("Queued -- this will finish once you're back online.");
       setIsSubmitting(false);
     }
   }
@@ -261,11 +348,26 @@ export default function ActiveVoyageScreen() {
       const { error: grantError } = await voyageRepository.grantOrganizerStatus(activeVoyage!.voyage.id, member.userId);
       if (!isMounted.current) return;
       if (grantError) {
+        if (isNetworkFailure(grantError)) {
+          await outbox.enqueue({
+            kind: 'grant_organizer_status',
+            payload: { voyageId: activeVoyage!.voyage.id, targetUserId: member.userId },
+          });
+          setMembersError(`Queued -- ${member.displayName ?? 'they'} will be granted Organizer status once you're back online.`);
+          return;
+        }
         setMembersError(grantError.message);
         return;
       }
       setToastMessage(`${member.displayName ?? 'They'} is now an Organizer`);
       await loadMembers.current(activeVoyage!.voyage.id);
+    } catch {
+      if (!isMounted.current) return;
+      await outbox.enqueue({
+        kind: 'grant_organizer_status',
+        payload: { voyageId: activeVoyage!.voyage.id, targetUserId: member.userId },
+      });
+      setMembersError(`Queued -- ${member.displayName ?? 'they'} will be granted Organizer status once you're back online.`);
     } finally {
       if (isMounted.current) {
         setGrantingUserIds((prev) => {
@@ -293,11 +395,28 @@ export default function ActiveVoyageScreen() {
       const { error: removeErr } = await voyageRepository.removeVoyager(activeVoyage!.voyage.id, removeTarget.userId);
       if (!isMounted.current) return;
       if (removeErr) {
+        if (isNetworkFailure(removeErr)) {
+          await outbox.enqueue({
+            kind: 'remove_voyager',
+            payload: { voyageId: activeVoyage!.voyage.id, targetUserId: removeTarget.userId },
+          });
+          setRemoveTarget(null);
+          setMembersError(`Queued -- ${removeTarget.displayName ?? 'they'} will be removed once you're back online.`);
+          return;
+        }
         setRemoveError(removeErr.message);
         return;
       }
       setRemoveTarget(null);
       await loadMembers.current(activeVoyage!.voyage.id);
+    } catch {
+      if (!isMounted.current) return;
+      await outbox.enqueue({
+        kind: 'remove_voyager',
+        payload: { voyageId: activeVoyage!.voyage.id, targetUserId: removeTarget.userId },
+      });
+      setRemoveTarget(null);
+      setMembersError(`Queued -- ${removeTarget.displayName ?? 'they'} will be removed once you're back online.`);
     } finally {
       if (isMounted.current) {
         setIsRemoving(false);
@@ -554,6 +673,17 @@ export default function ActiveVoyageScreen() {
             </Text>
           </View>
           <Text style={styles.hudElapsed}>{formatElapsed(activeVoyage.voyage.createdAt, now)}</Text>
+          {/* Subtle, not a blocking banner (AC1) -- deliberately not
+              hudError's alarm-red treatment; a calm status note, not an
+              error. Markers keep rendering whatever `locations` last held --
+              useLiveLocations simply stops receiving new broadcasts while
+              disconnected, it never clears them, so no extra logic is needed
+              here to preserve last-known positions. */}
+          {!isConnected ? (
+            <Text testID="reconnecting-note" style={styles.hudReconnecting}>
+              Reconnecting…
+            </Text>
+          ) : null}
           {hasLocationsError ? (
             <Text testID="locations-error" style={styles.hudError}>
               Couldn&apos;t load everyone&apos;s position. Pull down or reopen the trip to try again.
@@ -633,6 +763,14 @@ export default function ActiveVoyageScreen() {
             ) : null}
           </View>
         </View>
+      ) : null}
+
+      {/* A flush-triggered success/conflict toast (Story 3.5) can legitimately
+          fire while the user is looking at the map, not just from within the
+          Organizer menu -- the organizer-menu block above keeps its own copy
+          of this for its existing synchronous-action toasts. */}
+      {toastMessage ? (
+        <Toast testID="outbox-toast" message={toastMessage} onDismiss={() => setToastMessage(null)} />
       ) : null}
     </View>
   );
@@ -796,6 +934,11 @@ const styles = StyleSheet.create({
   },
   hudError: {
     color: Colors.error,
+    fontFamily: Typography.label.fontFamily,
+    fontSize: Typography.label.fontSize,
+  },
+  hudReconnecting: {
+    color: Colors.inkSecondary,
     fontFamily: Typography.label.fontFamily,
     fontSize: Typography.label.fontSize,
   },

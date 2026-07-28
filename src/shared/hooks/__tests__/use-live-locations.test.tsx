@@ -51,7 +51,7 @@ test('subscribes to the Voyage channel after mounting', async () => {
 
   await render(<Probe voyageId="voyage-1" />);
 
-  await waitFor(() => expect(mockSubscribeToLocations).toHaveBeenCalledWith('voyage-1', expect.any(Function)));
+  await waitFor(() => expect(mockSubscribeToLocations).toHaveBeenCalledWith('voyage-1', expect.any(Function), expect.any(Function)));
 });
 
 test('exposes hasError (not stuck loading) when the cold-load fetch fails', async () => {
@@ -200,6 +200,65 @@ test('prunes trail points older than MapMarker.trailLengthMs (8s)', async () => 
   expect(getByTestId('trail-length').props.children).toBe(1);
 });
 
+test('isConnected starts true (optimistic -- no false "reconnecting" flash during a normal fast subscribe handshake)', async () => {
+  mockGetLiveLocations.mockResolvedValue({ data: [], error: null });
+
+  function ConnectedProbe({ voyageId }: { voyageId: string }) {
+    const { isConnected } = useLiveLocations(voyageId);
+    return <Text testID="connected">{String(isConnected)}</Text>;
+  }
+
+  const { getByTestId } = await render(<ConnectedProbe voyageId="voyage-1" />);
+
+  expect(getByTestId('connected').props.children).toBe('true');
+});
+
+test('isConnected flips to false on a disconnected status callback, and back to true on reconnect', async () => {
+  mockGetLiveLocations.mockResolvedValue({ data: [], error: null });
+
+  function ConnectedProbe({ voyageId }: { voyageId: string }) {
+    const { isConnected } = useLiveLocations(voyageId);
+    return <Text testID="connected">{String(isConnected)}</Text>;
+  }
+
+  const { getByTestId } = await render(<ConnectedProbe voyageId="voyage-1" />);
+  await waitFor(() => expect(mockSubscribeToLocations).toHaveBeenCalled());
+  const onStatusChange = mockSubscribeToLocations.mock.calls[0][2] as (status: 'connected' | 'disconnected') => void;
+
+  await act(async () => {
+    onStatusChange('disconnected');
+  });
+  expect(getByTestId('connected').props.children).toBe('false');
+
+  await act(async () => {
+    onStatusChange('connected');
+  });
+  expect(getByTestId('connected').props.children).toBe('true');
+});
+
+test('isConnected resets to true on a voyageId change', async () => {
+  mockGetLiveLocations.mockResolvedValue({ data: [], error: null });
+
+  function ConnectedProbe({ voyageId }: { voyageId: string }) {
+    const { isConnected } = useLiveLocations(voyageId);
+    return <Text testID="connected">{String(isConnected)}</Text>;
+  }
+
+  const { getByTestId, rerender } = await render(<ConnectedProbe voyageId="voyage-1" />);
+  await waitFor(() => expect(mockSubscribeToLocations).toHaveBeenCalled());
+  const onStatusChange = mockSubscribeToLocations.mock.calls[0][2] as (status: 'connected' | 'disconnected') => void;
+  await act(async () => {
+    onStatusChange('disconnected');
+  });
+  expect(getByTestId('connected').props.children).toBe('false');
+
+  await act(async () => {
+    rerender(<ConnectedProbe voyageId="voyage-2" />);
+  });
+
+  await waitFor(() => expect(getByTestId('connected').props.children).toBe('true'));
+});
+
 test('unsubscribes from the channel on unmount', async () => {
   mockGetLiveLocations.mockResolvedValue({ data: [], error: null });
 
@@ -217,12 +276,12 @@ test('re-subscribes when voyageId changes, unsubscribing from the previous chann
   mockGetLiveLocations.mockResolvedValue({ data: [], error: null });
 
   const { rerender } = await render(<Probe voyageId="voyage-1" />);
-  await waitFor(() => expect(mockSubscribeToLocations).toHaveBeenCalledWith('voyage-1', expect.any(Function)));
+  await waitFor(() => expect(mockSubscribeToLocations).toHaveBeenCalledWith('voyage-1', expect.any(Function), expect.any(Function)));
 
   await act(async () => {
     rerender(<Probe voyageId="voyage-2" />);
   });
 
   expect(mockUnsubscribe).toHaveBeenCalledTimes(1);
-  await waitFor(() => expect(mockSubscribeToLocations).toHaveBeenCalledWith('voyage-2', expect.any(Function)));
+  await waitFor(() => expect(mockSubscribeToLocations).toHaveBeenCalledWith('voyage-2', expect.any(Function), expect.any(Function)));
 });
