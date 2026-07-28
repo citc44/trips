@@ -1,9 +1,16 @@
 import { useEffect, useState } from 'react';
 
+import { MapMarker } from '@/constants/design-tokens';
 import { locationRepository, type LiveLocation } from '@/repositories/location-repository';
+
+export type TrailPoint = { lat: number; lng: number; updatedAt: string };
 
 type LiveLocationsState = {
   locations: Record<string, LiveLocation>;
+  // Recent positions per Voyager, newest last, pruned to MapMarker.trailLengthMs
+  // -- the comet-trail's data source (AC1). Rendering the fading line itself
+  // is the map screen's job; this hook only owns accumulating the points.
+  trails: Record<string, TrailPoint[]>;
   isLoading: boolean;
   hasError: boolean;
 };
@@ -14,6 +21,7 @@ type LiveLocationsState = {
 // parameterized hook (voyageId in, live locations out) is the right shape.
 export function useLiveLocations(voyageId: string | null): LiveLocationsState {
   const [locations, setLocations] = useState<Record<string, LiveLocation>>({});
+  const [trails, setTrails] = useState<Record<string, TrailPoint[]>>({});
   const [hasError, setHasError] = useState(false);
   // Derived isLoading (compared against the live voyageId), same pattern
   // use-active-voyage.tsx/use-profile.tsx established -- avoids ever needing
@@ -32,6 +40,7 @@ export function useLiveLocations(voyageId: string | null): LiveLocationsState {
       Promise.resolve().then(() => {
         if (!isEffectMounted) return;
         setLocations({});
+        setTrails({});
         setHasError(false);
         setResolvedForVoyageId(null);
       });
@@ -41,6 +50,33 @@ export function useLiveLocations(voyageId: string | null): LiveLocationsState {
     }
 
     let isMounted = true;
+    // Closure-local accumulators, not React state read via a functional
+    // setState(prev => ...) updater -- scoped fresh to this exact effect run
+    // (i.e. reset on every voyageId change), so they can never leak a
+    // previous Voyage's positions into this one. Both the cold-load and
+    // every broadcast merge through this same function (code review
+    // finding: the cold-load previously called setLocations(initial)
+    // unconditionally, discarding a broadcast that had already arrived and
+    // was fresher than the cold-load's own snapshot).
+    let current: Record<string, LiveLocation> = {};
+    let currentTrails: Record<string, TrailPoint[]> = {};
+
+    function mergeIn(location: LiveLocation) {
+      const existing = current[location.userId];
+      // A stale/delayed value can't regress a fresher one already rendered
+      // -- same conditional-upsert discipline the DB itself applies (AD-3).
+      if (existing && existing.updatedAt >= location.updatedAt) return;
+      current = { ...current, [location.userId]: location };
+      setLocations(current);
+
+      const cutoff = new Date(location.updatedAt).getTime() - MapMarker.trailLengthMs;
+      const priorTrail = currentTrails[location.userId] ?? [];
+      const nextTrail = [...priorTrail, { lat: location.lat, lng: location.lng, updatedAt: location.updatedAt }].filter(
+        (point) => new Date(point.updatedAt).getTime() >= cutoff,
+      );
+      currentTrails = { ...currentTrails, [location.userId]: nextTrail };
+      setTrails(currentTrails);
+    }
 
     locationRepository.getLiveLocations(voyageId).then(({ data, error }) => {
       if (!isMounted) return;
@@ -49,27 +85,16 @@ export function useLiveLocations(voyageId: string | null): LiveLocationsState {
         setResolvedForVoyageId(voyageId);
         return;
       }
-      const initial: Record<string, LiveLocation> = {};
       for (const location of data) {
-        initial[location.userId] = location;
+        mergeIn(location);
       }
-      setLocations(initial);
       setHasError(false);
       setResolvedForVoyageId(voyageId);
     });
 
     const { unsubscribe } = locationRepository.subscribeToLocations(voyageId, (location) => {
       if (!isMounted) return;
-      setLocations((prev) => {
-        const existing = prev[location.userId];
-        // A stale/delayed broadcast can't regress a fresher one already
-        // rendered -- same conditional-upsert discipline the DB itself
-        // applies (AD-3), mirrored here for the client-side merge.
-        if (existing && existing.updatedAt >= location.updatedAt) {
-          return prev;
-        }
-        return { ...prev, [location.userId]: location };
-      });
+      mergeIn(location);
     });
 
     return () => {
@@ -78,5 +103,5 @@ export function useLiveLocations(voyageId: string | null): LiveLocationsState {
     };
   }, [voyageId]);
 
-  return { locations, isLoading, hasError };
+  return { locations, trails, isLoading, hasError };
 }

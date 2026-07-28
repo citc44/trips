@@ -119,6 +119,87 @@ test('a stale broadcast does not regress a fresher already-rendered location', a
   expect(getByTestId('lat').props.children).toBe(40.0);
 });
 
+test('a broadcast that arrives before the cold-load resolves is not regressed by the cold-load (code review: race condition)', async () => {
+  let resolveColdLoad: (value: any) => void;
+  mockGetLiveLocations.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        resolveColdLoad = resolve;
+      }),
+  );
+
+  function LatProbe({ voyageId }: { voyageId: string }) {
+    const { locations } = useLiveLocations(voyageId);
+    return <Text testID="lat">{locations['user-1']?.lat ?? 'none'}</Text>;
+  }
+
+  const { getByTestId } = await render(<LatProbe voyageId="voyage-1" />);
+  await waitFor(() => expect(mockSubscribeToLocations).toHaveBeenCalled());
+  const onLocation = mockSubscribeToLocations.mock.calls[0][1] as (location: typeof locationFixture) => void;
+
+  // A fresher broadcast lands while the cold-load's network round-trip is
+  // still in flight.
+  await act(async () => {
+    onLocation({ ...locationFixture, lat: 40.0, updatedAt: '2026-07-26T00:05:00Z' });
+  });
+  await waitFor(() => expect(getByTestId('lat').props.children).toBe(40.0));
+
+  // The cold-load finally resolves with the older (pre-broadcast) snapshot.
+  await act(async () => {
+    resolveColdLoad!({ data: [locationFixture], error: null });
+  });
+
+  // Must still show the fresher broadcast position, not regress to the
+  // stale cold-load snapshot.
+  expect(getByTestId('lat').props.children).toBe(40.0);
+});
+
+test('accumulates a trail of recent positions per Voyager as broadcasts arrive', async () => {
+  mockGetLiveLocations.mockResolvedValue({ data: [], error: null });
+
+  function TrailProbe({ voyageId }: { voyageId: string }) {
+    const { trails } = useLiveLocations(voyageId);
+    return <Text testID="trail-length">{trails['user-1']?.length ?? 0}</Text>;
+  }
+
+  const { getByTestId } = await render(<TrailProbe voyageId="voyage-1" />);
+  await waitFor(() => expect(mockSubscribeToLocations).toHaveBeenCalled());
+  const onLocation = mockSubscribeToLocations.mock.calls[0][1] as (location: typeof locationFixture) => void;
+
+  await act(async () => {
+    onLocation({ ...locationFixture, updatedAt: '2026-07-26T00:00:00Z' });
+  });
+  await waitFor(() => expect(getByTestId('trail-length').props.children).toBe(1));
+
+  await act(async () => {
+    onLocation({ ...locationFixture, updatedAt: '2026-07-26T00:00:02Z' });
+  });
+  expect(getByTestId('trail-length').props.children).toBe(2);
+});
+
+test('prunes trail points older than MapMarker.trailLengthMs (8s)', async () => {
+  mockGetLiveLocations.mockResolvedValue({ data: [], error: null });
+
+  function TrailProbe({ voyageId }: { voyageId: string }) {
+    const { trails } = useLiveLocations(voyageId);
+    return <Text testID="trail-length">{trails['user-1']?.length ?? 0}</Text>;
+  }
+
+  const { getByTestId } = await render(<TrailProbe voyageId="voyage-1" />);
+  await waitFor(() => expect(mockSubscribeToLocations).toHaveBeenCalled());
+  const onLocation = mockSubscribeToLocations.mock.calls[0][1] as (location: typeof locationFixture) => void;
+
+  await act(async () => {
+    onLocation({ ...locationFixture, updatedAt: '2026-07-26T00:00:00Z' });
+  });
+  // 9 seconds later -- past the 8s trail window, so the first point is pruned.
+  await act(async () => {
+    onLocation({ ...locationFixture, updatedAt: '2026-07-26T00:00:09Z' });
+  });
+
+  expect(getByTestId('trail-length').props.children).toBe(1);
+});
+
 test('unsubscribes from the channel on unmount', async () => {
   mockGetLiveLocations.mockResolvedValue({ data: [], error: null });
 

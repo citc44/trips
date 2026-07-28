@@ -19,11 +19,18 @@ create table public.voyage_member_locations (
 
 alter table public.voyage_member_locations enable row level security;
 
+-- Code review finding: filters both the *requester's* active membership
+-- (via is_active_voyage_member) AND the *row owner's* (vm.removed_at is
+-- null and vm.is_active = true) -- the original version only checked the
+-- former, which let a removed/inactive Voyager's stale last-known position
+-- keep rendering as a live marker for every remaining member indefinitely.
 create policy "voyage_member_locations_select_fellow_members" on public.voyage_member_locations
   for select using (
     exists (
       select 1 from public.voyage_members vm
       where vm.id = voyage_member_locations.voyage_member_id
+        and vm.removed_at is null
+        and vm.is_active = true
         and public.is_active_voyage_member(vm.voyage_id, auth.uid())
     )
   );
@@ -239,6 +246,18 @@ revoke execute on function public.join_voyage(text) from anon;
 -- same Voyager metadata get_live_locations() would otherwise duplicate --
 -- the map screen joins get_live_locations()'s bare position rows against
 -- this already-fetched roster client-side.
+--
+-- Code review finding: Postgres rejects changing a function's return-column
+-- set via CREATE OR REPLACE FUNCTION (adding player_color as a 5th output
+-- column here counts as such a change) -- it must be dropped first. This
+-- migration has never successfully applied anywhere (Supabase CLI blocked
+-- all session; this fix lands in the same session as the original commit,
+-- before any CI run could plausibly have reached it), so the drop is folded
+-- directly into this file rather than layered on in a separate follow-up
+-- migration -- a later migration could never have "fixed" a predecessor
+-- that never got past this exact statement in the first place.
+drop function if exists public.get_voyage_members(uuid);
+
 create or replace function public.get_voyage_members(p_voyage_id uuid)
 returns table (
   user_id uuid,
@@ -296,11 +315,17 @@ begin
     raise exception 'You are not an active member of this Voyage.' using errcode = 'LOC01';
   end if;
 
+  -- Code review finding: the original query had no is_active/removed_at
+  -- filter on the row owner at all (unlike get_voyage_members(), which
+  -- already filters this) -- a removed Voyager's stale position kept
+  -- rendering as a live marker for everyone else indefinitely.
   return query
     select vm.user_id, l.lat, l.lng, l.heading, l.updated_at
     from public.voyage_member_locations l
     join public.voyage_members vm on vm.id = l.voyage_member_id
-    where vm.voyage_id = p_voyage_id;
+    where vm.voyage_id = p_voyage_id
+      and vm.removed_at is null
+      and vm.is_active = true;
 end;
 $$;
 
@@ -380,11 +405,23 @@ create policy "voyage_channel_read_active_members" on realtime.messages
     )
   );
 
+-- Code review finding: the original version only checked that the sender
+-- was an active member of the topic's Voyage -- it never checked the
+-- broadcast payload's own claimed user_id, so any active Voyager could
+-- broadcast a spoofed location under a different Voyager's identity. The
+-- `payload->>'user_id' = auth.uid()::text` check requires
+-- location-repository.ts's broadcast payload to always include the
+-- sender's own user_id (it does -- see createBroadcastChannel's send()).
+-- Same "genuinely new, unproven Realtime-authorization surface" caveat as
+-- the rest of this block -- verify realtime.messages' actual payload column
+-- shape against live Supabase docs before trusting this without live
+-- testing (see Task 8/Debug Log).
 create policy "voyage_channel_write_active_members" on realtime.messages
   for insert
   to authenticated
   with check (
-    exists (
+    payload ->> 'user_id' = auth.uid()::text
+    and exists (
       select 1 from public.voyage_members vm
       where 'voyage:' || vm.voyage_id::text = realtime.topic()
         and vm.user_id = auth.uid()

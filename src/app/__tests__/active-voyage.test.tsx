@@ -35,6 +35,8 @@ jest.mock('@rnmapbox/maps', () => {
       return null;
     }),
     MarkerView: ({ children }: any) => children,
+    ShapeSource: ({ children }: any) => children ?? null,
+    LineLayer: ({ id }: any) => ReactActual.createElement(View, { testID: id }),
   };
 });
 
@@ -113,7 +115,7 @@ beforeEach(() => {
     verifyCode: jest.fn<(...args: any[]) => Promise<any>>(),
     signOut: jest.fn<(...args: any[]) => Promise<any>>(),
   });
-  mockUseLiveLocations.mockReturnValue({ locations: locationsFixture, isLoading: false, hasError: false });
+  mockUseLiveLocations.mockReturnValue({ locations: locationsFixture, trails: {}, isLoading: false, hasError: false });
 });
 
 test('shows the map, destination, and status pill', async () => {
@@ -137,7 +139,7 @@ test('renders a marker for each Voyager with a live location', async () => {
 
 test('does not render a marker for a Voyager with no live location yet', async () => {
   mockActiveVoyage('organizer');
-  mockUseLiveLocations.mockReturnValue({ locations: { 'user-1': locationsFixture['user-1'] }, isLoading: false, hasError: false });
+  mockUseLiveLocations.mockReturnValue({ locations: { 'user-1': locationsFixture['user-1'] }, trails: {}, isLoading: false, hasError: false });
 
   const { getByTestId, queryByTestId } = await render(<ActiveVoyageScreen />);
 
@@ -157,12 +159,58 @@ test('tapping a marker opens the peek card with that Voyager, and closing it dis
 
   expect(getByTestId('marker-peek-card')).toBeTruthy();
   expect(within(getByTestId('marker-peek-card')).getByText('Meera')).toBeTruthy();
+  // Player color shown on the peek card (code review finding: the original
+  // version omitted it despite the story's own stated v1 scope).
+  expect(getByTestId('marker-peek-color-swatch')).toBeTruthy();
 
   await act(async () => {
     fireEvent.press(getByTestId('marker-peek-close-button'));
   });
 
   expect(queryByTestId('marker-peek-card')).toBeNull();
+});
+
+test('shows an inline error when live locations fail to load (code review: not indistinguishable from nobody online)', async () => {
+  mockActiveVoyage('organizer');
+  mockUseLiveLocations.mockReturnValue({ locations: {}, trails: {}, isLoading: false, hasError: true });
+
+  const { getByTestId } = await render(<ActiveVoyageScreen />);
+
+  await waitFor(() => expect(getByTestId('locations-error')).toBeTruthy());
+});
+
+test('renders a comet-trail line for a Voyager with 2+ recent trail points (AC1)', async () => {
+  mockActiveVoyage('organizer');
+  mockUseLiveLocations.mockReturnValue({
+    locations: locationsFixture,
+    trails: {
+      'user-1': [
+        { lat: 39.0, lng: -120.0, updatedAt: '2026-07-26T00:00:00Z' },
+        { lat: 39.1, lng: -120.0, updatedAt: '2026-07-26T00:00:02Z' },
+      ],
+    },
+    isLoading: false,
+    hasError: false,
+  });
+
+  const { getByTestId } = await render(<ActiveVoyageScreen />);
+
+  await waitFor(() => expect(getByTestId('trail-layer-user-1')).toBeTruthy());
+});
+
+test('does not render a trail line for a Voyager with fewer than 2 recent trail points', async () => {
+  mockActiveVoyage('organizer');
+  mockUseLiveLocations.mockReturnValue({
+    locations: locationsFixture,
+    trails: { 'user-1': [{ lat: 39.0, lng: -120.0, updatedAt: '2026-07-26T00:00:00Z' }] },
+    isLoading: false,
+    hasError: false,
+  });
+
+  const { getByTestId, queryByTestId } = await render(<ActiveVoyageScreen />);
+
+  await waitFor(() => expect(getByTestId('voyager-marker-user-1')).toBeTruthy());
+  expect(queryByTestId('trail-layer-user-1')).toBeNull();
 });
 
 test('tapping recenter moves the camera to the average of all live locations', async () => {

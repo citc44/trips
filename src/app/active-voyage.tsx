@@ -1,4 +1,4 @@
-import Mapbox, { Camera, MapView, MarkerView } from '@rnmapbox/maps';
+import Mapbox, { Camera, LineLayer, MapView, MarkerView, ShapeSource } from '@rnmapbox/maps';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AccessibilityInfo, Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -13,13 +13,8 @@ import { Toast } from '@/shared/components/toast';
 import { useActiveVoyage } from '@/shared/hooks/use-active-voyage';
 import { useAuth } from '@/shared/hooks/use-auth';
 import { useForegroundLocationBroadcast } from '@/shared/hooks/use-foreground-location-broadcast';
-import { useLiveLocations } from '@/shared/hooks/use-live-locations';
+import { useLiveLocations, type TrailPoint } from '@/shared/hooks/use-live-locations';
 import { screenStyles } from '@/shared/styles/screen';
-
-// Must run once, before any MapView mounts anywhere in the app -- same
-// "call once at module scope" shape _layout.tsx already uses for
-// initSentry()/SplashScreen.preventAutoHideAsync().
-initMapbox();
 
 const GENERIC_ERROR = 'Something went wrong. Please try again.';
 const DEFAULT_ZOOM = 13;
@@ -104,6 +99,33 @@ function VoyagerMarker({
   );
 }
 
+// AC1's "comet-trail" (code review finding: the trail tokens existed in
+// design-tokens.ts but were never actually rendered). A real Mapbox
+// ShapeSource + LineLayer, not an approximation within MarkerView -- a
+// multi-point geographic trail needs to pan/zoom with the map itself, which
+// only a real map layer can do. Rendered as one fixed-opacity line per
+// Voyager (a deliberate simplification of the token's per-point fade --
+// Mapbox GL line-gradient expressions would be the fuller version, left for
+// a follow-up rather than guessed at without live testing).
+function VoyagerTrail({ userId, color, points }: { userId: string; color: string; points: TrailPoint[] }) {
+  if (points.length < 2) return null;
+
+  const shape: GeoJSON.Feature = {
+    type: 'Feature',
+    properties: {},
+    geometry: { type: 'LineString', coordinates: points.map((point) => [point.lng, point.lat]) },
+  };
+
+  return (
+    <ShapeSource id={`trail-source-${userId}`} shape={shape}>
+      <LineLayer
+        id={`trail-layer-${userId}`}
+        style={{ lineColor: color, lineWidth: 3, lineOpacity: 0.4, lineCap: 'round', lineJoin: 'round' }}
+      />
+    </ShapeSource>
+  );
+}
+
 // The real Live Map (Story 3.2). Reached via _layout.tsx's
 // `route === 'home' && hasActiveVoyage && !needsLocationPermission` guard,
 // so `activeVoyage` should always be populated when this renders. Organizer
@@ -116,7 +138,7 @@ export default function ActiveVoyageScreen() {
   const { session } = useAuth();
   const voyageId = activeVoyage?.voyage.id ?? null;
 
-  const { locations } = useLiveLocations(voyageId);
+  const { locations, trails, hasError: hasLocationsError } = useLiveLocations(voyageId);
   useForegroundLocationBroadcast(voyageId);
 
   const [showConfirm, setShowConfirm] = useState(false);
@@ -143,6 +165,16 @@ export default function ActiveVoyageScreen() {
     };
   }, []);
 
+  // Scoped to this screen's own mount, not module scope (code review
+  // finding: the previous module-scope call contradicted mapbox.ts's own
+  // documented design intent -- Expo Router's file-based route registration
+  // may import this module eagerly at app startup regardless of whether the
+  // user ever reaches an active Voyage, which would turn a missing token
+  // into an app-wide crash instead of one confined to Live Map).
+  useEffect(() => {
+    initMapbox();
+  }, []);
+
   useEffect(() => {
     let isEffectMounted = true;
     AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
@@ -155,10 +187,16 @@ export default function ActiveVoyageScreen() {
     };
   }, []);
 
+  // Only ticks while the default map view is actually showing the elapsed
+  // text (code review finding: this previously ran unconditionally, causing
+  // a once-a-second re-render even while a sub-view like the Organizer menu
+  // or a confirm screen -- where the elapsed text isn't rendered at all --
+  // was up).
   useEffect(() => {
+    if (showOrganizerMenu || showConfirm || removeTarget) return;
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
-  }, []);
+  }, [showOrganizerMenu, showConfirm, removeTarget]);
 
   const loadMembers = useRef(async (id: string) => {
     const { data, error: fetchError } = await voyageRepository.getVoyageMembers(id);
@@ -416,6 +454,14 @@ export default function ActiveVoyageScreen() {
       <View style={styles.skyStrip} />
       <MapView testID="live-map" style={styles.map} styleURL={Mapbox.StyleURL.Dark}>
         <Camera ref={cameraRef} defaultSettings={{ zoomLevel: DEFAULT_ZOOM }} />
+        {markers.map(({ member }) => (
+          <VoyagerTrail
+            key={`trail-${member.userId}`}
+            userId={member.userId}
+            color={member.playerColor ? PlayerColors[member.playerColor] : Colors.inkSecondary}
+            points={trails[member.userId] ?? []}
+          />
+        ))}
         {markers.map(({ member, location }) => (
           <VoyagerMarker
             key={member.userId}
@@ -451,6 +497,11 @@ export default function ActiveVoyageScreen() {
             </Text>
           </View>
           <Text style={styles.hudElapsed}>{formatElapsed(activeVoyage.voyage.createdAt, now)}</Text>
+          {hasLocationsError ? (
+            <Text testID="locations-error" style={styles.hudError}>
+              Couldn&apos;t load everyone&apos;s position. Pull down or reopen the trip to try again.
+            </Text>
+          ) : null}
         </View>
 
         <View style={styles.hudBottom}>
@@ -471,7 +522,16 @@ export default function ActiveVoyageScreen() {
         <View testID="marker-peek-card" style={styles.peekScrim}>
           <View style={styles.peekCard}>
             <View style={styles.peekHeaderRow}>
-              <Text style={styles.peekName}>{selectedMember.displayName ?? 'Voyager'}</Text>
+              <View style={styles.peekNameRow}>
+                <View
+                  testID="marker-peek-color-swatch"
+                  style={[
+                    styles.peekColorSwatch,
+                    { backgroundColor: selectedMember.playerColor ? PlayerColors[selectedMember.playerColor] : Colors.inkSecondary },
+                  ]}
+                />
+                <Text style={styles.peekName}>{selectedMember.displayName ?? 'Voyager'}</Text>
+              </View>
               <Text
                 testID="marker-peek-close-button"
                 accessibilityRole="button"
@@ -624,6 +684,11 @@ const styles = StyleSheet.create({
     fontSize: Typography.statNumeral.fontSize * 0.5,
     fontWeight: Typography.statNumeral.fontWeight,
   },
+  hudError: {
+    color: Colors.error,
+    fontFamily: Typography.label.fontFamily,
+    fontSize: Typography.label.fontSize,
+  },
   hudBottom: {
     backgroundColor: HudCard.background,
     borderRadius: HudCard.radius,
@@ -736,6 +801,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  peekNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing['2'],
+  },
+  peekColorSwatch: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
   },
   peekName: {
     color: Colors.inkPrimary,

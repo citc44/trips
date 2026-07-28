@@ -141,6 +141,17 @@ test('a heading-less position (device stationary) still sends, with heading null
   expect(mockSend).toHaveBeenCalledWith(expect.objectContaining({ heading: null }));
 });
 
+test('a platform heading sentinel of -1 (undetermined) normalizes to null, not -1 (code review finding)', async () => {
+  await render(<Harness voyageId="voyage-1" />);
+  const callback = mockWatchPositionAsync.mock.calls[0][1] as (position: unknown) => void;
+
+  await act(async () => {
+    callback({ coords: { latitude: 39.1, longitude: -120.0, heading: -1 }, timestamp: Date.now() });
+  });
+
+  expect(mockSend).toHaveBeenCalledWith(expect.objectContaining({ heading: null }));
+});
+
 test('stops watching and unsubscribes the broadcast channel on unmount', async () => {
   const { unmount } = await render(<Harness voyageId="voyage-1" />);
 

@@ -42,7 +42,12 @@ export function useForegroundLocationBroadcast(voyageId: string | null): void {
       (position) => {
         const lat = position.coords.latitude;
         const lng = position.coords.longitude;
-        const heading = position.coords.heading ?? null;
+        // Some platforms report -1 as an "undetermined heading" sentinel
+        // rather than null (code review finding) -- normalized here so a
+        // stationary device's marker hides its chevron instead of rendering
+        // it rotated to an invalid -1deg angle.
+        const rawHeading = position.coords.heading;
+        const heading = rawHeading != null && rawHeading >= 0 ? rawHeading : null;
         const updatedAt = new Date(position.timestamp).toISOString();
 
         broadcastChannel.send({ userId, lat, lng, heading, updatedAt });
