@@ -6,6 +6,7 @@ import { useColorScheme } from 'react-native';
 import { initSentry, Sentry } from '@/lib/sentry';
 import { ActiveVoyageProvider, useActiveVoyage } from '@/shared/hooks/use-active-voyage';
 import { AuthProvider, useAuth } from '@/shared/hooks/use-auth';
+import { LocationPermissionProvider, useLocationPermission } from '@/shared/hooks/use-location-permission';
 import { PendingJoinProvider, usePendingJoin } from '@/shared/hooks/use-pending-join';
 import { ProfileProvider, useProfile } from '@/shared/hooks/use-profile';
 import { RemovalNoticeProvider, useRemovalNotice } from '@/shared/hooks/use-removal-notice';
@@ -20,13 +21,19 @@ function AppNavigator() {
   const { pendingJoinCode } = usePendingJoin();
   const { activeVoyage, isLoading: isActiveVoyageLoading } = useActiveVoyage();
   const { removalNotice, isLoading: isRemovalNoticeLoading } = useRemovalNotice();
+  const {
+    status: locationPermissionStatus,
+    hasCompletedPriming,
+    isLoading: isLocationPermissionLoading,
+  } = useLocationPermission();
 
-  // Profile/active-Voyage/removal-notice data only start loading once a
-  // session exists (see use-profile.tsx/use-active-voyage.tsx/
-  // use-removal-notice.tsx), so only wait on them while signed in -- an
-  // unauthenticated user would otherwise be stuck on the splash screen
-  // forever.
-  const isLoading = isAuthLoading || (!!session && (isProfileLoading || isActiveVoyageLoading || isRemovalNoticeLoading));
+  // Profile/active-Voyage/removal-notice/location-permission data only start
+  // loading once a session exists (see use-profile.tsx/use-active-voyage.tsx/
+  // use-removal-notice.tsx/use-location-permission.tsx), so only wait on them
+  // while signed in -- an unauthenticated user would otherwise be stuck on
+  // the splash screen forever.
+  const isLoading =
+    isAuthLoading || (!!session && (isProfileLoading || isActiveVoyageLoading || isRemovalNoticeLoading || isLocationPermissionLoading));
 
   useEffect(() => {
     if (!isLoading) {
@@ -47,12 +54,14 @@ function AppNavigator() {
 
   const route = resolveRoute({ hasSession: !!session, hasSeenTrustMoment, hasSeenDriverConsent, hasDisplayName });
 
-  // The join-resume, active-Voyage, and removal-notice decisions are layered
-  // on top of resolveRoute()'s own 5-branch result, not folded into it --
-  // resolveRoute() stays a pure, directly-tested function (Story 1.4's real
-  // routing bug lived in exactly this file, hence the extra care). These four
-  // `home`-scoped blocks stay mutually exclusive by construction, same
-  // invariant resolve-route.ts's own doc comment already documents.
+  // The join-resume, active-Voyage, removal-notice, and location-permission
+  // decisions are layered on top of resolveRoute()'s own 5-branch result, not
+  // folded into it -- resolveRoute() stays a pure, directly-tested function
+  // (Story 1.4's real routing bug lived in exactly this file, hence the extra
+  // care). These `home`-scoped blocks stay mutually exclusive by
+  // construction, same invariant resolve-route.ts's own doc comment already
+  // documents (needsLocationPermission is the one exception: it's a split
+  // within hasActiveVoyage, not a sibling of it).
   // hasActiveVoyage takes precedence over hasRemovalNotice/hasPendingJoin --
   // deliberately, not just because a removed user's activeVoyage happens to
   // be null: that's only true until they join or start a *different* Voyage
@@ -64,12 +73,33 @@ function AppNavigator() {
   // hasPendingJoin: a leftover pending join from before removal shouldn't
   // silently suppress showing the user what happened to their last Voyage.
   const hasActiveVoyage = !!activeVoyage;
+  // Gates hasActiveVoyage's own active-voyage screen, not a fifth mutually
+  // exclusive `home`-scoped concern of its own -- location-permission and
+  // active-voyage are two faces of the same "there's an active Voyage" state.
+  // Reads useLocationPermission()'s live OS status, not a cached/persisted
+  // flag: once the OS has recorded any real decision (granted or denied),
+  // `status` is no longer 'undetermined' and this naturally stops firing on
+  // any later app session -- EXPERIENCE.md's "fires once per device" with no
+  // extra app-side state (see use-location-permission.tsx's own comment).
+  // `hasCompletedPriming` exists only to stop location-permission.tsx's own
+  // in-flight permission-request calls (which change `status` mid-flow) from
+  // prematurely flipping this guard away from itself before the flow (which
+  // may still need to ask for background permission, or show the explainer)
+  // has actually finished.
+  const needsLocationPermission = hasActiveVoyage && locationPermissionStatus === 'undetermined' && !hasCompletedPriming;
   const hasRemovalNotice = !hasActiveVoyage && !!removalNotice;
   const hasPendingJoin = !hasActiveVoyage && !hasRemovalNotice && !!pendingJoinCode;
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Protected guard={route === 'home' && hasActiveVoyage}>
+      {/* Registered inside its own guard branch, same reasoning as
+          voyage-removed below: the screen that clears the blocking
+          condition (location-permission.tsx's own markPrimingComplete()
+          call) IS the currently-focused, guarded screen itself. */}
+      <Stack.Protected guard={route === 'home' && hasActiveVoyage && needsLocationPermission}>
+        <Stack.Screen name="location-permission" />
+      </Stack.Protected>
+      <Stack.Protected guard={route === 'home' && hasActiveVoyage && !needsLocationPermission}>
         <Stack.Screen name="active-voyage" />
       </Stack.Protected>
       {/* Registered inside its own guard branch (unlike voyage-ended, which
@@ -125,9 +155,11 @@ function RootLayout() {
         <ProfileProvider>
           <ActiveVoyageProvider>
             <RemovalNoticeProvider>
-              <PendingJoinProvider>
-                <AppNavigator />
-              </PendingJoinProvider>
+              <LocationPermissionProvider>
+                <PendingJoinProvider>
+                  <AppNavigator />
+                </PendingJoinProvider>
+              </LocationPermissionProvider>
             </RemovalNoticeProvider>
           </ActiveVoyageProvider>
         </ProfileProvider>

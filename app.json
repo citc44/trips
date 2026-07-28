@@ -34,7 +34,16 @@
           "imageWidth": 76
         }
       ],
-      "@sentry/react-native"
+      "@sentry/react-native",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Voylo needs your location while a Voyage is active so your group can see you on the map.",
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
