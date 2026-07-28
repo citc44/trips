@@ -54,12 +54,21 @@ type EndedVoyageResult = { data: EndedVoyage | null; error: RepositoryError | nu
 
 export type PlayerColor = 'coral' | 'teal' | 'violet' | 'gold' | 'sky' | 'lime' | 'pink' | 'slate';
 
+// 'organizer' | 'voyager' -- the Voyage *membership* role (Epic 2). Not to be
+// confused with TravelRole below, a completely different, per-Voyage safety
+// concept (Story 3.4).
+export type TravelRole = 'riding' | 'driving';
+
 export type VoyageMember = {
   userId: string;
   displayName: string | null;
   role: 'organizer' | 'voyager';
   joinedAt: string;
   playerColor: PlayerColor | null;
+  // null until this Voyager lands on Live Map for the first time this
+  // Voyage and resolves the role prompt (or taps the status pill) -- see
+  // set_travel_role()'s migration comment.
+  travelRole: TravelRole | null;
 };
 
 type VoyageMemberRow = {
@@ -68,6 +77,7 @@ type VoyageMemberRow = {
   role: 'organizer' | 'voyager';
   joined_at: string;
   player_color: PlayerColor | null;
+  travel_role: TravelRole | null;
 };
 
 type VoyageMembersResult = { data: VoyageMember[] | null; error: RepositoryError | null };
@@ -79,6 +89,7 @@ function toVoyageMember(row: VoyageMemberRow): VoyageMember {
     role: row.role,
     joinedAt: row.joined_at,
     playerColor: row.player_color,
+    travelRole: row.travel_role,
   };
 }
 
@@ -290,6 +301,20 @@ async function acknowledgeRemoval(voyageId: string): Promise<{ error: Repository
   return { error: null };
 }
 
+// set_travel_role() enforces active-membership authorization server-side --
+// see its migration for the full rationale. Serves both the first-landing
+// role prompt's choice and every later status-pill tap; no meaningful data
+// payload on success, just { error: null }.
+async function setTravelRole(voyageId: string, travelRole: TravelRole): Promise<{ error: RepositoryError | null }> {
+  const { error } = await supabase.rpc('set_travel_role', { p_voyage_id: voyageId, p_travel_role: travelRole });
+
+  if (error) {
+    return { error: toRepositoryError(error) };
+  }
+
+  return { error: null };
+}
+
 export const voyageRepository = {
   startVoyage,
   getVoyagePreview,
@@ -301,4 +326,5 @@ export const voyageRepository = {
   removeVoyager,
   getRemovalNotice,
   acknowledgeRemoval,
+  setTravelRole,
 };

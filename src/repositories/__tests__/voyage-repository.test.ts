@@ -403,11 +403,25 @@ test('getVoyageMembers calls the get_voyage_members RPC with the Voyage id', asy
   expect(mockRpc).toHaveBeenCalledWith('get_voyage_members', { p_voyage_id: 'voyage-1' });
 });
 
-test('getVoyageMembers returns the mapped list of members, including player_color', async () => {
+test('getVoyageMembers returns the mapped list of members, including player_color and travel_role', async () => {
   mockRpc.mockResolvedValue({
     data: [
-      { user_id: 'user-1', display_name: 'Chintan', role: 'organizer', joined_at: '2026-07-26T00:00:00Z', player_color: 'coral' },
-      { user_id: 'user-2', display_name: 'Meera', role: 'voyager', joined_at: '2026-07-26T00:05:00Z', player_color: 'teal' },
+      {
+        user_id: 'user-1',
+        display_name: 'Chintan',
+        role: 'organizer',
+        joined_at: '2026-07-26T00:00:00Z',
+        player_color: 'coral',
+        travel_role: 'driving',
+      },
+      {
+        user_id: 'user-2',
+        display_name: 'Meera',
+        role: 'voyager',
+        joined_at: '2026-07-26T00:05:00Z',
+        player_color: 'teal',
+        travel_role: null,
+      },
     ],
     error: null,
   });
@@ -416,8 +430,8 @@ test('getVoyageMembers returns the mapped list of members, including player_colo
 
   expect(result).toEqual({
     data: [
-      { userId: 'user-1', displayName: 'Chintan', role: 'organizer', joinedAt: '2026-07-26T00:00:00Z', playerColor: 'coral' },
-      { userId: 'user-2', displayName: 'Meera', role: 'voyager', joinedAt: '2026-07-26T00:05:00Z', playerColor: 'teal' },
+      { userId: 'user-1', displayName: 'Chintan', role: 'organizer', joinedAt: '2026-07-26T00:00:00Z', playerColor: 'coral', travelRole: 'driving' },
+      { userId: 'user-2', displayName: 'Meera', role: 'voyager', joinedAt: '2026-07-26T00:05:00Z', playerColor: 'teal', travelRole: null },
     ],
     error: null,
   });
@@ -541,4 +555,28 @@ test('acknowledgeRemoval returns no error on success', async () => {
   const result = await voyageRepository.acknowledgeRemoval('voyage-1');
 
   expect(result).toEqual({ error: null });
+});
+
+test('setTravelRole calls the set_travel_role RPC with the Voyage id and the chosen role', async () => {
+  mockRpc.mockResolvedValue({ data: null, error: null });
+
+  await voyageRepository.setTravelRole('voyage-1', 'driving');
+
+  expect(mockRpc).toHaveBeenCalledWith('set_travel_role', { p_voyage_id: 'voyage-1', p_travel_role: 'driving' });
+});
+
+test('setTravelRole returns no error on success', async () => {
+  mockRpc.mockResolvedValue({ data: null, error: null });
+
+  const result = await voyageRepository.setTravelRole('voyage-1', 'riding');
+
+  expect(result).toEqual({ error: null });
+});
+
+test('setTravelRole surfaces the not-an-active-member rejection as a normal typed error', async () => {
+  mockRpc.mockResolvedValue({ data: null, error: { code: 'ROL01', message: 'You are not an active member of this Voyage.' } });
+
+  const result = await voyageRepository.setTravelRole('voyage-1', 'driving');
+
+  expect(result).toEqual({ error: { code: 'ROL01', message: 'You are not an active member of this Voyage.' } });
 });

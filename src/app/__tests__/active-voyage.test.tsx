@@ -41,7 +41,13 @@ jest.mock('@rnmapbox/maps', () => {
 });
 
 jest.mock('@/repositories/voyage-repository', () => ({
-  voyageRepository: { endVoyage: jest.fn(), getVoyageMembers: jest.fn(), grantOrganizerStatus: jest.fn(), removeVoyager: jest.fn() },
+  voyageRepository: {
+    endVoyage: jest.fn(),
+    getVoyageMembers: jest.fn(),
+    grantOrganizerStatus: jest.fn(),
+    removeVoyager: jest.fn(),
+    setTravelRole: jest.fn(),
+  },
 }));
 
 jest.mock('@/shared/hooks/use-active-voyage', () => ({
@@ -64,14 +70,29 @@ const mockEndVoyage = voyageRepository.endVoyage as jest.MockedFunction<typeof v
 const mockGetVoyageMembers = voyageRepository.getVoyageMembers as jest.MockedFunction<typeof voyageRepository.getVoyageMembers>;
 const mockGrantOrganizerStatus = voyageRepository.grantOrganizerStatus as jest.MockedFunction<typeof voyageRepository.grantOrganizerStatus>;
 const mockRemoveVoyager = voyageRepository.removeVoyager as jest.MockedFunction<typeof voyageRepository.removeVoyager>;
+const mockSetTravelRole = voyageRepository.setTravelRole as jest.MockedFunction<typeof voyageRepository.setTravelRole>;
 const mockUseActiveVoyage = useActiveVoyage as jest.MockedFunction<typeof useActiveVoyage>;
 const mockUseAuth = useAuth as jest.MockedFunction<typeof useAuth>;
 const mockUseLiveLocations = useLiveLocations as jest.MockedFunction<typeof useLiveLocations>;
 const mockRefetch = jest.fn<() => Promise<void>>();
 
 const membersFixture = [
-  { userId: 'user-1', displayName: 'Chintan', role: 'organizer' as const, joinedAt: '2026-07-26T00:00:00Z', playerColor: 'coral' as const },
-  { userId: 'user-2', displayName: 'Meera', role: 'voyager' as const, joinedAt: '2026-07-26T00:05:00Z', playerColor: 'teal' as const },
+  {
+    userId: 'user-1',
+    displayName: 'Chintan',
+    role: 'organizer' as const,
+    joinedAt: '2026-07-26T00:00:00Z',
+    playerColor: 'coral' as const,
+    travelRole: 'riding' as const,
+  },
+  {
+    userId: 'user-2',
+    displayName: 'Meera',
+    role: 'voyager' as const,
+    joinedAt: '2026-07-26T00:05:00Z',
+    playerColor: 'teal' as const,
+    travelRole: 'riding' as const,
+  },
 ];
 
 const locationsFixture = {
@@ -108,6 +129,7 @@ async function openOrganizerMenu(getByTestId: (id: string) => any) {
 beforeEach(() => {
   jest.clearAllMocks();
   mockGetVoyageMembers.mockResolvedValue({ data: membersFixture, error: null });
+  mockSetTravelRole.mockResolvedValue({ error: null });
   mockUseAuth.mockReturnValue({
     session: { user: { id: 'user-1' } } as any,
     isLoading: false,
@@ -126,6 +148,151 @@ test('shows the map, destination, and status pill', async () => {
   expect(getByTestId('live-map')).toBeTruthy();
   expect(getByText('Lake Tahoe')).toBeTruthy();
   expect(getByTestId('status-pill')).toBeTruthy();
+});
+
+test('does not show the role prompt once the signed-in user already has a resolved travel role', async () => {
+  mockActiveVoyage('organizer');
+
+  const { queryByTestId } = await render(<ActiveVoyageScreen />);
+
+  await waitFor(() => expect(queryByTestId('status-pill')).toBeTruthy());
+  expect(queryByTestId('role-prompt')).toBeNull();
+});
+
+test('shows the role prompt when the signed-in user has not yet resolved a travel role this Voyage', async () => {
+  mockActiveVoyage('organizer');
+  mockGetVoyageMembers.mockResolvedValue({
+    data: [{ ...membersFixture[0], travelRole: null }, membersFixture[1]],
+    error: null,
+  });
+
+  const { getByTestId } = await render(<ActiveVoyageScreen />);
+
+  await waitFor(() => expect(getByTestId('role-prompt')).toBeTruthy());
+  expect(getByTestId('role-prompt-riding-button')).toBeTruthy();
+  expect(getByTestId('role-prompt-driving-button')).toBeTruthy();
+});
+
+test('tapping Riding in the role prompt calls setTravelRole with riding and re-fetches, then dismisses the prompt', async () => {
+  mockActiveVoyage('organizer');
+  mockGetVoyageMembers.mockResolvedValueOnce({
+    data: [{ ...membersFixture[0], travelRole: null }, membersFixture[1]],
+    error: null,
+  });
+
+  const { getByTestId, queryByTestId } = await render(<ActiveVoyageScreen />);
+  await waitFor(() => expect(getByTestId('role-prompt')).toBeTruthy());
+
+  mockGetVoyageMembers.mockResolvedValueOnce({ data: membersFixture, error: null });
+  await act(async () => {
+    fireEvent.press(getByTestId('role-prompt-riding-button'));
+  });
+
+  expect(mockSetTravelRole).toHaveBeenCalledWith('voyage-1', 'riding');
+  expect(mockGetVoyageMembers).toHaveBeenCalledTimes(2);
+  expect(queryByTestId('role-prompt')).toBeNull();
+});
+
+test('tapping Driving in the role prompt calls setTravelRole with driving and re-fetches, then dismisses the prompt', async () => {
+  mockActiveVoyage('organizer');
+  mockGetVoyageMembers.mockResolvedValueOnce({
+    data: [{ ...membersFixture[0], travelRole: null }, membersFixture[1]],
+    error: null,
+  });
+
+  const { getByTestId, queryByTestId } = await render(<ActiveVoyageScreen />);
+  await waitFor(() => expect(getByTestId('role-prompt')).toBeTruthy());
+
+  mockGetVoyageMembers.mockResolvedValueOnce({
+    data: [{ ...membersFixture[0], travelRole: 'driving' }, membersFixture[1]],
+    error: null,
+  });
+  await act(async () => {
+    fireEvent.press(getByTestId('role-prompt-driving-button'));
+  });
+
+  expect(mockSetTravelRole).toHaveBeenCalledWith('voyage-1', 'driving');
+  expect(queryByTestId('role-prompt')).toBeNull();
+});
+
+test('shows an inline error (not a dead end) when resolving the role prompt fails, and leaves the prompt showing', async () => {
+  mockActiveVoyage('organizer');
+  mockGetVoyageMembers.mockResolvedValue({
+    data: [{ ...membersFixture[0], travelRole: null }, membersFixture[1]],
+    error: null,
+  });
+  mockSetTravelRole.mockResolvedValue({ error: { code: 'ROL01', message: 'You are not an active member of this Voyage.' } });
+
+  const { getByTestId } = await render(<ActiveVoyageScreen />);
+  await waitFor(() => expect(getByTestId('role-prompt')).toBeTruthy());
+
+  await act(async () => {
+    fireEvent.press(getByTestId('role-prompt-riding-button'));
+  });
+
+  expect(getByTestId('role-prompt-error')).toBeTruthy();
+  expect(getByTestId('role-prompt')).toBeTruthy();
+});
+
+test('status pill shows Riding by default and switches to Driving with no confirmation dialog on tap', async () => {
+  mockActiveVoyage('organizer');
+
+  const { getByTestId, queryByTestId } = await render(<ActiveVoyageScreen />);
+  await waitFor(() => expect(within(getByTestId('status-pill')).getByText('Riding')).toBeTruthy());
+
+  mockGetVoyageMembers.mockResolvedValueOnce({
+    data: [{ ...membersFixture[0], travelRole: 'driving' }, membersFixture[1]],
+    error: null,
+  });
+  await act(async () => {
+    fireEvent.press(getByTestId('status-pill'));
+  });
+
+  expect(mockSetTravelRole).toHaveBeenCalledWith('voyage-1', 'driving');
+  // No confirmation dialog -- AC #2's explicit "no confirmation dialog" requirement.
+  expect(queryByTestId('confirm-end-voyage-button')).toBeNull();
+  await waitFor(() => expect(within(getByTestId('status-pill')).getByText('Driving')).toBeTruthy());
+});
+
+test('status pill shows Driving and switches back to Riding on tap', async () => {
+  mockActiveVoyage('organizer');
+  mockGetVoyageMembers.mockResolvedValue({
+    data: [{ ...membersFixture[0], travelRole: 'driving' }, membersFixture[1]],
+    error: null,
+  });
+
+  const { getByTestId } = await render(<ActiveVoyageScreen />);
+  await waitFor(() => expect(within(getByTestId('status-pill')).getByText('Driving')).toBeTruthy());
+
+  await act(async () => {
+    fireEvent.press(getByTestId('status-pill'));
+  });
+
+  expect(mockSetTravelRole).toHaveBeenCalledWith('voyage-1', 'riding');
+});
+
+test('status pill is disabled while a role switch is already in flight', async () => {
+  mockActiveVoyage('organizer');
+  let resolveSetTravelRole: (value: any) => void;
+  mockSetTravelRole.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        resolveSetTravelRole = resolve;
+      }),
+  );
+
+  const { getByTestId } = await render(<ActiveVoyageScreen />);
+  await waitFor(() => expect(getByTestId('status-pill')).toBeTruthy());
+
+  await act(async () => {
+    fireEvent.press(getByTestId('status-pill'));
+  });
+  expect(getByTestId('status-pill').props.accessibilityState?.disabled).toBe(true);
+
+  await act(async () => {
+    resolveSetTravelRole!({ error: null });
+  });
+  expect(mockSetTravelRole).toHaveBeenCalledTimes(1);
 });
 
 test('renders a marker for each Voyager with a live location', async () => {
@@ -168,6 +335,36 @@ test('tapping a marker opens the peek card with that Voyager, and closing it dis
   });
 
   expect(queryByTestId('marker-peek-card')).toBeNull();
+});
+
+test('hud-bottom roster row shows Driving for a Driving-role Voyager instead of the old hardcoded Riding', async () => {
+  mockActiveVoyage('organizer');
+  mockGetVoyageMembers.mockResolvedValue({
+    data: [membersFixture[0], { ...membersFixture[1], travelRole: 'driving' }],
+    error: null,
+  });
+
+  const { getByTestId } = await render(<ActiveVoyageScreen />);
+  await waitFor(() => expect(within(getByTestId('hud-bottom')).getByText('Meera')).toBeTruthy());
+
+  expect(within(getByTestId('hud-bottom')).getByText('Driving')).toBeTruthy();
+});
+
+test('marker peek card shows Driving for a Driving-role Voyager instead of the old hardcoded Riding', async () => {
+  mockActiveVoyage('organizer');
+  mockGetVoyageMembers.mockResolvedValue({
+    data: [membersFixture[0], { ...membersFixture[1], travelRole: 'driving' }],
+    error: null,
+  });
+
+  const { getByTestId } = await render(<ActiveVoyageScreen />);
+  await waitFor(() => expect(getByTestId('voyager-marker-user-2')).toBeTruthy());
+
+  await act(async () => {
+    fireEvent.press(getByTestId('voyager-marker-user-2'));
+  });
+
+  expect(within(getByTestId('marker-peek-card')).getByText('Driving')).toBeTruthy();
 });
 
 test('shows an inline error when live locations fail to load (code review: not indistinguishable from nobody online)', async () => {
@@ -441,9 +638,30 @@ test('granting Organizer status on one row does not re-enable a different row st
   mockActiveVoyage('organizer');
   mockGetVoyageMembers.mockResolvedValue({
     data: [
-      { userId: 'user-1', displayName: 'Chintan', role: 'organizer' as const, joinedAt: '2026-07-26T00:00:00Z', playerColor: 'coral' as const },
-      { userId: 'user-2', displayName: 'Meera', role: 'voyager' as const, joinedAt: '2026-07-26T00:05:00Z', playerColor: 'teal' as const },
-      { userId: 'user-3', displayName: 'Sam', role: 'voyager' as const, joinedAt: '2026-07-26T00:10:00Z', playerColor: 'violet' as const },
+      {
+        userId: 'user-1',
+        displayName: 'Chintan',
+        role: 'organizer' as const,
+        joinedAt: '2026-07-26T00:00:00Z',
+        playerColor: 'coral' as const,
+        travelRole: 'riding' as const,
+      },
+      {
+        userId: 'user-2',
+        displayName: 'Meera',
+        role: 'voyager' as const,
+        joinedAt: '2026-07-26T00:05:00Z',
+        playerColor: 'teal' as const,
+        travelRole: 'riding' as const,
+      },
+      {
+        userId: 'user-3',
+        displayName: 'Sam',
+        role: 'voyager' as const,
+        joinedAt: '2026-07-26T00:10:00Z',
+        playerColor: 'violet' as const,
+        travelRole: 'riding' as const,
+      },
     ],
     error: null,
   });

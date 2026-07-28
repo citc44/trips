@@ -154,6 +154,8 @@ export default function ActiveVoyageScreen() {
   const [removeError, setRemoveError] = useState<string | null>(null);
   const [showOrganizerMenu, setShowOrganizerMenu] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [isTogglingRole, setIsTogglingRole] = useState(false);
+  const [roleError, setRoleError] = useState<string | null>(null);
   const [reduceMotion, setReduceMotion] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const isMounted = useRef(true);
@@ -310,6 +312,30 @@ export default function ActiveVoyageScreen() {
     cameraRef.current.moveTo([avgLng, avgLat], 500);
   }
 
+  // Serves both the first-landing role prompt's choice and every later
+  // status-pill tap -- same "call RPC, then re-fetch the roster" pattern as
+  // handleGrantOrganizer/handleRemoveVoyager. Once members refreshes,
+  // myMember.travelRole is non-null, so the prompt disappears on its own --
+  // no separate dismiss flag needed.
+  async function handleSetTravelRole(role: 'riding' | 'driving') {
+    setIsTogglingRole(true);
+    setRoleError(null);
+
+    try {
+      const { error: setRoleErr } = await voyageRepository.setTravelRole(activeVoyage!.voyage.id, role);
+      if (!isMounted.current) return;
+      if (setRoleErr) {
+        setRoleError(setRoleErr.message);
+        return;
+      }
+      await loadMembers.current(activeVoyage!.voyage.id);
+    } finally {
+      if (isMounted.current) {
+        setIsTogglingRole(false);
+      }
+    }
+  }
+
   if (removeTarget) {
     return (
       <View style={screenStyles.container}>
@@ -449,6 +475,13 @@ export default function ActiveVoyageScreen() {
 
   const selectedMember = selectedUserId ? members.find((m) => m.userId === selectedUserId) : null;
 
+  // `myMember` stays `undefined` until `members` has loaded at least once
+  // (it starts as `[]`), so `showRolePrompt` is correctly `false` before the
+  // roster fetch resolves -- no separate "members loaded" flag needed.
+  const myMember = members.find((m) => m.userId === session?.user.id);
+  const myTravelRole = myMember?.travelRole ?? null;
+  const showRolePrompt = !!myMember && myTravelRole === null;
+
   return (
     <View style={screenStyles.container}>
       <View style={styles.skyStrip} />
@@ -474,9 +507,18 @@ export default function ActiveVoyageScreen() {
       </MapView>
 
       <SafeAreaView style={styles.hudOverlay} pointerEvents="box-none">
-        <View testID="status-pill" style={styles.statusPill}>
-          <Text style={styles.statusPillLabel}>Riding</Text>
-        </View>
+        <Pressable
+          testID="status-pill"
+          accessibilityRole="button"
+          accessibilityLabel={myTravelRole === 'driving' ? 'Switch to Riding' : 'Switch to Driving'}
+          disabled={isTogglingRole}
+          onPress={() => handleSetTravelRole(myTravelRole === 'driving' ? 'riding' : 'driving')}
+          style={[styles.statusPill, myTravelRole === 'driving' ? styles.statusPillDriving : styles.statusPillRiding]}
+        >
+          <Text style={[styles.statusPillLabel, { color: myTravelRole === 'driving' ? StatusPill.driving.foreground : StatusPill.riding.foreground }]}>
+            {myTravelRole === 'driving' ? 'Driving' : 'Riding'}
+          </Text>
+        </Pressable>
 
         <View testID="hud-top" style={styles.hudTop}>
           <View style={styles.hudTopRow}>
@@ -504,11 +546,13 @@ export default function ActiveVoyageScreen() {
           ) : null}
         </View>
 
-        <View style={styles.hudBottom}>
+        <View testID="hud-bottom" style={styles.hudBottom}>
           {members.map((member) => (
             <View key={member.userId} style={styles.hudBottomRow}>
               <Text style={styles.hudBottomName}>{member.displayName ?? 'Voyager'}</Text>
-              <Text style={styles.hudBottomRole}>{member.role === 'organizer' ? 'Organizer' : 'Riding'}</Text>
+              <Text style={styles.hudBottomRole}>
+                {member.role === 'organizer' ? 'Organizer' : member.travelRole === 'driving' ? 'Driving' : 'Riding'}
+              </Text>
             </View>
           ))}
         </View>
@@ -541,7 +585,38 @@ export default function ActiveVoyageScreen() {
                 {'✕'}
               </Text>
             </View>
-            <Text style={styles.peekStatus}>{selectedMember.role === 'organizer' ? 'Organizer' : 'Riding'}</Text>
+            <Text style={styles.peekStatus}>
+              {selectedMember.role === 'organizer' ? 'Organizer' : selectedMember.travelRole === 'driving' ? 'Driving' : 'Riding'}
+            </Text>
+          </View>
+        </View>
+      ) : null}
+
+      {showRolePrompt ? (
+        <View testID="role-prompt" style={styles.peekScrim}>
+          <View style={styles.peekCard}>
+            <Text style={styles.confirmTitle}>Riding or driving?</Text>
+            <Text style={styles.confirmSub}>
+              Pick one — you can switch anytime with your status pill, no need to ask again.
+            </Text>
+            <IgnitionButton
+              testID="role-prompt-riding-button"
+              label="Riding"
+              disabled={isTogglingRole}
+              onPress={() => handleSetTravelRole('riding')}
+            />
+            <IgnitionButton
+              testID="role-prompt-driving-button"
+              label="Driving"
+              disabled={isTogglingRole}
+              onPress={() => handleSetTravelRole('driving')}
+              variant="secondary"
+            />
+            {roleError ? (
+              <Text testID="role-prompt-error" style={screenStyles.error}>
+                {roleError}
+              </Text>
+            ) : null}
           </View>
         </View>
       ) : null}
@@ -639,12 +714,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing['4'],
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: StatusPill.riding.background,
     borderWidth: 1,
+  },
+  statusPillRiding: {
+    backgroundColor: StatusPill.riding.background,
     borderColor: StatusPill.riding.borderColor,
   },
+  statusPillDriving: {
+    backgroundColor: StatusPill.driving.background,
+    borderColor: StatusPill.driving.background,
+    shadowColor: StatusPill.driving.glowColor,
+    shadowOpacity: 1,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 8,
+  },
   statusPillLabel: {
-    color: StatusPill.riding.foreground,
     fontFamily: Typography.label.fontFamily,
     fontSize: Typography.label.fontSize,
     fontWeight: Typography.label.fontWeight,
