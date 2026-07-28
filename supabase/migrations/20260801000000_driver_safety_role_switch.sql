@@ -15,9 +15,17 @@ alter table public.voyage_members
 -- caller's own active-membership row for the Voyage, then write. Serves both
 -- the first-landing prompt's choice and every later status-pill tap -- one
 -- function, no separate RPC for the pill switch. No separate application-
--- level validation of p_travel_role -- the column's own check constraint is
--- the authoritative guard, and the client's TS type already restricts
--- callers to the two valid literals.
+-- level validation of p_travel_role beyond the explicit null guard below --
+-- the column's own check constraint handles a bad non-null value, and the
+-- client's TS type already restricts callers to the two valid literals.
+--
+-- Code review finding: a null p_travel_role trivially satisfies the check
+-- constraint (NULL always satisfies a CHECK per SQL semantics), so without
+-- this guard any authenticated active member could call this RPC directly
+-- (bypassing the TS type system entirely, e.g. via raw PostgREST) and reset
+-- their own travel_role back to null -- contradicting this migration's own
+-- "never write back to null" invariant and silently re-triggering their own
+-- role prompt.
 create or replace function public.set_travel_role(p_voyage_id uuid, p_travel_role text)
 returns void
 language plpgsql
@@ -27,6 +35,10 @@ as $$
 declare
   v_voyage_member_id uuid;
 begin
+  if p_travel_role is null then
+    raise exception 'A travel role is required.' using errcode = 'ROL02';
+  end if;
+
   select id into v_voyage_member_id
   from public.voyage_members
   where voyage_id = p_voyage_id

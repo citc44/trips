@@ -171,6 +171,13 @@ test('shows the role prompt when the signed-in user has not yet resolved a trave
   await waitFor(() => expect(getByTestId('role-prompt')).toBeTruthy());
   expect(getByTestId('role-prompt-riding-button')).toBeTruthy();
   expect(getByTestId('role-prompt-driving-button')).toBeTruthy();
+  // Both must be real, full-size Pressable buttons (IgnitionButton's default
+  // `primary` variant, which renders to a host "View"), not the undersized
+  // text-link `secondary` variant (a plain `Text` with no minHeight) --
+  // code review finding: Riding and Driving are peer choices, not a main
+  // action next to a de-emphasized one.
+  expect(getByTestId('role-prompt-riding-button').type).toBe('View');
+  expect(getByTestId('role-prompt-driving-button').type).toBe('View');
 });
 
 test('tapping Riding in the role prompt calls setTravelRole with riding and re-fetches, then dismisses the prompt', async () => {
@@ -293,6 +300,31 @@ test('status pill is disabled while a role switch is already in flight', async (
     resolveSetTravelRole!({ error: null });
   });
   expect(mockSetTravelRole).toHaveBeenCalledTimes(1);
+});
+
+test('status pill announces the current travel role to screen readers, not the destination of the next tap', async () => {
+  mockActiveVoyage('organizer');
+
+  const { getByTestId } = await render(<ActiveVoyageScreen />);
+  await waitFor(() => expect(getByTestId('status-pill').props.accessibilityLabel).toBe('Riding'));
+});
+
+test('shows an inline error (not a silent failure) when a pill-triggered role switch fails after the role is already resolved', async () => {
+  mockActiveVoyage('organizer');
+  mockSetTravelRole.mockResolvedValue({ error: { code: 'ROL01', message: 'You are not an active member of this Voyage.' } });
+
+  const { getByTestId, queryByTestId } = await render(<ActiveVoyageScreen />);
+  await waitFor(() => expect(getByTestId('status-pill')).toBeTruthy());
+  // No prompt is showing (the fixture's own travel role is already resolved) -- this is the
+  // path the prompt's own inline error doesn't cover.
+  expect(queryByTestId('role-prompt')).toBeNull();
+
+  await act(async () => {
+    fireEvent.press(getByTestId('status-pill'));
+  });
+
+  expect(getByTestId('status-pill-error')).toBeTruthy();
+  expect(getByTestId('status-pill-error').props.children).toBe('You are not an active member of this Voyage.');
 });
 
 test('renders a marker for each Voyager with a live location', async () => {

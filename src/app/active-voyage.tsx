@@ -507,18 +507,33 @@ export default function ActiveVoyageScreen() {
       </MapView>
 
       <SafeAreaView style={styles.hudOverlay} pointerEvents="box-none">
-        <Pressable
-          testID="status-pill"
-          accessibilityRole="button"
-          accessibilityLabel={myTravelRole === 'driving' ? 'Switch to Riding' : 'Switch to Driving'}
-          disabled={isTogglingRole}
-          onPress={() => handleSetTravelRole(myTravelRole === 'driving' ? 'riding' : 'driving')}
-          style={[styles.statusPill, myTravelRole === 'driving' ? styles.statusPillDriving : styles.statusPillRiding]}
-        >
-          <Text style={[styles.statusPillLabel, { color: myTravelRole === 'driving' ? StatusPill.driving.foreground : StatusPill.riding.foreground }]}>
-            {myTravelRole === 'driving' ? 'Driving' : 'Riding'}
-          </Text>
-        </Pressable>
+        <View style={styles.statusPillWrapper}>
+          <Pressable
+            testID="status-pill"
+            accessibilityRole="button"
+            // Describes current state, not the destination of the next tap --
+            // a screen reader user must be able to hear their actual travel
+            // role from this control, the same way a sighted user reads it at
+            // a glance (DESIGN.md: "the single most safety-critical control").
+            // The "switch to X" framing lives in accessibilityHint instead,
+            // which doesn't override the accessible name the way
+            // accessibilityLabel would (code review finding).
+            accessibilityLabel={myTravelRole === 'driving' ? 'Driving' : 'Riding'}
+            accessibilityHint={myTravelRole === 'driving' ? 'Switches to Riding' : 'Switches to Driving'}
+            disabled={isTogglingRole}
+            onPress={() => handleSetTravelRole(myTravelRole === 'driving' ? 'riding' : 'driving')}
+            style={[styles.statusPill, myTravelRole === 'driving' ? styles.statusPillDriving : styles.statusPillRiding]}
+          >
+            <Text style={[styles.statusPillLabel, { color: myTravelRole === 'driving' ? StatusPill.driving.foreground : StatusPill.riding.foreground }]}>
+              {myTravelRole === 'driving' ? 'Driving' : 'Riding'}
+            </Text>
+          </Pressable>
+          {roleError && !showRolePrompt ? (
+            <Text testID="status-pill-error" style={styles.statusPillErrorText}>
+              {roleError}
+            </Text>
+          ) : null}
+        </View>
 
         <View testID="hud-top" style={styles.hudTop}>
           <View style={styles.hudTopRow}>
@@ -610,7 +625,6 @@ export default function ActiveVoyageScreen() {
               label="Driving"
               disabled={isTogglingRole}
               onPress={() => handleSetTravelRole('driving')}
-              variant="secondary"
             />
             {roleError ? (
               <Text testID="role-prompt-error" style={screenStyles.error}>
@@ -704,10 +718,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: Spacing.gutter,
   },
-  statusPill: {
+  statusPillWrapper: {
     position: 'absolute',
     top: Spacing.gutter,
     right: Spacing.gutter,
+    alignItems: 'flex-end',
+    gap: Spacing['1'],
+  },
+  statusPill: {
     minHeight: StatusPill.minHeight,
     minWidth: StatusPill.minWidth,
     borderRadius: StatusPill.radius,
@@ -733,6 +751,13 @@ const styles = StyleSheet.create({
     fontFamily: Typography.label.fontFamily,
     fontSize: Typography.label.fontSize,
     fontWeight: Typography.label.fontWeight,
+  },
+  statusPillErrorText: {
+    maxWidth: 140,
+    textAlign: 'right',
+    color: Colors.error,
+    fontFamily: Typography.label.fontFamily,
+    fontSize: Typography.label.fontSize,
   },
   hudTop: {
     backgroundColor: HudCard.background,
