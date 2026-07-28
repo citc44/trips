@@ -127,6 +127,14 @@ function createBroadcastChannel(voyageId: string): {
   };
 }
 
+// Bounds broadcastLocationOnce's subscribe handshake below -- without this,
+// a status that's never SUBSCRIBED/CHANNEL_ERROR/TIMED_OUT/CLOSED (or a
+// connection that never calls back at all) would leave that promise
+// unresolved and its channel un-torn-down forever. Called from a background
+// task on every tick, so a hang here is a real leak, not just a slow
+// response (Story 3.3 code review finding).
+const BROADCAST_ONCE_TIMEOUT_MS = 10000;
+
 // A single fire-and-forget broadcast, for callers that can't hold a
 // persistent channel reference the way a hook's closure/ref can -- namely
 // background-location-task.ts's module-scope task callback (Story 3.3),
@@ -139,11 +147,26 @@ function createBroadcastChannel(voyageId: string): {
 // discipline elsewhere.
 function broadcastLocationOnce(voyageId: string, location: LiveLocation): Promise<void> {
   return new Promise((resolve) => {
+    let settled = false;
     // `channel` must be assigned before .subscribe() is called, not chained
     // off it -- a callback that fires synchronously (some SDKs do this for
     // an already-resolved/cached status) would otherwise reference `channel`
     // before its own assignment completes.
     const channel = supabase.channel(channelName(voyageId), { config: { private: true } });
+
+    // Guards against acting twice: an unrecognized status, or a stale
+    // duplicate callback invocation after this call already settled, would
+    // otherwise re-remove an already-removed channel or resolve twice.
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutId);
+      supabase.removeChannel(channel);
+      resolve();
+    };
+
+    const timeoutId = setTimeout(finish, BROADCAST_ONCE_TIMEOUT_MS);
+
     channel.subscribe((status: string) => {
       if (status === 'SUBSCRIBED') {
         channel.send({
@@ -157,11 +180,9 @@ function broadcastLocationOnce(voyageId: string, location: LiveLocation): Promis
             updated_at: location.updatedAt,
           },
         });
-        supabase.removeChannel(channel);
-        resolve();
+        finish();
       } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-        supabase.removeChannel(channel);
-        resolve();
+        finish();
       }
     });
   });

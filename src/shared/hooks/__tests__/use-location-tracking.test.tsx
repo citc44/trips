@@ -105,6 +105,37 @@ test('stops tracking and clears the background task context on unmount', async (
   expect(mockSetBackgroundLocationContext).toHaveBeenLastCalledWith(null);
 });
 
+test('corrects the native state if startLocationUpdatesAsync resolves after this effect instance already cleaned up', async () => {
+  let resolveStart: (() => void) | undefined;
+  mockStartLocationUpdatesAsync.mockImplementation(() => new Promise<void>((resolve) => { resolveStart = resolve; }));
+
+  const { unmount } = await render(<Harness voyageId="voyage-1" />);
+
+  await act(async () => {
+    unmount();
+  });
+
+  expect(mockStopLocationUpdatesAsync).toHaveBeenCalledTimes(1);
+  expect(mockSetBackgroundLocationContext).toHaveBeenLastCalledWith(null);
+
+  // The late-resolving start() from before unmount now completes.
+  await act(async () => {
+    resolveStart?.();
+    await Promise.resolve();
+  });
+
+  // The stale start should be immediately undone, not left re-armed.
+  expect(mockStopLocationUpdatesAsync).toHaveBeenCalledTimes(2);
+  expect(mockSetBackgroundLocationContext).toHaveBeenLastCalledWith(null);
+});
+
+test('does not re-issue stop when start resolves normally before any cleanup', async () => {
+  await render(<Harness voyageId="voyage-1" />);
+
+  expect(mockStopLocationUpdatesAsync).not.toHaveBeenCalled();
+  expect(mockSetBackgroundLocationContext).toHaveBeenLastCalledWith({ voyageId: 'voyage-1', userId: 'user-1' });
+});
+
 test('stops tracking and clears context when permission is lost while a Voyage is still active', async () => {
   const { rerender } = await render(<Harness voyageId="voyage-1" />);
 

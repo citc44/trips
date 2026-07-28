@@ -68,7 +68,7 @@ development_status:
   epic-3: in-progress
   3-1-os-location-permission: done
   3-2-real-time-voyager-map: done
-  3-3-location-persistence-background-tracking: review
+  3-3-location-persistence-background-tracking: done
   3-4-driver-safety-role-switch: backlog
   3-5-connectivity-loss-reconnection: backlog
   epic-3-retrospective: optional

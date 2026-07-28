@@ -42,6 +42,20 @@ export function useLocationTracking(voyageId: string | null): void {
   useEffect(() => {
     if (!voyageId || !userId || status !== 'granted') return;
 
+    // Restores the old watchPositionAsync-based hook's isCancelled guard,
+    // adapted to startLocationUpdatesAsync/stopLocationUpdatesAsync's
+    // shape: unlike a per-call subscription object, both calls target the
+    // same constant task name and are independent, unawaited native calls.
+    // Without this, a start() that resolves after this same effect
+    // instance's own cleanup already ran would re-arm tracking for a
+    // context that's already been torn down (Story 3.3 code review
+    // finding). This does not fully serialize start/stop calls *across*
+    // different effect instances (e.g. a very fast back-to-back Voyage
+    // transition) -- that narrower residual race is deferred, since this
+    // app's routing doesn't let voyageId flip directly between two active
+    // Voyages without an intervening unmount.
+    let cancelled = false;
+
     setBackgroundLocationContext({ voyageId, userId });
 
     Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK, {
@@ -52,12 +66,23 @@ export function useLocationTracking(voyageId: string | null): void {
         notificationTitle: FOREGROUND_SERVICE_NOTIFICATION_TITLE,
         notificationBody: FOREGROUND_SERVICE_NOTIFICATION_BODY,
       },
-    }).catch(() => {
-      // Swallowed on purpose -- fails open, matching this app's established
-      // best-effort discipline for background/native-module operations.
-    });
+    })
+      .then(() => {
+        if (!cancelled) return;
+        // Cleanup already ran before this resolved -- correct the native
+        // state rather than leaving tracking running for a superseded
+        // context.
+        setBackgroundLocationContext(null);
+        Location.stopLocationUpdatesAsync(BACKGROUND_LOCATION_TASK).catch(() => {});
+      })
+      .catch(() => {
+        // Swallowed on purpose -- fails open, matching this app's
+        // established best-effort discipline for background/native-module
+        // operations.
+      });
 
     return () => {
+      cancelled = true;
       // Context is always cleared, even if stopLocationUpdatesAsync itself
       // fails, so a stray task callback firing after cleanup has nothing
       // stale to report against.

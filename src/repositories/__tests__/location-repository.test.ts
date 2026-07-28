@@ -1,4 +1,4 @@
-import { beforeEach, expect, jest, test } from '@jest/globals';
+import { afterEach, beforeEach, expect, jest, test } from '@jest/globals';
 
 import { locationRepository } from '@/repositories/location-repository';
 
@@ -29,6 +29,10 @@ beforeEach(() => {
     callback?.('SUBSCRIBED');
     return channelInstance;
   });
+});
+
+afterEach(() => {
+  jest.useRealTimers();
 });
 
 test('getLiveLocations calls the get_live_locations RPC with the Voyage id', async () => {
@@ -183,4 +187,49 @@ test('broadcastLocationOnce resolves without throwing (fails open) if the channe
 
   expect(mockSend).not.toHaveBeenCalled();
   expect(mockRemoveChannel).toHaveBeenCalledTimes(1);
+});
+
+test('broadcastLocationOnce resolves and tears the channel down if no terminal status ever arrives', async () => {
+  jest.useFakeTimers();
+  mockSubscribe.mockImplementation(() => ({ on: mockOn, subscribe: mockSubscribe, send: mockSend })); // never calls back at all
+
+  const promise = locationRepository.broadcastLocationOnce('voyage-1', {
+    userId: 'user-1',
+    lat: 39.1,
+    lng: -120.0,
+    heading: 90,
+    updatedAt: '2026-07-26T00:00:00Z',
+  });
+
+  await jest.advanceTimersByTimeAsync(10000);
+  await expect(promise).resolves.toBeUndefined();
+
+  expect(mockSend).not.toHaveBeenCalled();
+  expect(mockRemoveChannel).toHaveBeenCalledTimes(1);
+});
+
+test('broadcastLocationOnce ignores a stale duplicate status callback after it already settled', async () => {
+  let capturedCallback: ((status: string) => void) | undefined;
+  mockSubscribe.mockImplementation((callback?: (status: string) => void) => {
+    capturedCallback = callback;
+    callback?.('SUBSCRIBED');
+    return { on: mockOn, subscribe: mockSubscribe, send: mockSend };
+  });
+
+  await locationRepository.broadcastLocationOnce('voyage-1', {
+    userId: 'user-1',
+    lat: 39.1,
+    lng: -120.0,
+    heading: 90,
+    updatedAt: '2026-07-26T00:00:00Z',
+  });
+
+  expect(mockRemoveChannel).toHaveBeenCalledTimes(1);
+  expect(mockSend).toHaveBeenCalledTimes(1);
+
+  // A stale duplicate callback firing after settlement must not act again.
+  capturedCallback?.('CLOSED');
+
+  expect(mockRemoveChannel).toHaveBeenCalledTimes(1);
+  expect(mockSend).toHaveBeenCalledTimes(1);
 });
