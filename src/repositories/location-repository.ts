@@ -127,9 +127,50 @@ function createBroadcastChannel(voyageId: string): {
   };
 }
 
+// A single fire-and-forget broadcast, for callers that can't hold a
+// persistent channel reference the way a hook's closure/ref can -- namely
+// background-location-task.ts's module-scope task callback (Story 3.3),
+// which has no stable place to keep a long-lived channel between
+// invocations. Opens a channel, waits for the subscribe handshake (unlike
+// createBroadcastChannel's send(), which drops a too-early call), sends
+// once, tears the channel down, and resolves either way -- a failed/timed-
+// out subscribe fails open (resolves without throwing) rather than
+// rejecting, matching this app's established best-effort-broadcast
+// discipline elsewhere.
+function broadcastLocationOnce(voyageId: string, location: LiveLocation): Promise<void> {
+  return new Promise((resolve) => {
+    // `channel` must be assigned before .subscribe() is called, not chained
+    // off it -- a callback that fires synchronously (some SDKs do this for
+    // an already-resolved/cached status) would otherwise reference `channel`
+    // before its own assignment completes.
+    const channel = supabase.channel(channelName(voyageId), { config: { private: true } });
+    channel.subscribe((status: string) => {
+      if (status === 'SUBSCRIBED') {
+        channel.send({
+          type: 'broadcast',
+          event: BROADCAST_EVENT,
+          payload: {
+            user_id: location.userId,
+            lat: location.lat,
+            lng: location.lng,
+            heading: location.heading,
+            updated_at: location.updatedAt,
+          },
+        });
+        supabase.removeChannel(channel);
+        resolve();
+      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+        supabase.removeChannel(channel);
+        resolve();
+      }
+    });
+  });
+}
+
 export const locationRepository = {
   getLiveLocations,
   upsertLocation,
   subscribeToLocations,
   createBroadcastChannel,
+  broadcastLocationOnce,
 };

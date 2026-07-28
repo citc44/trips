@@ -1,3 +1,10 @@
+// Side-effect import only, and deliberately first: registers the
+// background location task (a module-scope TaskManager.defineTask() call)
+// before anything else runs, matching Expo's own documented pattern for
+// Expo Router projects -- the task must be defined before any navigation,
+// not lazily whenever some screen happens to first reference it.
+import '@/shared/lib/background-location-task';
+
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';

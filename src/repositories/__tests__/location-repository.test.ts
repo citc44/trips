@@ -146,3 +146,41 @@ test('createBroadcastChannel unsubscribe removes the channel', () => {
 
   expect(mockRemoveChannel).toHaveBeenCalledTimes(1);
 });
+
+test('broadcastLocationOnce creates a private channel, sends once subscribed, then tears the channel down', async () => {
+  await locationRepository.broadcastLocationOnce('voyage-1', {
+    userId: 'user-1',
+    lat: 39.1,
+    lng: -120.0,
+    heading: 90,
+    updatedAt: '2026-07-26T00:00:00Z',
+  });
+
+  expect(mockChannel).toHaveBeenCalledWith('voyage:voyage-1', { config: { private: true } });
+  expect(mockSend).toHaveBeenCalledWith({
+    type: 'broadcast',
+    event: 'location',
+    payload: { user_id: 'user-1', lat: 39.1, lng: -120.0, heading: 90, updated_at: '2026-07-26T00:00:00Z' },
+  });
+  expect(mockRemoveChannel).toHaveBeenCalledTimes(1);
+});
+
+test('broadcastLocationOnce resolves without throwing (fails open) if the channel never reaches SUBSCRIBED', async () => {
+  mockSubscribe.mockImplementation((callback?: (status: string) => void) => {
+    callback?.('CHANNEL_ERROR');
+    return { on: mockOn, subscribe: mockSubscribe, send: mockSend };
+  });
+
+  await expect(
+    locationRepository.broadcastLocationOnce('voyage-1', {
+      userId: 'user-1',
+      lat: 39.1,
+      lng: -120.0,
+      heading: 90,
+      updatedAt: '2026-07-26T00:00:00Z',
+    }),
+  ).resolves.toBeUndefined();
+
+  expect(mockSend).not.toHaveBeenCalled();
+  expect(mockRemoveChannel).toHaveBeenCalledTimes(1);
+});

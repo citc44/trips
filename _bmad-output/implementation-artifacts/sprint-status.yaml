@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-07-25
-last_updated: 2026-07-27
+last_updated: 2026-07-28
 project: trips
 project_key: NOKEY
 tracking_system: file-system
@@ -68,7 +68,7 @@ development_status:
   epic-3: in-progress
   3-1-os-location-permission: done
   3-2-real-time-voyager-map: done
-  3-3-location-persistence-background-tracking: backlog
+  3-3-location-persistence-background-tracking: review
   3-4-driver-safety-role-switch: backlog
   3-5-connectivity-loss-reconnection: backlog
   epic-3-retrospective: optional

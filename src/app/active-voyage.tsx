@@ -12,8 +12,8 @@ import { IgnitionButton } from '@/shared/components/ignition-button';
 import { Toast } from '@/shared/components/toast';
 import { useActiveVoyage } from '@/shared/hooks/use-active-voyage';
 import { useAuth } from '@/shared/hooks/use-auth';
-import { useForegroundLocationBroadcast } from '@/shared/hooks/use-foreground-location-broadcast';
 import { useLiveLocations, type TrailPoint } from '@/shared/hooks/use-live-locations';
+import { useLocationTracking } from '@/shared/hooks/use-location-tracking';
 import { screenStyles } from '@/shared/styles/screen';
 
 const GENERIC_ERROR = 'Something went wrong. Please try again.';
@@ -139,7 +139,7 @@ export default function ActiveVoyageScreen() {
   const voyageId = activeVoyage?.voyage.id ?? null;
 
   const { locations, trails, hasError: hasLocationsError } = useLiveLocations(voyageId);
-  useForegroundLocationBroadcast(voyageId);
+  useLocationTracking(voyageId);
 
   const [showConfirm, setShowConfirm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);

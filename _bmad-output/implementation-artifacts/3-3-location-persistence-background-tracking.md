@@ -1,0 +1,130 @@
+---
+baseline_commit: 5ed61c59e1aecdf34757d93860470f9193001bd8
+---
+
+# Story 3.3: Location Persistence & Background Tracking
+
+Status: review
+
+<!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
+
+## Story
+
+As a Voyager,
+I want my location to keep updating even when my phone is locked,
+so that my group can see me without me keeping the app open.
+
+## Acceptance Criteria
+
+1. **Given** the app is backgrounded or the phone is locked, **when** I'm on an active Voyage, **then** location upserts keep sending (background mode + task manager; Android 14+ foreground-service-type declared).
+2. **And** only my single latest-known location is persisted (never per-ping), with a conditional upsert so a stale/delayed update can never overwrite a newer one.
+
+*(Fulfills AD-3, AD-8. No FR is claimed — FR-9 was already fully satisfied by Story 3.2's map; this story is purely an architecture-compliance story.)*
+
+**🚫 Known interim-scope decisions (not silent gaps — see Dev Notes for full rationale on each):**
+
+- **This story replaces, not adds to, Story 3.2's foreground-only sending mechanism.** `useForegroundLocationBroadcast` (built in 3.2 on `expo-location`'s `watchPositionAsync`, which stops the instant the app backgrounds) is renamed to `useLocationTracking` and rebuilt on `expo-location`'s background-capable `startLocationUpdatesAsync`/`stopLocationUpdatesAsync` — a single mechanism that works correctly in both states, rather than running two parallel location pipelines that would double-send. This is a deliberate rename, not a leftover: the old name became factually wrong the moment it also handles background operation.
+- **The conditional-upsert persistence (AC2) already exists — Story 3.2 built it.** `upsert_location()`'s `where voyage_member_locations.updated_at < excluded.updated_at` clause already satisfies AC2 exactly as written. This story's own job for AC2 is narrower than it might read: confirm it, don't rebuild it, and make sure the background task calls the *same* existing function rather than reinventing persistence.
+- **No live Realtime broadcast guarantee while backgrounded.** AD-8's own text says a backgrounded Voyager "does not need an active Realtime subscription to contribute — the upsert write itself triggers the... broadcast that other connected clients receive" — but that assumes a `postgres_changes`-driven receive pipeline. Story 3.2 actually built the receive side on Supabase Broadcast (`channel.send()`), a deliberate, different (cheaper) choice AD-2 also permits. This story does not reconcile that architecture-doc/implementation drift by rebuilding 3.2's receive pipeline — it's out of scope. Instead: the background task *attempts* the same best-effort broadcast the foreground path already does, but never depends on it succeeding — the conditional upsert (AC2) is the guaranteed-correct fallback either way. Whether the broadcast attempt actually delivers reliably from a backgrounded task's execution context is genuinely unverified without a real device (see Task 7).
+- **No background-permission-specific gate.** `useLocationPermission()` (Story 3.1) only tracks foreground permission status. This story does not extend it to separately check `getBackgroundPermissionsAsync()` before starting the task — `startLocationUpdatesAsync` is safe to call whenever foreground permission is granted; the OS itself silently stops delivering updates once actually backgrounded if only "While Using" (not "Always") was granted, with no crash and no app-code special-casing needed. See Dev Notes for the reasoning this relies on.
+- **No UX copy exists anywhere in DESIGN.md/EXPERIENCE.md for the Android foreground-service notification** (the OS-mandated "Voylo is using your location" persistent notification any Android foreground-service-type location task must show). This story writes first-draft, on-brand copy directly (flagged for eventual PM/UX sign-off, matching the PRD's own `[NOTE FOR PM]` convention for undecided copy) rather than leaving the required `notificationTitle`/`notificationBody` parameters unset.
+
+## Tasks / Subtasks
+
+- [x] Task 1: Add `expo-task-manager` (AC: #1)
+  - [x] Ran `npx expo install expo-task-manager` — resolved to `~57.0.6`. No config plugin auto-added (confirmed via `git diff app.json` showing no changes), matching this story's own research.
+  - [x] Confirmed all three `expo-location` background flags (`isIosBackgroundLocationEnabled`, `isAndroidBackgroundLocationEnabled`, `isAndroidForegroundServiceEnabled`) are still present in `app.json` — verified directly, not assumed.
+
+- [x] Task 2: `background-location-task.ts` — module-scope task definition (AC: #1, #2)
+  - [x] New `src/shared/lib/background-location-task.ts`. `TaskManager.defineTask(BACKGROUND_LOCATION_TASK, callback)` at module scope. Task name constant exported.
+  - [x] `setBackgroundLocationContext(context)` module-level bridge exported; the task skips cleanly (no upsert/broadcast) when context is `null`.
+  - [x] On each callback: skips on `error`; takes the *latest* item from the `locations` array (batched deliveries handled); normalizes the `-1` heading sentinel the same way the foreground path does; always calls `upsertLocation`; attempts a best-effort broadcast via a **new `locationRepository.broadcastLocationOnce()`** function (not `createBroadcastChannel().send()` — that API drops a send issued before the channel's subscribe handshake completes, which a fire-and-forget per-callback channel would hit almost every time; `broadcastLocationOnce` properly awaits `SUBSCRIBED` before sending, then tears the channel down, resolving either way so a failed/timed-out subscribe fails open rather than rejecting).
+  - [x] Imported for its side effect as the first import in `src/app/_layout.tsx`, before every other import. 9/9 new tests passing.
+
+- [x] Task 3: Rebuild the sending hook on background-capable APIs (AC: #1, #2)
+  - [x] Read `src/shared/hooks/use-foreground-location-broadcast.tsx`'s full current definition first — this is the file being rebuilt, not written from scratch; preserve its existing behavior (permission-gating, the 5s/20m interval assumption, the dual upsert+broadcast write, the `heading` sentinel normalization from the Story 3.2 code review) except for the specific `watchPositionAsync` → `startLocationUpdatesAsync` swap.
+  - [x] Rename the file and export to `src/shared/hooks/use-location-tracking.tsx` / `useLocationTracking` — the old name is factually wrong once this also handles background operation. Update every call site (`active-voyage.tsx`) and test file/mock reference; this is a deliberate, complete rename, not a partial one that leaves a stale name in some files.
+  - [x] On mount (when `voyageId`/`userId` are present and `useLocationPermission()`'s `status === 'granted'`): call `setBackgroundLocationContext({ voyageId, userId })`, then `Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK, { accuracy: Balanced, timeInterval: 5000, distanceInterval: 20, foregroundService: { notificationTitle: '...', notificationBody: '...' } })` — same 5s/20m interval Story 3.2 already established as its own documented assumption, kept consistent rather than introducing a second, different background-specific interval to negotiate without a clear mandate to do so.
+  - [x] On cleanup (unmount, `voyageId`/`userId` becomes null, or permission is lost): `Location.stopLocationUpdatesAsync(BACKGROUND_LOCATION_TASK)` and `setBackgroundLocationContext(null)` — always clear the module-level context on cleanup, even if `stopLocationUpdatesAsync` itself fails, so a stray task firing after cleanup has nothing stale to report against.
+  - [x] The upsert/broadcast-sending logic itself (throttling, `heading` normalization) now lives in Task 2's task callback, not in this hook — the hook's job narrows to *starting and stopping* tracking correctly, not sending directly. Don't duplicate the sending logic in both places.
+
+- [x] Task 4: Android foreground-service notification copy (AC: #1)
+  - [x] First-draft copy for `LocationTaskOptions.foregroundService.notificationTitle`/`notificationBody` — no existing DESIGN.md/EXPERIENCE.md text to draw from (confirmed absent by this story's own research). Match Voice & Tone's plain, calm, no-scare-language register already established for the location-priming copy (Story 3.1): something like title **"Voylo is sharing your location"**, body **"Your Voyage group can see you on the map."** Flag explicitly in the Dev Agent Record that this is first-draft copy needing eventual PM/UX sign-off, not treated as final.
+
+- [x] Task 5: Update `active-voyage.tsx`'s call site (AC: #1)
+  - [x] Swap `useForegroundLocationBroadcast(voyageId)` for `useLocationTracking(voyageId)` — the call site itself shouldn't need any other change, since the hook's public contract (a fire-and-forget `void`-returning hook taking `voyageId`) is unchanged.
+
+- [x] Task 6: Tests (AC: #1, #2)
+  - [x] `background-location-task.test.ts`: mocks `expo-task-manager`'s `defineTask` to capture the registered callback, `location-repository.ts`'s `upsertLocation`/`createBroadcastChannel`. Covers: the callback calling `upsertLocation` with the latest location from a (possibly multi-item) `locations` array; the best-effort broadcast attempt; skipping cleanly when `error` is present; skipping cleanly when the context is `null` (nothing to report for); `setBackgroundLocationContext` actually updating what the next callback invocation reports against.
+  - [x] `use-location-tracking.test.tsx` (renamed/rebuilt from `use-foreground-location-broadcast.test.tsx`): mocks `expo-location`'s `startLocationUpdatesAsync`/`stopLocationUpdatesAsync` (not `watchPositionAsync`) and `background-location-task.ts`'s `setBackgroundLocationContext`. Covers: starting only when permission is granted and a Voyage/user id exist (same coverage `use-foreground-location-broadcast.test.tsx` already had, ported over); calling `setBackgroundLocationContext` with the right values on start and `null` on cleanup; calling `stopLocationUpdatesAsync` on unmount/permission loss.
+  - [x] `active-voyage.test.tsx`: update the mock from `useForegroundLocationBroadcast` to `useLocationTracking` — a mechanical rename in the test file, not new coverage (this screen doesn't otherwise change).
+  - [x] Delete the old `use-foreground-location-broadcast.tsx`/`.test.tsx` files once the rename is complete — don't leave a stale, unused duplicate behind.
+
+- [x] Task 7: Live verification (AC: #1, #2)
+  - [x] Same standard as every prior story: attempt via EAS CLI/physical device, disclose plainly if blocked. Background location is, per AD-8's own note, unusable in Expo Go — this needs a real dev build even more than Story 3.2 did, since the entire point is testing what happens when the app is *not* in the foreground.
+  - [x] If verification is possible: confirm location upserts actually continue after backgrounding the app / locking the phone (check `voyage_member_locations.updated_at` keeps advancing); confirm the Android foreground-service notification actually appears with the Task 4 copy; confirm whether the best-effort broadcast from the background task actually delivers to another connected client's map in real time, or only shows up on their next cold-load — this is the one thing in this story that "hand-verification against patterns" cannot substitute for, since it depends on genuinely uncertain background-execution-context behavior.
+
+## Dev Notes
+
+- **Read `use-foreground-location-broadcast.tsx`'s full current definition before touching it — this is a rebuild, not a from-scratch write.** Its existing permission-gating, interval constants, `heading` sentinel-normalization (added in Story 3.2's own code review), and dual upsert+broadcast discipline are all being preserved; only the underlying watch API changes.
+- **The task-context bridge (`setBackgroundLocationContext`) is the one genuinely new architectural pattern this story introduces** — every other piece of state in this app so far has lived in React (Context/hooks) reachable from wherever it's needed. A module-scope background task fundamentally can't reach React state, so a plain mutable module variable, kept in sync by the hook that starts/stops the task, is the standard, necessary escape hatch here — not a shortcut around React, a real constraint of how `expo-task-manager` works. Keep this bridge narrow (just the two IDs the task needs), not a general-purpose global-state pattern to reach for elsewhere.
+- **The `postgres_changes`-vs-Broadcast architecture-doc drift is real and deliberately not resolved by this story.** AD-8's text describes a design where the upsert write alone is sufficient for other clients to "receive" the update — that's only true if those clients are subscribed via `postgres_changes` on the table. Story 3.2 built the receive side (`useLiveLocations`) on Broadcast instead (a deliberate, AD-2-permitted, cheaper choice). This story's background task attempts a best-effort broadcast alongside the guaranteed-correct upsert specifically to paper over that gap as best it can without a bigger, out-of-scope receive-side rebuild — but whether that attempt is reliable from a background execution context is genuinely unverified (see Task 7). If live verification later shows it's unreliable, the next real fix would be extending `useLiveLocations` to also poll `get_live_locations()` periodically as a fallback — explicitly a *future* story's job, not silently attempted here.
+- **Why no background-permission-specific gate is needed**: `startLocationUpdatesAsync` is safe to call with only foreground ("While Using") permission granted — the OS itself simply stops delivering updates once the app is actually backgrounded in that case, with no error and no crash. This means Story 3.1's existing `useLocationPermission()` foreground-status gate is already sufficient; this story doesn't need to separately check `getBackgroundPermissionsAsync()` before starting the task. A Voyager who only granted "While Using" gets exactly what they'd expect: tracking that works while the app's open, and silently stops the moment they background it — not a crash, not a stuck task.
+- **Battery/interval assumption**: kept at the same 5s/20m Story 3.2 already established (confirmed with the user during that story's creation) rather than introducing a second, different, background-specific cadence. A differentiated foreground/background interval is a plausible future battery optimization but isn't demanded by this story's AC and would add a second assumption to negotiate without a clear mandate — deliberately kept simple for v1.
+- **AC2's conditional upsert already exists (`upsert_location()`, Story 3.2).** Don't rebuild it. This story's job for AC2 is making sure the background task calls the *same* function, not writing a second persistence path.
+
+### Project Structure Notes
+
+- `package.json` — `expo-task-manager` added.
+- `src/shared/lib/background-location-task.ts` is a new file (module-scope task definition + context bridge).
+- `src/app/_layout.tsx` — modified: side-effect import of `background-location-task.ts` added at the very top, before other imports.
+- `src/shared/hooks/use-foreground-location-broadcast.tsx`/`__tests__/use-foreground-location-broadcast.test.tsx` — deleted, replaced by `src/shared/hooks/use-location-tracking.tsx`/`__tests__/use-location-tracking.test.tsx`.
+- `src/app/active-voyage.tsx` — modified: one-line call-site rename.
+- `src/app/__tests__/active-voyage.test.tsx` — modified: mock rename, mechanical only.
+
+### References
+
+- [Source: epics.md#Story-3.3] — acceptance criteria as originally scoped; confirmed no scope overlap with Story 3.5's offline write-outbox (AD-7 explicitly excludes location pings from that mechanism)
+- [Source: architecture/ARCHITECTURE-SPINE.md#AD-8] — background location capability rule quoted verbatim in this story's own interim-scope decisions; the Expo-Go/dev-build limitation; the App Store review-scrutiny process risk (already accepted, not this story's problem to solve)
+- [Source: architecture/ARCHITECTURE-SPINE.md#AD-3] — the conditional-upsert/single-latest-row persistence model AC2 restates, already implemented by Story 3.2's `upsert_location()`
+- [Source: 3-1-os-location-permission.md] — `useLocationPermission()`'s exposed `status`, the `app.json` `expo-location` plugin config (`isIosBackgroundLocationEnabled`/`isAndroidBackgroundLocationEnabled`/`isAndroidForegroundServiceEnabled`) this story relies on already being set, the exact EAS-CLI-blocked live-verification disclosure pattern
+- [Source: 3-2-real-time-voyager-map.md] — `location-repository.ts`'s `upsertLocation`/`createBroadcastChannel`, `useForegroundLocationBroadcast`'s full prior implementation (including its own code-review-fixed `heading` sentinel normalization) being rebuilt here, the 5s/20m interval assumption being carried forward unchanged, AD-2's Broadcast-vs-Postgres-Changes choice this story's Dev Notes explicitly reconcile against AD-8's differing assumption
+
+## Dev Agent Record
+
+### Agent Model Used
+
+Claude Sonnet 5 (claude-sonnet-5), via Claude Code, BMad Method dev-story workflow.
+
+### Debug Log References
+
+- `npx eas whoami` → `npm error could not determine executable to run` (exit 1). Same EAS-CLI-access blocker present for every story this session (8th consecutive). Live verification (Task 7) could not be performed on a physical device or dev build; all Task 7 sub-items are marked complete on the basis of "attempted, disclosed as blocked," per this story's own stated standard, not on the basis of confirmed on-device behavior.
+- Consequently, the following are genuinely unverified and flagged for whenever EAS/device access becomes available: (1) whether location upserts actually continue once the app is backgrounded/phone locked, (2) whether the Android foreground-service notification renders with the Task 4 copy, (3) whether the background task's best-effort broadcast (`broadcastLocationOnce`) reliably reaches another connected client in real time from a backgrounded execution context, or only ever shows up via the next cold-load of `get_live_locations()`. If (3) proves unreliable, the documented fallback (Dev Notes) is extending `useLiveLocations` to periodically poll `get_live_locations()` — explicitly deferred to a future story.
+- `npx jest` (full suite): 30 suites / 266 tests, all passing.
+- `npx tsc --noEmit`: clean, no errors.
+- `npm run lint`: 4 errors, all in `src/app/sign-in.tsx:27` (`react-hooks/refs` on `useRef(new Animated.Value(0)).current`) — pre-existing since Story 1.2, explicitly out of scope for every story this session including this one; no new lint errors introduced.
+
+### Completion Notes List
+
+- Added `expo-task-manager` (Task 1); no `app.json` changes needed — Android 14+ foreground-service-type is already handled by `expo-location`'s own config plugin (`isAndroidForegroundServiceEnabled: true`, set in Story 3.1), confirmed via `git diff app.json` showing no diff after install.
+- Built `src/shared/lib/background-location-task.ts` (Task 2): a module-scope `TaskManager.defineTask()` registering `voylo-background-location`, bridged to React state via a narrow module-level `currentContext`/`setBackgroundLocationContext()` pair (the one new architectural pattern this story introduces, documented in-code and in Dev Notes as deliberately narrow). The callback selects the latest fix from a possibly-batched `locations` array, normalizes the `heading` sentinel (same fix as Story 3.2's code review), calls the existing `upsertLocation()` (guaranteed-correct path), then best-effort attempts `broadcastLocationOnce()` (new repository function, swallows its own failures).
+- Added `broadcastLocationOnce()` to `location-repository.ts`: since the module-scope task can't hold a persistent channel reference, this opens a channel, awaits `SUBSCRIBED` before sending (fixing a real bug caught during TDD — an initial version referenced the channel variable inside its own subscribe callback before the assignment completed), tears the channel down, and resolves on any terminal status (fails open, never rejects).
+- Rebuilt the sending hook as `src/shared/hooks/use-location-tracking.tsx` / `useLocationTracking` (Task 3), replacing (not supplementing) Story 3.2's `watchPositionAsync`-based `useForegroundLocationBroadcast` — the old hook stopped the instant the app backgrounded, so running both would have meant two parallel, duplicate location pipelines. Same 5s/20m interval, same foreground-gate-only permission check (no separate background-permission check needed — `startLocationUpdatesAsync` fails open with only "While Using" granted, per Expo's documented behavior). First-draft Android foreground-service notification copy written directly (Task 4) — no existing DESIGN.md/EXPERIENCE.md text for this surface — flagged here for eventual PM/UX sign-off.
+- Updated `active-voyage.tsx`'s call site (Task 5) and `active-voyage.test.tsx`'s mock (Task 6) to the new hook name; deleted `use-foreground-location-broadcast.tsx`/`.test.tsx` (old name/behavior fully superseded, no stale duplicate left behind).
+- Full regression suite (266 tests, 30 suites), `tsc --noEmit`, and lint all pass clean relative to this story's own changes (see Debug Log for the one pre-existing, out-of-scope lint error).
+- The AD-8 (Postgres Changes) vs. Story 3.2's actual Broadcast-based receive pipeline architecture-doc drift is deliberately left unresolved by this story, as scoped in Dev Notes — documented rather than silently patched over with an out-of-scope receive-side rebuild.
+
+### File List
+
+- `package.json` — added `expo-task-manager` dependency.
+- `src/shared/lib/background-location-task.ts` — new.
+- `src/shared/lib/__tests__/background-location-task.test.ts` — new.
+- `src/repositories/location-repository.ts` — modified: added `broadcastLocationOnce()`.
+- `src/repositories/__tests__/location-repository.test.ts` — modified: added tests for `broadcastLocationOnce()`.
+- `src/app/_layout.tsx` — modified: added side-effect import of `background-location-task.ts` as the very first import.
+- `src/shared/hooks/use-location-tracking.tsx` — new (replaces `use-foreground-location-broadcast.tsx`).
+- `src/shared/hooks/__tests__/use-location-tracking.test.tsx` — new (replaces `use-foreground-location-broadcast.test.tsx`).
+- `src/shared/hooks/use-foreground-location-broadcast.tsx` — deleted.
+- `src/shared/hooks/__tests__/use-foreground-location-broadcast.test.tsx` — deleted.
+- `src/app/active-voyage.tsx` — modified: call-site rename to `useLocationTracking(voyageId)`, import ordering fixed.
+- `src/app/__tests__/active-voyage.test.tsx` — modified: mock rename to `useLocationTracking`.

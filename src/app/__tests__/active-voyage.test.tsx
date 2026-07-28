@@ -56,8 +56,8 @@ jest.mock('@/shared/hooks/use-live-locations', () => ({
   useLiveLocations: jest.fn(),
 }));
 
-jest.mock('@/shared/hooks/use-foreground-location-broadcast', () => ({
-  useForegroundLocationBroadcast: jest.fn(),
+jest.mock('@/shared/hooks/use-location-tracking', () => ({
+  useLocationTracking: jest.fn(),
 }));
 
 const mockEndVoyage = voyageRepository.endVoyage as jest.MockedFunction<typeof voyageRepository.endVoyage>;
