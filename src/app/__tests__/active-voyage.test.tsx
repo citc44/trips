@@ -763,6 +763,52 @@ test('a flush conflict shows the conflict message via the same toast mechanism, 
   expect(within(getByTestId('outbox-toast')).getByText('That person is not an active member of this Voyage.')).toBeTruthy();
 });
 
+test('a flush pass with multiple items combines their messages into one toast instead of overwriting', async () => {
+  mockActiveVoyage('organizer');
+  // Mounts already connected with the default (empty) flush result, so the
+  // mount-time flush is a no-op and the initial roster fetch resolves and
+  // populates `members` before the flush this test cares about ever runs --
+  // avoids a race between the two independent mount-time effects.
+  mockUseLiveLocations.mockReturnValue({ locations: locationsFixture, trails: {}, isLoading: false, hasError: false, isConnected: false });
+
+  const { getByTestId, rerender } = await render(<ActiveVoyageScreen />);
+  await waitFor(() => expect(mockGetVoyageMembers).toHaveBeenCalledTimes(1));
+
+  mockOutboxFlush.mockResolvedValueOnce({
+    succeeded: [
+      {
+        item: {
+          id: 'item-1',
+          kind: 'grant_organizer_status',
+          payload: { voyageId: 'voyage-1', targetUserId: 'user-2' },
+          queuedAt: '2026-07-28T00:00:00Z',
+        },
+        data: null,
+      },
+    ],
+    conflicts: [
+      {
+        item: {
+          id: 'item-2',
+          kind: 'remove_voyager',
+          payload: { voyageId: 'voyage-1', targetUserId: 'user-3' },
+          queuedAt: '2026-07-28T00:00:01Z',
+        },
+        message: 'That person is not an active member of this Voyage.',
+      },
+    ],
+  });
+  mockUseLiveLocations.mockReturnValue({ locations: locationsFixture, trails: {}, isLoading: false, hasError: false, isConnected: true });
+  await act(async () => {
+    rerender(<ActiveVoyageScreen />);
+  });
+
+  await waitFor(() => expect(getByTestId('outbox-toast')).toBeTruthy());
+  const messageNode = within(getByTestId('outbox-toast')).getByText(/Meera is now an Organizer/);
+  expect(messageNode.props.children).toContain('Meera is now an Organizer');
+  expect(messageNode.props.children).toContain('That person is not an active member of this Voyage.');
+});
+
 test('fetches and shows the Voyager list with display names in the organizer menu', async () => {
   mockActiveVoyage('organizer');
 
@@ -859,6 +905,36 @@ test('a thrown exception on Grant Organizer also queues it', async () => {
 
   await act(async () => {
     fireEvent.press(getByTestId('grant-organizer-button-user-2'));
+  });
+
+  expect(mockOutboxEnqueue).toHaveBeenCalledWith({
+    kind: 'grant_organizer_status',
+    payload: { voyageId: 'voyage-1', targetUserId: 'user-2' },
+  });
+});
+
+test('a network failure on Grant Organizer still enqueues even if the component unmounts before the RPC resolves', async () => {
+  mockActiveVoyage('organizer');
+  let resolveGrant: (value: any) => void;
+  mockGrantOrganizerStatus.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        resolveGrant = resolve;
+      }),
+  );
+
+  const { getByTestId, unmount } = await render(<ActiveVoyageScreen />);
+  await openOrganizerMenu(getByTestId);
+  await waitFor(() => expect(getByTestId('grant-organizer-button-user-2')).toBeTruthy());
+
+  await act(async () => {
+    fireEvent.press(getByTestId('grant-organizer-button-user-2'));
+  });
+  await act(async () => {
+    unmount();
+  });
+  await act(async () => {
+    resolveGrant!({ error: { code: 'unknown', message: 'Network request failed' } });
   });
 
   expect(mockOutboxEnqueue).toHaveBeenCalledWith({
@@ -1087,6 +1163,39 @@ test('a thrown exception on Remove Voyager also queues it', async () => {
   });
   await act(async () => {
     fireEvent.press(getByTestId('confirm-remove-voyager-button'));
+  });
+
+  expect(mockOutboxEnqueue).toHaveBeenCalledWith({
+    kind: 'remove_voyager',
+    payload: { voyageId: 'voyage-1', targetUserId: 'user-2' },
+  });
+});
+
+test('a network failure on Remove Voyager still enqueues even if the component unmounts before the RPC resolves', async () => {
+  mockActiveVoyage('organizer');
+  let resolveRemove: (value: any) => void;
+  mockRemoveVoyager.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        resolveRemove = resolve;
+      }),
+  );
+
+  const { getByTestId, unmount } = await render(<ActiveVoyageScreen />);
+  await openOrganizerMenu(getByTestId);
+  await waitFor(() => expect(getByTestId('remove-voyager-button-user-2')).toBeTruthy());
+
+  await act(async () => {
+    fireEvent.press(getByTestId('remove-voyager-button-user-2'));
+  });
+  await act(async () => {
+    fireEvent.press(getByTestId('confirm-remove-voyager-button'));
+  });
+  await act(async () => {
+    unmount();
+  });
+  await act(async () => {
+    resolveRemove!({ error: { code: 'unknown', message: 'Network request failed' } });
   });
 
   expect(mockOutboxEnqueue).toHaveBeenCalledWith({

@@ -70,7 +70,7 @@ development_status:
   3-2-real-time-voyager-map: done
   3-3-location-persistence-background-tracking: done
   3-4-driver-safety-role-switch: done
-  3-5-connectivity-loss-reconnection: review
+  3-5-connectivity-loss-reconnection: done
   epic-3-retrospective: optional
 
   epic-4: backlog

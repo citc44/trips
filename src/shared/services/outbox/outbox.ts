@@ -17,9 +17,36 @@ export type OutboxItem =
 
 const STORAGE_KEY = 'voylo:offline-write-outbox';
 
+// Code review finding: enqueue() and flush() each do an unserialized
+// load-modify-save cycle over AsyncStorage. Two calls firing close together
+// (the mount-time and reconnect-time flush effects both fire on the same
+// initial render; a write handler can fail at the exact moment a
+// reconnect-triggered flush is mid-pass) could both read the same pre-write
+// snapshot, and whichever save() lands last silently clobbers the other's
+// result -- a queued item lost, or double-processed. Every enqueue()/flush()
+// call chains onto this single shared promise, guaranteeing they run fully
+// sequentially (never interleaved), regardless of call order or how close
+// together they fire. `.catch(() => {})` on the chain link (not on the
+// caller's own promise) so one call's rejection doesn't permanently wedge
+// the chain for every call after it.
+let queueLock: Promise<unknown> = Promise.resolve();
+
+function withQueueLock<T>(operation: () => Promise<T>): Promise<T> {
+  const result = queueLock.then(operation, operation);
+  queueLock = result.catch(() => {});
+  return result;
+}
+
 async function loadQueue(): Promise<OutboxItem[]> {
   const stored = await AsyncStorage.getItem(STORAGE_KEY);
-  return stored ? (JSON.parse(stored) as OutboxItem[]) : [];
+  if (!stored) return [];
+  try {
+    return JSON.parse(stored) as OutboxItem[];
+  } catch {
+    // Malformed persisted value -- degrade to an empty queue rather than
+    // leaving the outbox permanently unusable.
+    return [];
+  }
 }
 
 async function saveQueue(items: OutboxItem[]): Promise<void> {
@@ -27,9 +54,11 @@ async function saveQueue(items: OutboxItem[]): Promise<void> {
 }
 
 async function enqueue(item: Omit<OutboxItem, 'id' | 'queuedAt'>): Promise<void> {
-  const queue = await loadQueue();
-  const fullItem = { ...item, id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, queuedAt: new Date().toISOString() } as OutboxItem;
-  await saveQueue([...queue, fullItem]);
+  return withQueueLock(async () => {
+    const queue = await loadQueue();
+    const fullItem = { ...item, id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, queuedAt: new Date().toISOString() } as OutboxItem;
+    await saveQueue([...queue, fullItem]);
+  });
 }
 
 function callForKind(item: OutboxItem): Promise<{ data?: unknown; error: { code: string; message: string } | null }> {
@@ -85,26 +114,28 @@ type FlushResult = {
 // flush trigger, since attempting more items while evidently still offline
 // would just repeat the same failure.
 async function flush(): Promise<FlushResult> {
-  const items = await loadQueue();
-  const succeeded: FlushResult['succeeded'] = [];
-  const conflicts: FlushResult['conflicts'] = [];
-  let stoppedAt = items.length;
+  return withQueueLock(async () => {
+    const items = await loadQueue();
+    const succeeded: FlushResult['succeeded'] = [];
+    const conflicts: FlushResult['conflicts'] = [];
+    let stoppedAt = items.length;
 
-  for (let i = 0; i < items.length; i++) {
-    const item = items[i];
-    const result = await attemptItem(item);
-    if (result.outcome === 'succeeded') {
-      succeeded.push({ item, data: result.data });
-    } else if (result.outcome === 'conflict') {
-      conflicts.push({ item, message: result.message });
-    } else {
-      stoppedAt = i;
-      break;
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const result = await attemptItem(item);
+      if (result.outcome === 'succeeded') {
+        succeeded.push({ item, data: result.data });
+      } else if (result.outcome === 'conflict') {
+        conflicts.push({ item, message: result.message });
+      } else {
+        stoppedAt = i;
+        break;
+      }
     }
-  }
 
-  await saveQueue(items.slice(stoppedAt));
-  return { succeeded, conflicts };
+    await saveQueue(items.slice(stoppedAt));
+    return { succeeded, conflicts };
+  });
 }
 
 export const outbox = { enqueue, flush };

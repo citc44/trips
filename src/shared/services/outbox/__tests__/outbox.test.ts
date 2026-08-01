@@ -168,6 +168,91 @@ test('flush treats a thrown exception the same as a network-level failure', asyn
   expect(JSON.parse(value)).toHaveLength(1);
 });
 
+test('concurrent enqueue calls are serialized -- the second does not read the queue until the first has fully persisted', async () => {
+  const outbox = loadOutbox();
+  let resolveFirstGetItem: (value: unknown) => void;
+  mockGetItem.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        resolveFirstGetItem = resolve;
+      }),
+  );
+
+  const first = outbox.enqueue({ kind: 'end_voyage', payload: { voyageId: 'voyage-1' } });
+  const second = outbox.enqueue({ kind: 'end_voyage', payload: { voyageId: 'voyage-2' } });
+  // Let the microtask queue drain enough for the first call's operation to
+  // actually start (it's chained via .then(), which itself needs a tick),
+  // without resolving the (still-hanging) first getItem call.
+  await Promise.resolve();
+  await Promise.resolve();
+
+  // The second enqueue's own loadQueue() must not fire until the first has
+  // fully completed its own read-modify-write cycle.
+  expect(mockGetItem).toHaveBeenCalledTimes(1);
+
+  // The mock doesn't simulate real persistence across calls on its own --
+  // wire the second (as-yet-unconsumed) getItem call to return whatever the
+  // first call's save() actually wrote, matching what real AsyncStorage
+  // would do.
+  mockGetItem.mockImplementationOnce(() => Promise.resolve(mockSetItem.mock.calls[0]?.[1] ?? null));
+  resolveFirstGetItem!(null);
+  await first;
+  await second;
+
+  expect(mockGetItem).toHaveBeenCalledTimes(2);
+  // The second call's persisted queue must include both items -- it read
+  // the queue only after the first had already saved its own.
+  const [, secondValue] = mockSetItem.mock.calls[1] as [string, string];
+  expect(JSON.parse(secondValue)).toHaveLength(2);
+});
+
+test('a flush() call is serialized against a concurrent enqueue() -- neither reads a stale pre-write snapshot', async () => {
+  mockEndVoyage.mockResolvedValue({ data: { id: 'voyage-1', destination: 'Lake Tahoe', voyagerCount: 1 }, error: null });
+  const outbox = loadOutbox();
+
+  const initialQueue = JSON.stringify([{ id: 'item-1', kind: 'end_voyage', payload: { voyageId: 'voyage-1' }, queuedAt: '2026-07-28T00:00:00Z' }]);
+  let resolveFlushGetItem: (value: unknown) => void;
+  mockGetItem.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        resolveFlushGetItem = resolve;
+      }),
+  );
+
+  const flushPromise = outbox.flush();
+  const enqueuePromise = outbox.enqueue({ kind: 'grant_organizer_status', payload: { voyageId: 'voyage-1', targetUserId: 'user-2' } });
+  await Promise.resolve();
+  await Promise.resolve();
+
+  // enqueue's own loadQueue() must not fire until flush's read-modify-write
+  // cycle has fully completed.
+  expect(mockGetItem).toHaveBeenCalledTimes(1);
+
+  // enqueue's own subsequent loadQueue() call should read whatever flush's
+  // save() actually wrote (an empty queue, since item-1 succeeded), not a
+  // stale pre-flush snapshot -- the mock doesn't simulate real persistence
+  // across calls on its own.
+  mockGetItem.mockImplementationOnce(() => Promise.resolve(mockSetItem.mock.calls.at(-1)?.[1] ?? null));
+  resolveFlushGetItem!(initialQueue);
+  await flushPromise;
+  await enqueuePromise;
+
+  // The enqueue landed on top of flush's already-emptied queue, not a stale
+  // pre-flush snapshot that still had item-1 in it.
+  const [, lastValue] = mockSetItem.mock.calls.at(-1) as [string, string];
+  const persisted = JSON.parse(lastValue);
+  expect(persisted).toHaveLength(1);
+  expect(persisted[0].kind).toBe('grant_organizer_status');
+});
+
+test('loadQueue degrades gracefully (returns an empty queue) on malformed persisted JSON', async () => {
+  mockGetItem.mockResolvedValue('{not valid json');
+  const outbox = loadOutbox();
+
+  await expect(outbox.flush()).resolves.toEqual({ succeeded: [], conflicts: [] });
+  await expect(outbox.enqueue({ kind: 'end_voyage', payload: { voyageId: 'voyage-1' } })).resolves.toBeUndefined();
+});
+
 test('flush preserves queue order across a partial flush', async () => {
   mockGetItem.mockResolvedValue(
     JSON.stringify([

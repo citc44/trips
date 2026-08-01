@@ -240,10 +240,20 @@ export default function ActiveVoyageScreen() {
       const result = await outbox.flush();
       if (!isMounted.current) return;
 
+      // Accumulated, not set per-iteration -- a single flush pass can
+      // process more than one item, and setToastMessage overwriting itself
+      // in a loop would silently lose every message but the last (code
+      // review finding). A joined single toast is a minimal, correct fix,
+      // not a full multi-toast queue -- this Toast component only ever
+      // shows one message at a time.
+      const messages: string[] = [];
+
       for (const { item, data } of result.succeeded) {
+        if (!isMounted.current) return;
         if (item.kind === 'end_voyage') {
           const endedData = data as { destination: string; createdAt: string; endedAt: string | null; voyagerCount: number };
           await refetch();
+          if (!isMounted.current) return;
           router.push({
             pathname: '/voyage-ended',
             params: {
@@ -253,21 +263,32 @@ export default function ActiveVoyageScreen() {
               voyagerCount: String(endedData.voyagerCount),
             },
           });
+          // The Voyage session just ended and this screen is navigating
+          // away -- any other queued items for it (a narrow, already-
+          // disclosed duplicate-enqueue scenario) are no longer meaningful
+          // to keep processing against a now-defunct roster.
+          return;
         } else if (item.kind === 'grant_organizer_status') {
           // The outbox only carries the target user's id, not their display
           // name -- look it up from the (possibly stale, pre-refresh) members
           // list, falling back gracefully if they've since fallen out of it.
           const grantedMember = members.find((m) => m.userId === item.payload.targetUserId);
-          setToastMessage(`${grantedMember?.displayName ?? 'A Voyager'} is now an Organizer`);
+          messages.push(`${grantedMember?.displayName ?? 'A Voyager'} is now an Organizer`);
           if (voyageId) await loadMembers.current(voyageId);
+          if (!isMounted.current) return;
         } else if (item.kind === 'remove_voyager') {
-          setToastMessage('A queued Voyager removal finished.');
+          messages.push('A queued Voyager removal finished.');
           if (voyageId) await loadMembers.current(voyageId);
+          if (!isMounted.current) return;
         }
       }
 
       for (const { message } of result.conflicts) {
-        setToastMessage(message);
+        messages.push(message);
+      }
+
+      if (messages.length > 0) {
+        setToastMessage(messages.join(' • '));
       }
     };
   });
@@ -309,21 +330,32 @@ export default function ActiveVoyageScreen() {
       const { data, error: endError } = await voyageRepository.endVoyage(activeVoyage!.voyage.id);
       if (endError) {
         if (isNetworkFailure(endError)) {
+          // Enqueue unconditionally -- must happen whether or not this
+          // component is still mounted by the time the RPC resolves (code
+          // review finding: an isMounted check gating the enqueue itself,
+          // not just the state updates after it, would silently drop the
+          // write on an unmount racing a network failure -- exactly the
+          // scenario this outbox exists to survive). Only the subsequent
+          // React state updates are guarded.
           await outbox.enqueue({ kind: 'end_voyage', payload: { voyageId: activeVoyage!.voyage.id } });
+          if (!isMounted.current) return;
           setError("Queued -- this will finish once you're back online.");
           setIsSubmitting(false);
           return;
         }
+        if (!isMounted.current) return;
         setError(endError.message);
         setIsSubmitting(false);
         return;
       }
       if (!data) {
+        if (!isMounted.current) return;
         setError(GENERIC_ERROR);
         setIsSubmitting(false);
         return;
       }
       await refetch();
+      if (!isMounted.current) return;
       router.push({
         pathname: '/voyage-ended',
         params: {
@@ -335,6 +367,7 @@ export default function ActiveVoyageScreen() {
       });
     } catch {
       await outbox.enqueue({ kind: 'end_voyage', payload: { voyageId: activeVoyage!.voyage.id } });
+      if (!isMounted.current) return;
       setError("Queued -- this will finish once you're back online.");
       setIsSubmitting(false);
     }
@@ -346,27 +379,30 @@ export default function ActiveVoyageScreen() {
 
     try {
       const { error: grantError } = await voyageRepository.grantOrganizerStatus(activeVoyage!.voyage.id, member.userId);
-      if (!isMounted.current) return;
       if (grantError) {
         if (isNetworkFailure(grantError)) {
+          // Enqueue before the isMounted check -- see handleEndVoyage's note.
           await outbox.enqueue({
             kind: 'grant_organizer_status',
             payload: { voyageId: activeVoyage!.voyage.id, targetUserId: member.userId },
           });
+          if (!isMounted.current) return;
           setMembersError(`Queued -- ${member.displayName ?? 'they'} will be granted Organizer status once you're back online.`);
           return;
         }
+        if (!isMounted.current) return;
         setMembersError(grantError.message);
         return;
       }
+      if (!isMounted.current) return;
       setToastMessage(`${member.displayName ?? 'They'} is now an Organizer`);
       await loadMembers.current(activeVoyage!.voyage.id);
     } catch {
-      if (!isMounted.current) return;
       await outbox.enqueue({
         kind: 'grant_organizer_status',
         payload: { voyageId: activeVoyage!.voyage.id, targetUserId: member.userId },
       });
+      if (!isMounted.current) return;
       setMembersError(`Queued -- ${member.displayName ?? 'they'} will be granted Organizer status once you're back online.`);
     } finally {
       if (isMounted.current) {
@@ -388,35 +424,39 @@ export default function ActiveVoyageScreen() {
 
   async function handleRemoveVoyager() {
     if (!removeTarget) return;
+    const target = removeTarget;
     setIsRemoving(true);
     setRemoveError(null);
 
     try {
-      const { error: removeErr } = await voyageRepository.removeVoyager(activeVoyage!.voyage.id, removeTarget.userId);
-      if (!isMounted.current) return;
+      const { error: removeErr } = await voyageRepository.removeVoyager(activeVoyage!.voyage.id, target.userId);
       if (removeErr) {
         if (isNetworkFailure(removeErr)) {
+          // Enqueue before the isMounted check -- see handleEndVoyage's note.
           await outbox.enqueue({
             kind: 'remove_voyager',
-            payload: { voyageId: activeVoyage!.voyage.id, targetUserId: removeTarget.userId },
+            payload: { voyageId: activeVoyage!.voyage.id, targetUserId: target.userId },
           });
+          if (!isMounted.current) return;
           setRemoveTarget(null);
-          setMembersError(`Queued -- ${removeTarget.displayName ?? 'they'} will be removed once you're back online.`);
+          setMembersError(`Queued -- ${target.displayName ?? 'they'} will be removed once you're back online.`);
           return;
         }
+        if (!isMounted.current) return;
         setRemoveError(removeErr.message);
         return;
       }
+      if (!isMounted.current) return;
       setRemoveTarget(null);
       await loadMembers.current(activeVoyage!.voyage.id);
     } catch {
-      if (!isMounted.current) return;
       await outbox.enqueue({
         kind: 'remove_voyager',
-        payload: { voyageId: activeVoyage!.voyage.id, targetUserId: removeTarget.userId },
+        payload: { voyageId: activeVoyage!.voyage.id, targetUserId: target.userId },
       });
+      if (!isMounted.current) return;
       setRemoveTarget(null);
-      setMembersError(`Queued -- ${removeTarget.displayName ?? 'they'} will be removed once you're back online.`);
+      setMembersError(`Queued -- ${target.displayName ?? 'they'} will be removed once you're back online.`);
     } finally {
       if (isMounted.current) {
         setIsRemoving(false);
