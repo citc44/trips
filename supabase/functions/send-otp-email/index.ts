@@ -67,7 +67,7 @@ Deno.serve(async (req) => {
 
   try {
     const { error } = await resend.emails.send({
-      from: 'Voylo <onboarding@resend.dev>',
+      from: 'Voylo <noreply@voyloapp.com>',
       to: [user.email],
       subject: 'Your Voylo sign-in code',
       html: renderOtpEmail(emailData.token),

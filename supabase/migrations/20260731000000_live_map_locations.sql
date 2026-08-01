@@ -384,15 +384,22 @@ revoke execute on function public.upsert_location(uuid, double precision, double
 -- MUST set that flag -- flagged here so the client-side implementation
 -- doesn't silently skip it.
 --
--- NOTE: this is the first use of Supabase's private-Realtime-channel
--- authorization feature anywhere in this project. The `realtime.messages`
--- table and `realtime.topic()` helper are current as of this story's own
--- research, but this exact area is the one most likely to have drifted from
--- Supabase's actual current API by the time this migration is applied --
--- verify against live docs before trusting this without live testing (see
--- Task 8/Debug Log).
-alter table realtime.messages enable row level security;
-
+-- Live-verified (2026-08-01, first real `supabase db push` this project ever
+-- got working access for): `realtime.messages` already ships with RLS
+-- enabled by Supabase's own infrastructure -- `relrowsecurity = true` by
+-- default, confirmed by direct query. The migration role is never the owner
+-- of this system table, so an explicit `alter table ... enable row level
+-- security` here fails outright with "must be owner of table messages"
+-- (SQLSTATE 42501) and was never needed in the first place -- only the
+-- `create policy` statements below are actually required, and creating a
+-- policy doesn't need table ownership. This migration never successfully
+-- applied anywhere before this fix (confirmed via `supabase migration
+-- list` -- empty remote entry -- and the failed `db push` rolled back the
+-- whole file, leaving nothing partially applied), so this is corrected
+-- directly in place rather than layered in a follow-up migration, same
+-- "never edit an already-applied migration" exception reasoning already
+-- used once before in this same file for the `get_voyage_members()` column
+-- change.
 create policy "voyage_channel_read_active_members" on realtime.messages
   for select
   to authenticated

@@ -10,7 +10,7 @@
 
 ## Deferred from: code review of story-1-2-email-otp-sign-in (2026-07-26)
 
-- **🚫 RELEASE BLOCKER: no real user other than the Resend account owner can currently receive an OTP email.** `supabase/functions/send-otp-email/index.ts` sends from `onboarding@resend.dev`, Resend's shared test domain — confirmed via Resend's own docs, this domain can only deliver to the email address associated with the Resend account (i.e., only `citc_44@hotmail.com` right now). Any other real user signing up would silently receive nothing, even though the request returns HTTP 200. **Must verify a real Voylo domain in Resend before any testing or usage involving anyone but the developer.** Accepted as not-yet-urgent since no domain is registered yet, but this is a hard blocker, not a cosmetic branding gap.
+- ~~**🚫 RELEASE BLOCKER: no real user other than the Resend account owner can currently receive an OTP email.**~~ **RESOLVED 2026-08-01**: `voyloapp.com` purchased and verified in Resend (DKIM/SPF/DMARC records added at Namecheap), `send-otp-email/index.ts` now sends from `noreply@voyloapp.com` instead of the sandbox `onboarding@resend.dev` address. OTP emails can now reach any real recipient, not just the Resend account owner — no longer blocks multi-user testing.
 - **`getSession()` and `onAuthStateChange`'s `INITIAL_SESSION` event both fire on mount, unordered.** Verified this is Supabase's own documented pattern (both calls are meant to coexist), and both read the same underlying session storage, so the theoretical race doesn't produce practically different values — not a real bug, just a shape worth knowing about if a genuine sign-in race is ever suspected later.
 
 ## Deferred from: code review of story-1-3-persistent-session-sign-out (2026-07-26)

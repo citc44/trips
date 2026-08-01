@@ -107,7 +107,7 @@ graph LR
 - **Binds:** Story 1.2 (Email OTP Sign-In, FR-1).
 - **Prevents:** shipping Supabase's default built-in auth emails — generic template, no Voylo branding, low daily-send limits on the built-in mailer.
 - **Rule:** Supabase Auth's **Send Email** HTTP Hook is wired to a Supabase Edge Function (`supabase/functions/send-otp-email`) instead of Supabase's built-in emailer. Auth calls the hook with the OTP payload (recipient, the numeric code, email action type); the function verifies the hook's signing secret, renders a branded HTML template (Night Drive identity, per `DESIGN.md`) with the code, and sends it via Resend's API. No screen or repository sends email directly — this hook is the single OTP-email send path.
-- **Sending domain:** Resend's shared test domain (`onboarding@resend.dev`) until a real Voylo domain is verified for production — swapping domains later is a Resend/config change (from-address + domain verification), not a code change.
+- **Sending domain:** `voyloapp.com`, verified in Resend (DKIM/SPF/DMARC records added at the registrar) — sends from `noreply@voyloapp.com`. `[ADOPTED, updated post-launch-prep]` Originally shipped against Resend's shared test domain (`onboarding@resend.dev`), which only delivers to the Resend account owner's own address; swapped once a real domain was purchased and verified, confirming the original design's own prediction that this would be a Resend/config change (from-address + domain verification), not a code change.
 - **Secrets:** `RESEND_API_KEY` and the hook's signing secret are Supabase Edge Function secrets (`supabase secrets set`), set per environment (dev/prod) — never client-exposed, never `EXPO_PUBLIC_`-prefixed.
 
 ## Consistency Conventions
