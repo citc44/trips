@@ -2,7 +2,7 @@ import Mapbox, { Camera, LineLayer, MapView, MarkerView, ShapeSource } from '@rn
 import { router } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AccessibilityInfo, Animated, Easing, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors, HudCard, MapMarker, PlayerColors, Spacing, StatusPill, Typography } from '@/constants/design-tokens';
 import { initMapbox } from '@/lib/mapbox';
@@ -163,6 +163,17 @@ export default function ActiveVoyageScreen() {
 
   const { locations, trails, hasError: hasLocationsError, isConnected } = useLiveLocations(voyageId);
   useLocationTracking(voyageId);
+  // skyStrip (below) masks the map bleeding under a phone's notch/status
+  // bar, sized to match. A hardcoded height assumed SafeAreaView's real
+  // inset would always clear it (true on native, where that inset is
+  // ~44-59px) -- verified in a real browser that react-native-safe-area-
+  // context's web polyfill always reports insets.top: 0 (no notch to
+  // simulate), so the HUD's own content started rendering almost at y=0,
+  // directly underneath the strip's opaque fixed height instead of below
+  // it. Deriving the strip's height from the real inset fixes both
+  // platforms at once: it shrinks to (correctly) ~0 on web, and keeps
+  // matching whatever real inset native reports instead of guessing 54.
+  const insets = useSafeAreaInsets();
 
   const [showConfirm, setShowConfirm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -627,6 +638,20 @@ export default function ActiveVoyageScreen() {
             Close
           </Text>
           <Text style={screenStyles.headline}>You&apos;re on your way to {activeVoyage.voyage.destination}.</Text>
+          {activeVoyage.voyage.joinCode ? (
+            <IgnitionButton
+              testID="invite-more-voyagers-button"
+              label="Invite More Voyagers"
+              disabled={false}
+              onPress={() =>
+                router.push({
+                  pathname: '/join-code',
+                  params: { destination: activeVoyage.voyage.destination, joinCode: activeVoyage.voyage.joinCode! },
+                })
+              }
+              variant="secondary"
+            />
+          ) : null}
           {isOrganizer ? (
             <IgnitionButton
               testID="end-voyage-button"
@@ -703,7 +728,7 @@ export default function ActiveVoyageScreen() {
 
   return (
     <View style={screenStyles.container}>
-      <View style={styles.skyStrip} />
+      <View style={[styles.skyStrip, { height: insets.top }]} />
       <MapView testID="live-map" style={styles.map} styleURL={MAP_STYLE_URL}>
         <Camera ref={cameraRef} defaultSettings={{ zoomLevel: DEFAULT_ZOOM }} />
         {markers.map(({ member }) => (
@@ -958,7 +983,6 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 54,
     backgroundColor: Colors.surfaceMidnight,
     zIndex: 1,
   },

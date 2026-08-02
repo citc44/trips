@@ -1,5 +1,6 @@
 import { beforeEach, expect, jest, test } from '@jest/globals';
 import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
+import mockSafeAreaContext from 'react-native-safe-area-context/jest/mock';
 
 import { voyageRepository } from '@/repositories/voyage-repository';
 import { useActiveVoyage } from '@/shared/hooks/use-active-voyage';
@@ -16,6 +17,11 @@ jest.mock('expo-router', () => ({
 }));
 
 jest.mock('@/lib/mapbox', () => ({ initMapbox: jest.fn() }));
+
+// Official RNSAC mock -- useSafeAreaInsets() (skyStrip's height) throws
+// without a real <SafeAreaProvider> ancestor, which this test harness
+// doesn't render.
+jest.mock('react-native-safe-area-context', () => mockSafeAreaContext);
 
 const mockCameraMoveTo = jest.fn();
 // require(), not import -- jest.mock() factories may only reference
@@ -606,6 +612,22 @@ test('does not show the End Voyage control for a plain Voyager', async () => {
   await openOrganizerMenu(getByTestId);
 
   expect(queryByTestId('end-voyage-button')).toBeNull();
+});
+
+test('Invite More Voyagers is available to any member (not just the Organizer), and re-opens the join-code screen', async () => {
+  mockActiveVoyage('voyager');
+
+  const { getByTestId } = await render(<ActiveVoyageScreen />);
+  await openOrganizerMenu(getByTestId);
+
+  await act(async () => {
+    fireEvent.press(getByTestId('invite-more-voyagers-button'));
+  });
+
+  expect(mockPush).toHaveBeenCalledWith({
+    pathname: '/join-code',
+    params: { destination: 'Lake Tahoe', joinCode: 'ABCD2345' },
+  });
 });
 
 test('tapping End Voyage swaps to the confirm view with the ceremonial copy', async () => {
