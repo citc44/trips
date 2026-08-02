@@ -1,7 +1,7 @@
 import Mapbox, { Camera, LineLayer, MapView, MarkerView, ShapeSource } from '@rnmapbox/maps';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AccessibilityInfo, Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
+import { AccessibilityInfo, Animated, Easing, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Colors, HudCard, MapMarker, PlayerColors, Spacing, StatusPill, Typography } from '@/constants/design-tokens';
@@ -20,6 +20,15 @@ import { screenStyles } from '@/shared/styles/screen';
 
 const GENERIC_ERROR = 'Something went wrong. Please try again.';
 const DEFAULT_ZOOM = 13;
+
+// @rnmapbox/maps' web shim (verified via a headless browser) only defines
+// StyleURL.Street and StyleURL.Satellite -- Dark isn't there, so
+// Mapbox.StyleURL.Dark silently evaluates to undefined on web and MapView's
+// own fallback ('mapbox://styles/mapbox/streets-v11') kicks in instead,
+// with no error or warning. Native's Mapbox.StyleURL.Dark is resolved by
+// the native SDK, not a JS constant this repo defines, so it's left
+// untouched there -- only web substitutes a real, literal dark style URL.
+const MAP_STYLE_URL = Platform.OS === 'web' ? 'mapbox://styles/mapbox/dark-v11' : Mapbox.StyleURL.Dark;
 
 // None of endVoyage/grantOrganizerStatus/removeVoyager's own RPCs ever
 // legitimately return this code themselves -- every real business/conflict
@@ -187,9 +196,22 @@ export default function ActiveVoyageScreen() {
   // may import this module eagerly at app startup regardless of whether the
   // user ever reaches an active Voyage, which would turn a missing token
   // into an app-wide crash instead of one confined to Live Map).
-  useEffect(() => {
+  //
+  // A useState lazy initializer, not a useEffect: verified via a headless
+  // browser that on web, MapView's componentDidMount constructs the
+  // underlying mapbox-gl Map synchronously and requires the access token to
+  // already be set at that exact moment -- a plain useEffect in this parent
+  // fires *after* the child's own mount, so the token was still unset when
+  // MapView tried to initialize ("An API access token is required to use
+  // Mapbox GL"). A lazy initializer runs synchronously during this
+  // component's own first render, before any child mounts, closing that
+  // ordering gap. Native never hit this (its token isn't consulted until an
+  // actual network request, well after any mount ordering), which is why
+  // this went unnoticed until web testing.
+  useState(() => {
     initMapbox();
-  }, []);
+    return null;
+  });
 
   useEffect(() => {
     let isEffectMounted = true;
@@ -316,6 +338,27 @@ export default function ActiveVoyageScreen() {
     () => members.filter((member) => locations[member.userId]).map((member) => ({ member, location: locations[member.userId] })),
     [members, locations],
   );
+
+  // Camera's `defaultSettings` prop (below) only ever sets the zoom, never a
+  // center, so the very first render always starts at whatever Mapbox's own
+  // default camera position is -- fine on native, where a later
+  // location/marker update was assumed to naturally recenter things, but
+  // verified via a headless browser that @rnmapbox/maps' web shim's Camera
+  // doesn't read `defaultSettings` at all (only flat `centerCoordinate`/
+  // `zoomLevel` props, which this screen never sets), so on web the map
+  // silently stayed on Mapbox's global default view forever. Fixed the same
+  // way for both platforms: once real marker positions first arrive, center
+  // on them exactly once -- reusing handleRecenter's own averaging math, not
+  // duplicating it. Once-only via the ref (not every markers change) so
+  // this never fights a user's own subsequent pan/zoom/manual recenter.
+  const hasAutoCenteredRef = useRef(false);
+  useEffect(() => {
+    if (hasAutoCenteredRef.current || markers.length === 0 || !cameraRef.current) return;
+    hasAutoCenteredRef.current = true;
+    const avgLng = markers.reduce((sum, m) => sum + m.location.lng, 0) / markers.length;
+    const avgLat = markers.reduce((sum, m) => sum + m.location.lat, 0) / markers.length;
+    cameraRef.current.moveTo([avgLng, avgLat], 0);
+  }, [markers]);
 
   if (!activeVoyage) {
     return null;
@@ -661,7 +704,7 @@ export default function ActiveVoyageScreen() {
   return (
     <View style={screenStyles.container}>
       <View style={styles.skyStrip} />
-      <MapView testID="live-map" style={styles.map} styleURL={Mapbox.StyleURL.Dark}>
+      <MapView testID="live-map" style={styles.map} styleURL={MAP_STYLE_URL}>
         <Camera ref={cameraRef} defaultSettings={{ zoomLevel: DEFAULT_ZOOM }} />
         {markers.map(({ member }) => (
           <VoyagerTrail
