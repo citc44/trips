@@ -99,7 +99,16 @@ function subscribeToLocations(
     .on('broadcast', { event: BROADCAST_EVENT }, (message: { payload: unknown }) => {
       onLocation(toLiveLocation(message.payload as LiveLocationRow));
     })
-    .subscribe((status: string) => {
+    .subscribe((status: string, err?: Error) => {
+      // TEMPORARY diagnostic logging -- the "Reconnecting..." note has been
+      // reported stuck even with the tab kept focused the whole time, which
+      // rules out browser tab-throttling as the cause. supabase-js's
+      // .subscribe() callback carries a second `err` argument this code was
+      // previously discarding entirely, which is the only way to see *why*
+      // the channel actually failed (an RLS rejection on realtime.messages
+      // would surface here, for one). Remove once diagnosed.
+      // eslint-disable-next-line no-console
+      console.warn('[locationRepository] channel status:', status, err);
       if (status === 'SUBSCRIBED') {
         onStatusChange?.('connected');
       } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {

@@ -21,6 +21,21 @@ import { screenStyles } from '@/shared/styles/screen';
 const GENERIC_ERROR = 'Something went wrong. Please try again.';
 const DEFAULT_ZOOM = 13;
 
+// Both floating controls below (status pill, recenter button) are
+// absolutely positioned over the map, in the same top-right/bottom-right
+// corners their respective HUD cards would otherwise occupy. Reserving this
+// much horizontal space on the cards themselves (verified against a real
+// screenshot: without it, the status pill visibly overlapped hud-top's own
+// destination text/menu button, worse whenever "Reconnecting..." made the
+// card taller) keeps them from ever running underneath, regardless of how
+// tall either card gets. STATUS_PILL_CLEARANCE comfortably covers the
+// pill's rendered width (StatusPill.minWidth is only a floor -- its actual
+// width also includes horizontal padding plus "Riding"/"Driving" text).
+// RECENTER_BUTTON_CLEARANCE covers its fixed 48px circle plus breathing
+// room.
+const STATUS_PILL_CLEARANCE = 110;
+const RECENTER_BUTTON_CLEARANCE = 80;
+
 // @rnmapbox/maps' web shim (verified via a headless browser) only defines
 // StyleURL.Street and StyleURL.Satellite -- Dark isn't there, so
 // Mapbox.StyleURL.Dark silently evaluates to undefined on web and MapView's
@@ -1042,6 +1057,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: HudCard.borderColor,
     padding: Spacing['4'],
+    marginRight: STATUS_PILL_CLEARANCE,
     gap: Spacing['2'],
   },
   hudTopRow: {
@@ -1087,6 +1103,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: HudCard.borderColor,
     padding: Spacing['4'],
+    marginRight: RECENTER_BUTTON_CLEARANCE,
     gap: Spacing['2'],
   },
   hudBottomRow: {
@@ -1115,7 +1132,21 @@ const styles = StyleSheet.create({
     fontSize: 11,
   },
   recenterButton: {
-    alignSelf: 'flex-end',
+    // Absolute, not a normal-flow flex child: hudOverlay uses `justifyContent:
+    // 'space-between'` to pin its first/last in-flow children to the top and
+    // bottom edges -- with this button previously a third in-flow child
+    // *after* hud-bottom, space-between pinned hud-top to the top and this
+    // button to the bottom correctly, but floated hud-bottom (the middle
+    // item) in the vertical *center* of the screen instead of at the bottom,
+    // since space-between distributes ALL in-flow children evenly, not just
+    // the first/last (verified against a real screenshot: the roster card
+    // was floating mid-map, not pinned above this button). Taking this
+    // button out of the flex flow entirely leaves hud-top/hud-bottom as the
+    // only two in-flow children, which space-between now correctly pins to
+    // the true top and bottom.
+    position: 'absolute',
+    bottom: Spacing.gutter,
+    right: Spacing.gutter,
     minHeight: 48,
     minWidth: 48,
     borderRadius: 24,
