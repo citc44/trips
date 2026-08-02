@@ -8,8 +8,11 @@
     "scheme": "voylo",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "bundleIdentifier": "com.voylo.app",
-      "icon": "./assets/expo.icon"
+      "bundleIdentifier": "com.voylo-app.app",
+      "icon": "./assets/expo.icon",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.voylo.app",
