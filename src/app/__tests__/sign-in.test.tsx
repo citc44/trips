@@ -63,20 +63,28 @@ test('submitting a valid email calls signInWithEmail and advances to the verify 
   expect(utils.getByTestId('code-input')).toBeTruthy();
 });
 
-test('entering 6 digits auto-submits verifyCode with no separate submit tap', async () => {
+test('entering 8 digits auto-submits verifyCode with no separate submit tap', async () => {
   mockVerifyCode.mockResolvedValue({ error: null });
+  const { getByTestId } = await getToVerifyStep();
+
+  await changeText(getByTestId('code-input'), '12345678');
+
+  await waitFor(() => expect(mockVerifyCode).toHaveBeenCalledWith('chintan@example.com', '12345678'));
+});
+
+test('entering fewer than 8 digits does not submit', async () => {
   const { getByTestId } = await getToVerifyStep();
 
   await changeText(getByTestId('code-input'), '123456');
 
-  await waitFor(() => expect(mockVerifyCode).toHaveBeenCalledWith('chintan@example.com', '123456'));
+  expect(mockVerifyCode).not.toHaveBeenCalled();
 });
 
 test('an invalid code clears the field in place and shows an inline error', async () => {
   mockVerifyCode.mockResolvedValue({ error: { message: 'Token has expired or is invalid' } });
   const { getByTestId, queryByTestId } = await getToVerifyStep();
 
-  await changeText(getByTestId('code-input'), '000000');
+  await changeText(getByTestId('code-input'), '00000000');
 
   await waitFor(() => expect(queryByTestId('error-message')).toBeTruthy());
   expect(getByTestId('code-input').props.value).toBe('');

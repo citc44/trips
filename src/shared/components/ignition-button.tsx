@@ -53,9 +53,13 @@ export function IgnitionButton({
         end={{ x: 1, y: 1 }}
         style={styles.button}
       >
-        <View style={styles.textScrim}>
-          <Text style={styles.buttonLabel}>{label}</Text>
-        </View>
+        {disabled ? (
+          <Text style={[styles.buttonLabel, styles.disabledButtonLabel]}>{label}</Text>
+        ) : (
+          <View style={styles.textScrim}>
+            <Text style={styles.buttonLabel}>{label}</Text>
+          </View>
+        )}
       </LinearGradient>
     </Pressable>
   );
@@ -79,6 +83,13 @@ const styles = StyleSheet.create({
     color: ButtonIgnition.foreground,
     fontSize: Typography.body.fontSize,
     fontWeight: '600',
+  },
+  disabledButtonLabel: {
+    // No gradient behind the label in the disabled state, so the textScrim's
+    // dark backing (needed for contrast against the vivid gradient) would
+    // just show up as a stray box/line against the flat inkSecondary fill.
+    // Darkening the label itself keeps contrast without that backing.
+    color: Colors.surfaceMidnight,
   },
   secondaryLabel: {
     color: Colors.inkPrimary,

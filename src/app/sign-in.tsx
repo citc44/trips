@@ -9,6 +9,9 @@ import { screenStyles } from '@/shared/styles/screen';
 
 const RESEND_COOLDOWN_SECONDS = 30;
 const GENERIC_ERROR = 'Something went wrong. Please try again.';
+// Must match supabase/config.toml's auth.email.otp_length (also set on the
+// hosted project's Auth settings, which config.toml does not push).
+const CODE_LENGTH = 8;
 
 function isPlausibleEmail(value: string) {
   return /^\S+@\S+\.\S+$/.test(value.trim());
@@ -70,11 +73,11 @@ export default function SignInScreen() {
   }
 
   async function handleCodeChange(text: string) {
-    const digitsOnly = text.replace(/[^0-9]/g, '').slice(0, 6);
+    const digitsOnly = text.replace(/[^0-9]/g, '').slice(0, CODE_LENGTH);
     setCode(digitsOnly);
     setError(null);
 
-    if (digitsOnly.length !== 6) return;
+    if (digitsOnly.length !== CODE_LENGTH) return;
 
     setIsSubmitting(true);
     try {
@@ -132,16 +135,22 @@ export default function SignInScreen() {
         ) : (
           <>
             <Text style={screenStyles.headline}>Enter the code</Text>
-            <Animated.View style={{ transform: [{ translateX: shakeX }] }}>
+            <Animated.View style={[styles.codeBoxRow, { transform: [{ translateX: shakeX }] }]}>
+              {Array.from({ length: CODE_LENGTH }, (_, index) => (
+                <View key={index} style={[styles.codeBox, index === code.length && styles.codeBoxActive]}>
+                  <Text style={styles.codeBoxText}>{code[index] ?? ''}</Text>
+                </View>
+              ))}
               <TextInput
                 testID="code-input"
-                style={styles.input}
+                style={styles.codeHiddenInput}
                 keyboardType="number-pad"
-                maxLength={6}
+                maxLength={CODE_LENGTH}
                 value={code}
                 onChangeText={handleCodeChange}
                 editable={!isSubmitting}
                 autoFocus
+                caretHidden
               />
             </Animated.View>
             <IgnitionButton
@@ -175,5 +184,37 @@ const styles = StyleSheet.create({
     borderRadius: Spacing['2'],
     paddingVertical: Spacing['3'],
     paddingHorizontal: Spacing['4'],
+  },
+  codeBoxRow: {
+    position: 'relative',
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  codeBox: {
+    width: 32,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: Colors.borderHairline,
+    borderRadius: Spacing['2'],
+  },
+  codeBoxActive: {
+    borderColor: Colors.accentViolet,
+  },
+  codeBoxText: {
+    color: Colors.inkPrimary,
+    fontFamily: Typography.statNumeral.fontFamily,
+    fontSize: Typography.headline.fontSize,
+    fontWeight: Typography.headline.fontWeight,
+  },
+  codeHiddenInput: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 0,
   },
 });
