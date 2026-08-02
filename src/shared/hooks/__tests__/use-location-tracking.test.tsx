@@ -1,6 +1,6 @@
-import { beforeEach, expect, jest, test } from '@jest/globals';
+import { afterEach, beforeEach, expect, jest, test } from '@jest/globals';
 import { act, render } from '@testing-library/react-native';
-import { Text } from 'react-native';
+import { Platform, Text } from 'react-native';
 
 import { useLocationTracking } from '@/shared/hooks/use-location-tracking';
 import { useAuth } from '@/shared/hooks/use-auth';
@@ -8,17 +8,24 @@ import { useLocationPermission } from '@/shared/hooks/use-location-permission';
 
 const mockStartLocationUpdatesAsync = jest.fn<(...args: any[]) => Promise<any>>();
 const mockStopLocationUpdatesAsync = jest.fn<(...args: any[]) => Promise<any>>();
+const mockWatchPositionAsync = jest.fn<(...args: any[]) => Promise<any>>();
+const mockSubscriptionRemove = jest.fn();
 jest.mock('expo-location', () => ({
   Accuracy: { Balanced: 3 },
   startLocationUpdatesAsync: (...args: unknown[]) => mockStartLocationUpdatesAsync(...args),
   stopLocationUpdatesAsync: (...args: unknown[]) => mockStopLocationUpdatesAsync(...args),
+  watchPositionAsync: (...args: unknown[]) => mockWatchPositionAsync(...args),
 }));
 
 const mockSetBackgroundLocationContext = jest.fn();
+const mockReportLocationFix = jest.fn<(...args: any[]) => Promise<any>>();
 jest.mock('@/shared/lib/background-location-task', () => ({
   BACKGROUND_LOCATION_TASK: 'voylo-background-location',
   setBackgroundLocationContext: (...args: unknown[]) => mockSetBackgroundLocationContext(...args),
+  reportLocationFix: (...args: unknown[]) => mockReportLocationFix(...args),
 }));
+
+const ORIGINAL_PLATFORM_OS = Platform.OS;
 
 jest.mock('@/shared/hooks/use-auth', () => ({ useAuth: jest.fn() }));
 jest.mock('@/shared/hooks/use-location-permission', () => ({ useLocationPermission: jest.fn() }));
@@ -50,6 +57,12 @@ beforeEach(() => {
   });
   mockStartLocationUpdatesAsync.mockResolvedValue(undefined);
   mockStopLocationUpdatesAsync.mockResolvedValue(undefined);
+  mockWatchPositionAsync.mockResolvedValue({ remove: mockSubscriptionRemove });
+  mockReportLocationFix.mockResolvedValue(undefined);
+});
+
+afterEach(() => {
+  Platform.OS = ORIGINAL_PLATFORM_OS;
 });
 
 test('does not start tracking when permission is not granted', async () => {
@@ -153,4 +166,44 @@ test('stops tracking and clears context when permission is lost while a Voyage i
 
   expect(mockStopLocationUpdatesAsync).toHaveBeenCalledWith('voylo-background-location');
   expect(mockSetBackgroundLocationContext).toHaveBeenLastCalledWith(null);
+});
+
+test('on web, uses foreground watchPositionAsync instead of the background task -- startLocationUpdatesAsync silently no-ops on web (TaskManager has no web implementation)', async () => {
+  Platform.OS = 'web';
+
+  await render(<Harness voyageId="voyage-1" />);
+
+  expect(mockWatchPositionAsync).toHaveBeenCalledWith(
+    expect.objectContaining({ accuracy: 3, timeInterval: 5000, distanceInterval: 20 }),
+    expect.any(Function),
+  );
+  expect(mockStartLocationUpdatesAsync).not.toHaveBeenCalled();
+  expect(mockSetBackgroundLocationContext).not.toHaveBeenCalled();
+});
+
+test('on web, each position update is reported through the same reportLocationFix() the native task uses', async () => {
+  Platform.OS = 'web';
+
+  await render(<Harness voyageId="voyage-1" />);
+
+  const onPosition = mockWatchPositionAsync.mock.calls[0][1] as (position: unknown) => void;
+  await act(async () => {
+    onPosition({ coords: { latitude: 39.1, longitude: -120.0, heading: -1 }, timestamp: 1753488000000 });
+  });
+
+  // heading -1 normalizes to null, same sentinel-normalization the native
+  // task callback applies.
+  expect(mockReportLocationFix).toHaveBeenCalledWith('voyage-1', 'user-1', 39.1, -120.0, null, new Date(1753488000000).toISOString());
+});
+
+test('on web, removes the watchPositionAsync subscription on unmount', async () => {
+  Platform.OS = 'web';
+
+  const { unmount } = await render(<Harness voyageId="voyage-1" />);
+  await act(async () => {
+    unmount();
+  });
+
+  expect(mockSubscriptionRemove).toHaveBeenCalledTimes(1);
+  expect(mockStopLocationUpdatesAsync).not.toHaveBeenCalled();
 });

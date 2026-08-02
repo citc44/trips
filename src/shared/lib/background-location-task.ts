@@ -48,6 +48,39 @@ export function setBackgroundLocationContext(context: BackgroundLocationContext 
   }
 }
 
+// Shared by both the native background-task callback below and web's
+// foreground watchPositionAsync path (use-location-tracking.tsx) -- same
+// throttled-upsert + best-effort-broadcast behavior regardless of which
+// platform-specific mechanism actually produced the fix. lastUpsertAt is
+// module-scope, not per-caller, but that's correct here: a given JS process
+// only ever runs one of the two paths at a time (a session is either native
+// or web, never both), so there's no cross-path throttle interference.
+export async function reportLocationFix(
+  voyageId: string,
+  userId: string,
+  lat: number,
+  lng: number,
+  heading: number | null,
+  updatedAt: string,
+): Promise<void> {
+  const now = Date.now();
+  if (now - lastUpsertAt >= UPSERT_THROTTLE_MS) {
+    lastUpsertAt = now;
+    try {
+      await locationRepository.upsertLocation(voyageId, { lat, lng, heading });
+    } catch {
+      // Fails open -- a real network exception here (not unlikely mid-road-
+      // trip) shouldn't crash the caller; the next tick tries again.
+    }
+  }
+
+  try {
+    await locationRepository.broadcastLocationOnce(voyageId, { userId, lat, lng, heading, updatedAt });
+  } catch {
+    // Swallowed on purpose -- fails open.
+  }
+}
+
 type BackgroundLocationCoords = { latitude: number; longitude: number; heading: number | null };
 type BackgroundLocationObject = { coords: BackgroundLocationCoords; timestamp: number };
 type BackgroundLocationTaskData = { locations: BackgroundLocationObject[] };
@@ -91,25 +124,5 @@ TaskManager.defineTask<BackgroundLocationTaskData>(BACKGROUND_LOCATION_TASK, asy
   const heading = rawHeading != null && rawHeading >= 0 ? rawHeading : null;
   const updatedAt = new Date(latest.timestamp).toISOString();
 
-  const now = Date.now();
-  if (now - lastUpsertAt >= UPSERT_THROTTLE_MS) {
-    lastUpsertAt = now;
-    try {
-      await locationRepository.upsertLocation(voyageId, { lat, lng, heading });
-    } catch {
-      // Fails open -- a real network exception here (not unlikely mid-road-
-      // trip) shouldn't crash the task; the next tick tries again.
-    }
-  }
-
-  // Best-effort only, and never lets a broadcast failure surface past this
-  // task -- the upsert above is the guaranteed-correct path regardless of
-  // whether this succeeds (see this story's own Dev Notes on the AD-8/
-  // Broadcast architecture-doc drift this is deliberately papering over,
-  // not resolving).
-  try {
-    await locationRepository.broadcastLocationOnce(voyageId, { userId, lat, lng, heading, updatedAt });
-  } catch {
-    // Swallowed on purpose -- fails open.
-  }
+  await reportLocationFix(voyageId, userId, lat, lng, heading, updatedAt);
 });

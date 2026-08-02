@@ -1,7 +1,8 @@
 import * as Location from 'expo-location';
 import { useEffect } from 'react';
+import { Platform } from 'react-native';
 
-import { BACKGROUND_LOCATION_TASK, setBackgroundLocationContext } from '@/shared/lib/background-location-task';
+import { BACKGROUND_LOCATION_TASK, reportLocationFix, setBackgroundLocationContext } from '@/shared/lib/background-location-task';
 import { useAuth } from '@/shared/hooks/use-auth';
 import { useLocationPermission } from '@/shared/hooks/use-location-permission';
 
@@ -34,6 +35,23 @@ const FOREGROUND_SERVICE_NOTIFICATION_BODY = 'Your Voyage group can see you on t
 // itself simply stops delivering updates once the app is actually
 // backgrounded in that case, with no error and no crash. Story 3.1's
 // existing foreground-status gate is already sufficient.
+//
+// Web is a genuine third path, not a variant of the above: verified via a
+// real browser session that startLocationUpdatesAsync silently no-ops on
+// web (TaskManager has no web implementation -- the .catch(() => {}) below
+// swallows the rejection, "fails open" exactly as commented, but the net
+// effect was that literally nobody's own location was ever tracked on web,
+// including the Organizer's own marker). Browsers have no background-task
+// concept at all, so there's no web equivalent of startLocationUpdatesAsync
+// to reach for -- watchPositionAsync (foreground-only, backed by the
+// browser's real Geolocation API) is the actual ceiling on web, same as
+// this app's own pre-Story-3.3 native behavior. Calls the same
+// reportLocationFix() the native task callback uses, so both platforms
+// share identical throttled-upsert + broadcast behavior.
+function normalizeHeading(rawHeading: number | null | undefined): number | null {
+  return rawHeading != null && rawHeading >= 0 ? rawHeading : null;
+}
+
 export function useLocationTracking(voyageId: string | null): void {
   const { session } = useAuth();
   const { status } = useLocationPermission();
@@ -41,6 +59,34 @@ export function useLocationTracking(voyageId: string | null): void {
 
   useEffect(() => {
     if (!voyageId || !userId || status !== 'granted') return;
+
+    if (Platform.OS === 'web') {
+      let subscription: Location.LocationSubscription | null = null;
+      let cancelled = false;
+
+      Location.watchPositionAsync(
+        { accuracy: Location.Accuracy.Balanced, timeInterval: WATCH_TIME_INTERVAL_MS, distanceInterval: WATCH_DISTANCE_INTERVAL_M },
+        (position) => {
+          const { latitude, longitude, heading } = position.coords;
+          reportLocationFix(voyageId, userId, latitude, longitude, normalizeHeading(heading), new Date(position.timestamp).toISOString());
+        },
+      )
+        .then((sub) => {
+          if (cancelled) {
+            sub.remove();
+            return;
+          }
+          subscription = sub;
+        })
+        .catch(() => {
+          // Fails open -- same discipline as the native path below.
+        });
+
+      return () => {
+        cancelled = true;
+        subscription?.remove();
+      };
+    }
 
     // Restores the old watchPositionAsync-based hook's isCancelled guard,
     // adapted to startLocationUpdatesAsync/stopLocationUpdatesAsync's
