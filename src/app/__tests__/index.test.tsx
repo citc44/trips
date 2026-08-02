@@ -25,3 +25,11 @@ test('tapping "Start a Voyage" navigates to /voyage-intro', async () => {
 
   expect(mockPush).toHaveBeenCalledWith('/voyage-intro');
 });
+
+test('tapping "Join a Voyage" navigates to /join', async () => {
+  const { getByTestId } = await render(<HomeScreen />);
+
+  fireEvent.press(getByTestId('join-voyage-button'));
+
+  expect(mockPush).toHaveBeenCalledWith('/join');
+});

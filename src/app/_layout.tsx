@@ -142,6 +142,11 @@ function AppNavigator() {
           /join/<code> navigates straight here regardless of what
           resolveRoute() would otherwise resolve to. */}
       <Stack.Screen name="join/[code]" />
+      {/* Same reachability as join/[code] above, same reason: someone with a
+          code but no link to tap needs a way in regardless of auth state --
+          it just collects the code here, then hands off to join/[code] for
+          everything else. */}
+      <Stack.Screen name="join/index" />
       {/* Unconditional, not gated on hasActiveVoyage, on purpose: end_voyage()
           success clears activeVoyage (via refetch), which would otherwise
           deregister this screen mid-transition if it lived inside the

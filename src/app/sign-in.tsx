@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Animated, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -131,6 +132,14 @@ export default function SignInScreen() {
               editable={!isSubmitting}
             />
             <IgnitionButton testID="send-code-button" label="Send code" disabled={!emailIsValid || isSubmitting} onPress={sendCode} />
+            <Text
+              testID="have-a-join-code-link"
+              accessibilityRole="button"
+              onPress={() => router.push('/join')}
+              style={styles.joinCodeLink}
+            >
+              Have a join code?
+            </Text>
           </>
         ) : (
           <>
@@ -174,6 +183,13 @@ export default function SignInScreen() {
 }
 
 const styles = StyleSheet.create({
+  joinCodeLink: {
+    color: Colors.inkSecondary,
+    fontFamily: Typography.body.fontFamily,
+    fontSize: 13,
+    textAlign: 'center',
+    padding: Spacing['3'],
+  },
   input: {
     width: '100%',
     color: Colors.inkPrimary,

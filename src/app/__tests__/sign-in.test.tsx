@@ -3,6 +3,15 @@ import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 import SignInScreen from '@/app/sign-in';
 
+const mockPush = jest.fn();
+jest.mock('expo-router', () => {
+  const actual = jest.requireActual('expo-router') as object;
+  return {
+    ...actual,
+    router: { push: (...args: unknown[]) => mockPush(...args) },
+  };
+});
+
 const mockSignInWithEmail = jest.fn<() => Promise<any>>();
 const mockVerifyCode = jest.fn<() => Promise<any>>();
 
@@ -44,6 +53,14 @@ test('renders the email entry step initially', async () => {
   const { getByTestId, queryByTestId } = await render(<SignInScreen />);
   expect(getByTestId('email-input')).toBeTruthy();
   expect(queryByTestId('code-input')).toBeNull();
+});
+
+test('tapping "Have a join code?" navigates to /join -- for someone who received a code with no link to tap', async () => {
+  const { getByTestId } = await render(<SignInScreen />);
+
+  fireEvent.press(getByTestId('have-a-join-code-link'));
+
+  expect(mockPush).toHaveBeenCalledWith('/join');
 });
 
 test('send-code button is disabled until the email looks valid', async () => {

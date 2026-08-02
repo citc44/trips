@@ -25,6 +25,13 @@ export default function HomeScreen() {
             disabled={false}
             onPress={() => router.push('/voyage-intro')}
           />
+          <IgnitionButton
+            testID="join-voyage-button"
+            label="Join a Voyage"
+            disabled={false}
+            onPress={() => router.push('/join')}
+            variant="secondary"
+          />
         </View>
       </SafeAreaView>
     </View>
@@ -51,6 +58,7 @@ const styles = StyleSheet.create({
     flex: 2,
     justifyContent: 'center',
     alignItems: 'center',
+    gap: Spacing['3'],
     paddingHorizontal: Spacing.heroGap,
     paddingBottom: Spacing.heroGap,
   },
