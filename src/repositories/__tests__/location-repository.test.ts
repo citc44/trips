@@ -92,7 +92,7 @@ test('upsertLocation returns a typed { code, message } error on RPC failure', as
 test('subscribeToLocations creates a private channel scoped to the Voyage and subscribes', () => {
   locationRepository.subscribeToLocations('voyage-1', jest.fn());
 
-  expect(mockChannel).toHaveBeenCalledWith('voyage:voyage-1', { config: { private: true } });
+  expect(mockChannel).toHaveBeenCalledWith('voyage:voyage-1', { config: { private: true, broadcast: { self: true } } });
   expect(mockOn).toHaveBeenCalledWith('broadcast', { event: 'location' }, expect.any(Function));
   expect(mockSubscribe).toHaveBeenCalledTimes(1);
 });

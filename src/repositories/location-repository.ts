@@ -74,6 +74,16 @@ function channelName(voyageId: string): string {
 // be consulted at all -- an un-flagged channel bypasses that authorization
 // entirely, so this must never be omitted.
 //
+// `broadcast: { self: true }` is required here too: our own device's
+// position is broadcast from a *separate* channel instance (see
+// createBroadcastChannel/broadcastLocationOnce below, used by the
+// background location task, which has no access to this hook-owned
+// listening channel). Realtime does not echo a client's own broadcasts back
+// to it by default, so without this flag our own marker would only ever
+// reflect the one-time cold-load position from getLiveLocations() and never
+// update live for the rest of the session, even though every other
+// Voyager's marker updates fine.
+//
 // onStatusChange (Story 3.5) surfaces the channel's own connection health --
 // this is "can we reach the server" for AC1's reconnecting-note purposes,
 // more accurate than a generic device-network check since it reflects this
@@ -85,7 +95,7 @@ function subscribeToLocations(
   onStatusChange?: (status: 'connected' | 'disconnected') => void,
 ): { unsubscribe: () => void } {
   const channel = supabase
-    .channel(channelName(voyageId), { config: { private: true } })
+    .channel(channelName(voyageId), { config: { private: true, broadcast: { self: true } } })
     .on('broadcast', { event: BROADCAST_EVENT }, (message: { payload: unknown }) => {
       onLocation(toLiveLocation(message.payload as LiveLocationRow));
     })
