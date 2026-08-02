@@ -14,6 +14,7 @@ import { useActiveVoyage } from '@/shared/hooks/use-active-voyage';
 import { useAuth } from '@/shared/hooks/use-auth';
 import { useLiveLocations, type TrailPoint } from '@/shared/hooks/use-live-locations';
 import { useLocationTracking } from '@/shared/hooks/use-location-tracking';
+import { formatDistanceMiles, haversineMiles } from '@/shared/lib/geo';
 import { outbox } from '@/shared/services/outbox/outbox';
 import { screenStyles } from '@/shared/styles/screen';
 
@@ -321,6 +322,22 @@ export default function ActiveVoyageScreen() {
   }
 
   const isOrganizer = activeVoyage.role === 'organizer';
+
+  // Null whenever this Voyage's destination has no picked coordinates (a
+  // free-text destination from before search existed, or one this Voyage
+  // was started with by manual entry) -- callers treat null as "omit the
+  // distance readout entirely," not an error or a zero distance.
+  const destinationCoords =
+    activeVoyage.voyage.destinationLat != null && activeVoyage.voyage.destinationLng != null
+      ? { lat: activeVoyage.voyage.destinationLat, lng: activeVoyage.voyage.destinationLng }
+      : null;
+
+  function getDistanceLabel(userId: string): string | null {
+    if (!destinationCoords) return null;
+    const location = locations[userId];
+    if (!location) return null;
+    return formatDistanceMiles(haversineMiles({ lat: location.lat, lng: location.lng }, destinationCoords));
+  }
 
   async function handleEndVoyage() {
     setIsSubmitting(true);
@@ -732,14 +749,24 @@ export default function ActiveVoyageScreen() {
         </View>
 
         <View testID="hud-bottom" style={styles.hudBottom}>
-          {members.map((member) => (
-            <View key={member.userId} style={styles.hudBottomRow}>
-              <Text style={styles.hudBottomName}>{member.displayName ?? 'Voyager'}</Text>
-              <Text style={styles.hudBottomRole}>
-                {member.role === 'organizer' ? 'Organizer' : member.travelRole === 'driving' ? 'Driving' : 'Riding'}
-              </Text>
-            </View>
-          ))}
+          {members.map((member) => {
+            const distanceLabel = getDistanceLabel(member.userId);
+            return (
+              <View key={member.userId} style={styles.hudBottomRow}>
+                <Text style={styles.hudBottomName}>{member.displayName ?? 'Voyager'}</Text>
+                <View style={styles.hudBottomMeta}>
+                  <Text style={styles.hudBottomRole}>
+                    {member.role === 'organizer' ? 'Organizer' : member.travelRole === 'driving' ? 'Driving' : 'Riding'}
+                  </Text>
+                  {distanceLabel ? (
+                    <Text testID={`hud-bottom-distance-${member.userId}`} style={styles.hudBottomDistance}>
+                      {distanceLabel}
+                    </Text>
+                  ) : null}
+                </View>
+              </View>
+            );
+          })}
         </View>
 
         <Text testID="recenter-button" accessibilityRole="button" accessibilityLabel="Recenter" onPress={handleRecenter} style={styles.recenterButton}>
@@ -773,6 +800,11 @@ export default function ActiveVoyageScreen() {
             <Text style={styles.peekStatus}>
               {selectedMember.role === 'organizer' ? 'Organizer' : selectedMember.travelRole === 'driving' ? 'Driving' : 'Riding'}
             </Text>
+            {getDistanceLabel(selectedMember.userId) ? (
+              <Text testID="marker-peek-distance" style={styles.peekStatus}>
+                {`${getDistanceLabel(selectedMember.userId)} from ${activeVoyage.voyage.destination}`}
+              </Text>
+            ) : null}
           </View>
         </View>
       ) : null}
@@ -1002,10 +1034,18 @@ const styles = StyleSheet.create({
     fontFamily: Typography.body.fontFamily,
     fontSize: Typography.label.fontSize,
   },
+  hudBottomMeta: {
+    alignItems: 'flex-end',
+  },
   hudBottomRole: {
     color: Colors.inkSecondary,
     fontFamily: Typography.label.fontFamily,
     fontSize: Typography.label.fontSize,
+  },
+  hudBottomDistance: {
+    color: Colors.inkSecondary,
+    fontFamily: Typography.label.fontFamily,
+    fontSize: 11,
   },
   recenterButton: {
     alignSelf: 'flex-end',

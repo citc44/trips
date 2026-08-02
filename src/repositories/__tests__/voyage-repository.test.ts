@@ -14,11 +14,13 @@ beforeEach(() => {
   jest.clearAllMocks();
 });
 
-test('startVoyage calls the start_voyage RPC with the destination', async () => {
+test('startVoyage calls the start_voyage RPC with the destination and null coordinates when none are given', async () => {
   mockRpc.mockResolvedValue({
     data: {
       id: 'voyage-1',
       destination: 'Lake Tahoe',
+      destination_lat: null,
+      destination_lng: null,
       status: 'active',
       created_by: 'user-1',
       created_at: '2026-07-26T00:00:00Z',
@@ -30,14 +32,16 @@ test('startVoyage calls the start_voyage RPC with the destination', async () => 
 
   await voyageRepository.startVoyage('Lake Tahoe');
 
-  expect(mockRpc).toHaveBeenCalledWith('start_voyage', { p_destination: 'Lake Tahoe' });
+  expect(mockRpc).toHaveBeenCalledWith('start_voyage', { p_destination: 'Lake Tahoe', p_destination_lat: null, p_destination_lng: null });
 });
 
-test('startVoyage returns the mapped, created Voyage', async () => {
+test('startVoyage passes picked-place coordinates through to the RPC', async () => {
   mockRpc.mockResolvedValue({
     data: {
       id: 'voyage-1',
-      destination: 'Lake Tahoe',
+      destination: 'Lake Tahoe, California, United States',
+      destination_lat: 39.0968,
+      destination_lng: -120.0324,
       status: 'active',
       created_by: 'user-1',
       created_at: '2026-07-26T00:00:00Z',
@@ -47,12 +51,39 @@ test('startVoyage returns the mapped, created Voyage', async () => {
     error: null,
   });
 
-  const result = await voyageRepository.startVoyage('Lake Tahoe');
+  await voyageRepository.startVoyage('Lake Tahoe, California, United States', { lat: 39.0968, lng: -120.0324 });
+
+  expect(mockRpc).toHaveBeenCalledWith('start_voyage', {
+    p_destination: 'Lake Tahoe, California, United States',
+    p_destination_lat: 39.0968,
+    p_destination_lng: -120.0324,
+  });
+});
+
+test('startVoyage returns the mapped, created Voyage', async () => {
+  mockRpc.mockResolvedValue({
+    data: {
+      id: 'voyage-1',
+      destination: 'Lake Tahoe',
+      destination_lat: 39.0968,
+      destination_lng: -120.0324,
+      status: 'active',
+      created_by: 'user-1',
+      created_at: '2026-07-26T00:00:00Z',
+      ended_at: null,
+      join_code: 'ABCD2345',
+    },
+    error: null,
+  });
+
+  const result = await voyageRepository.startVoyage('Lake Tahoe', { lat: 39.0968, lng: -120.0324 });
 
   expect(result).toEqual({
     data: {
       id: 'voyage-1',
       destination: 'Lake Tahoe',
+      destinationLat: 39.0968,
+      destinationLng: -120.0324,
       status: 'active',
       createdBy: 'user-1',
       createdAt: '2026-07-26T00:00:00Z',

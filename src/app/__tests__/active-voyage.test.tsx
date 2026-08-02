@@ -5,6 +5,7 @@ import { voyageRepository } from '@/repositories/voyage-repository';
 import { useActiveVoyage } from '@/shared/hooks/use-active-voyage';
 import { useAuth } from '@/shared/hooks/use-auth';
 import { useLiveLocations } from '@/shared/hooks/use-live-locations';
+import { formatDistanceMiles, haversineMiles } from '@/shared/lib/geo';
 import { outbox } from '@/shared/services/outbox/outbox';
 
 import ActiveVoyageScreen from '../active-voyage';
@@ -113,6 +114,37 @@ function mockActiveVoyage(role: 'organizer' | 'voyager') {
       voyage: {
         id: 'voyage-1',
         destination: 'Lake Tahoe',
+        destinationLat: null,
+        destinationLng: null,
+        status: 'active',
+        createdBy: 'user-1',
+        createdAt: '2026-07-26T00:00:00Z',
+        endedAt: null,
+        joinCode: 'ABCD2345',
+      },
+      role,
+    },
+    isLoading: false,
+    hasError: false,
+    refetch: mockRefetch,
+  });
+}
+
+const DESTINATION_COORDS = { lat: 39.0968, lng: -120.0324 };
+
+// Distinct from mockActiveVoyage() above: this Voyage's destination has real
+// picked-place coordinates (destination search), which is what the distance
+// readout needs -- mockActiveVoyage()'s default fixture deliberately has
+// none, covering the "started before destination search existed / free-text
+// entry" degrade-gracefully case those other tests exercise.
+function mockActiveVoyageWithDestinationCoords(role: 'organizer' | 'voyager') {
+  mockUseActiveVoyage.mockReturnValue({
+    activeVoyage: {
+      voyage: {
+        id: 'voyage-1',
+        destination: 'Lake Tahoe, California, United States',
+        destinationLat: DESTINATION_COORDS.lat,
+        destinationLng: DESTINATION_COORDS.lng,
         status: 'active',
         createdBy: 'user-1',
         createdAt: '2026-07-26T00:00:00Z',
@@ -397,6 +429,52 @@ test('hud-bottom roster row shows Driving for a Driving-role Voyager instead of 
   expect(within(getByTestId('hud-bottom')).getByText('Driving')).toBeTruthy();
 });
 
+test('hud-bottom roster row shows each Voyager\'s live distance from the destination once it has picked coordinates', async () => {
+  mockActiveVoyageWithDestinationCoords('organizer');
+
+  const { getByTestId } = await render(<ActiveVoyageScreen />);
+  await waitFor(() => expect(within(getByTestId('hud-bottom')).getByText('Meera')).toBeTruthy());
+
+  const expectedLabel = formatDistanceMiles(haversineMiles(locationsFixture['user-2'], DESTINATION_COORDS));
+  expect(getByTestId('hud-bottom-distance-user-2').props.children).toBe(expectedLabel);
+});
+
+test('hud-bottom roster row omits the distance readout when the destination has no picked coordinates', async () => {
+  mockActiveVoyage('organizer');
+
+  const { getByTestId, queryByTestId } = await render(<ActiveVoyageScreen />);
+  await waitFor(() => expect(within(getByTestId('hud-bottom')).getByText('Meera')).toBeTruthy());
+
+  expect(queryByTestId('hud-bottom-distance-user-2')).toBeNull();
+});
+
+test('marker peek card shows the selected Voyager\'s distance from the destination', async () => {
+  mockActiveVoyageWithDestinationCoords('organizer');
+
+  const { getByTestId } = await render(<ActiveVoyageScreen />);
+  await waitFor(() => expect(getByTestId('voyager-marker-user-2')).toBeTruthy());
+
+  await act(async () => {
+    fireEvent.press(getByTestId('voyager-marker-user-2'));
+  });
+
+  const expectedLabel = formatDistanceMiles(haversineMiles(locationsFixture['user-2'], DESTINATION_COORDS));
+  expect(getByTestId('marker-peek-distance').props.children).toBe(`${expectedLabel} from Lake Tahoe, California, United States`);
+});
+
+test('marker peek card omits the distance readout when the destination has no picked coordinates', async () => {
+  mockActiveVoyage('organizer');
+
+  const { getByTestId, queryByTestId } = await render(<ActiveVoyageScreen />);
+  await waitFor(() => expect(getByTestId('voyager-marker-user-2')).toBeTruthy());
+
+  await act(async () => {
+    fireEvent.press(getByTestId('voyager-marker-user-2'));
+  });
+
+  expect(queryByTestId('marker-peek-distance')).toBeNull();
+});
+
 test('marker peek card shows Driving for a Driving-role Voyager instead of the old hardcoded Riding', async () => {
   mockActiveVoyage('organizer');
   mockGetVoyageMembers.mockResolvedValue({
@@ -568,6 +646,8 @@ test('confirming calls endVoyage, refetches, and navigates to voyage-ended with 
     data: {
       id: 'voyage-1',
       destination: 'Lake Tahoe',
+      destinationLat: null,
+      destinationLng: null,
       status: 'ended',
       createdBy: 'user-1',
       createdAt: '2026-07-26T00:00:00Z',

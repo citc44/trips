@@ -43,7 +43,17 @@ test('calls joinVoyage with the pending join code on mount', async () => {
     clearPendingJoinCode: mockClearPendingJoinCode,
   });
   mockJoinVoyage.mockResolvedValue({
-    data: { id: 'v1', destination: 'Lake Tahoe', status: 'active', createdBy: 'u1', createdAt: 't', endedAt: null, joinCode: 'ABCD2345' },
+    data: {
+      id: 'v1',
+      destination: 'Lake Tahoe',
+      destinationLat: null,
+      destinationLng: null,
+      status: 'active',
+      createdBy: 'u1',
+      createdAt: 't',
+      endedAt: null,
+      joinCode: 'ABCD2345',
+    },
     error: null,
   });
 
@@ -59,7 +69,17 @@ test('shows a success confirmation with the destination on success', async () =>
     clearPendingJoinCode: mockClearPendingJoinCode,
   });
   mockJoinVoyage.mockResolvedValue({
-    data: { id: 'v1', destination: 'Lake Tahoe', status: 'active', createdBy: 'u1', createdAt: 't', endedAt: null, joinCode: 'ABCD2345' },
+    data: {
+      id: 'v1',
+      destination: 'Lake Tahoe',
+      destinationLat: null,
+      destinationLng: null,
+      status: 'active',
+      createdBy: 'u1',
+      createdAt: 't',
+      endedAt: null,
+      joinCode: 'ABCD2345',
+    },
     error: null,
   });
 
@@ -76,7 +96,17 @@ test('refetches activeVoyage on a successful join -- otherwise Continue would ro
     clearPendingJoinCode: mockClearPendingJoinCode,
   });
   mockJoinVoyage.mockResolvedValue({
-    data: { id: 'v1', destination: 'Lake Tahoe', status: 'active', createdBy: 'u1', createdAt: 't', endedAt: null, joinCode: 'ABCD2345' },
+    data: {
+      id: 'v1',
+      destination: 'Lake Tahoe',
+      destinationLat: null,
+      destinationLng: null,
+      status: 'active',
+      createdBy: 'u1',
+      createdAt: 't',
+      endedAt: null,
+      joinCode: 'ABCD2345',
+    },
     error: null,
   });
 
@@ -120,7 +150,17 @@ test('tapping Continue clears the pending join code', async () => {
     clearPendingJoinCode: mockClearPendingJoinCode,
   });
   mockJoinVoyage.mockResolvedValue({
-    data: { id: 'v1', destination: 'Lake Tahoe', status: 'active', createdBy: 'u1', createdAt: 't', endedAt: null, joinCode: 'ABCD2345' },
+    data: {
+      id: 'v1',
+      destination: 'Lake Tahoe',
+      destinationLat: null,
+      destinationLng: null,
+      status: 'active',
+      createdBy: 'u1',
+      createdAt: 't',
+      endedAt: null,
+      joinCode: 'ABCD2345',
+    },
     error: null,
   });
 
@@ -141,7 +181,17 @@ test('does not call joinVoyage twice across re-renders', async () => {
     clearPendingJoinCode: mockClearPendingJoinCode,
   });
   mockJoinVoyage.mockResolvedValue({
-    data: { id: 'v1', destination: 'Lake Tahoe', status: 'active', createdBy: 'u1', createdAt: 't', endedAt: null, joinCode: 'ABCD2345' },
+    data: {
+      id: 'v1',
+      destination: 'Lake Tahoe',
+      destinationLat: null,
+      destinationLng: null,
+      status: 'active',
+      createdBy: 'u1',
+      createdAt: 't',
+      endedAt: null,
+      joinCode: 'ABCD2345',
+    },
     error: null,
   });
 
@@ -162,7 +212,17 @@ test('starts a fresh join when the pending code changes to a different value whi
     clearPendingJoinCode: mockClearPendingJoinCode,
   });
   mockJoinVoyage.mockResolvedValue({
-    data: { id: 'v1', destination: 'Lake Tahoe', status: 'active', createdBy: 'u1', createdAt: 't', endedAt: null, joinCode: 'ABCD2345' },
+    data: {
+      id: 'v1',
+      destination: 'Lake Tahoe',
+      destinationLat: null,
+      destinationLng: null,
+      status: 'active',
+      createdBy: 'u1',
+      createdAt: 't',
+      endedAt: null,
+      joinCode: 'ABCD2345',
+    },
     error: null,
   });
 

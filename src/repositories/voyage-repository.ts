@@ -4,6 +4,12 @@ import type { RepositoryError } from '@/repositories/types';
 export type Voyage = {
   id: string;
   destination: string;
+  // Null for any Voyage started before destination search existed, or
+  // started from manually-typed free text with no place ever selected --
+  // the client degrades gracefully (no distance readout) rather than
+  // treating either case as an error.
+  destinationLat: number | null;
+  destinationLng: number | null;
   status: 'active' | 'ended';
   createdBy: string;
   createdAt: string;
@@ -14,6 +20,8 @@ export type Voyage = {
 type VoyageRow = {
   id: string;
   destination: string;
+  destination_lat: number | null;
+  destination_lng: number | null;
   status: 'active' | 'ended';
   created_by: string;
   created_at: string;
@@ -109,6 +117,8 @@ function toVoyage(row: VoyageRow): Voyage {
   return {
     id: row.id,
     destination: row.destination,
+    destinationLat: row.destination_lat,
+    destinationLng: row.destination_lng,
     status: row.status,
     createdBy: row.created_by,
     createdAt: row.created_at,
@@ -121,12 +131,16 @@ function toRepositoryError(error: { code?: string | null; message: string }): Re
   return { code: error.code ?? 'unknown', message: error.message };
 }
 
-async function startVoyage(destination: string): Promise<VoyageResult> {
+async function startVoyage(destination: string, coordinates?: { lat: number; lng: number } | null): Promise<VoyageResult> {
   // Atomic (Voyage + organizer membership created together server-side): the
   // start_voyage() RPC also enforces AD-9 (one active Voyage per user) and
   // surfaces a clear error on rejection -- see its migration for the full
   // rationale. No client-side two-step create.
-  const { data, error } = await supabase.rpc('start_voyage', { p_destination: destination });
+  const { data, error } = await supabase.rpc('start_voyage', {
+    p_destination: destination,
+    p_destination_lat: coordinates?.lat ?? null,
+    p_destination_lng: coordinates?.lng ?? null,
+  });
 
   if (error) {
     return { data: null, error: toRepositoryError(error) };

@@ -1,38 +1,91 @@
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Colors, Rounded, Spacing, Typography } from '@/constants/design-tokens';
+import { geocodingRepository, type PlaceSuggestion } from '@/repositories/geocoding-repository';
 import { voyageRepository } from '@/repositories/voyage-repository';
 import { IgnitionButton } from '@/shared/components/ignition-button';
 import { useActiveVoyage } from '@/shared/hooks/use-active-voyage';
 import { screenStyles } from '@/shared/styles/screen';
 
 const GENERIC_ERROR = 'Something went wrong. Please try again.';
+const SEARCH_DEBOUNCE_MS = 300;
+const MIN_QUERY_LENGTH = 3;
 
 export default function DestinationPickerScreen() {
   const { refetch: refetchActiveVoyage } = useActiveVoyage();
-  const [destination, setDestination] = useState('');
+  const [query, setQuery] = useState('');
+  const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
+  const [selectedPlace, setSelectedPlace] = useState<PlaceSuggestion | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const isMounted = useRef(true);
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Guards a stale, slow response from an earlier keystroke overwriting the
+  // suggestions for whatever's currently typed -- a plain isMounted check
+  // alone isn't enough here since the component stays mounted the whole
+  // time, only the in-flight query itself goes stale.
+  const searchToken = useRef(0);
 
   useEffect(() => {
     return () => {
       isMounted.current = false;
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
     };
   }, []);
 
-  const trimmedDestination = destination.trim();
-  const canSubmit = trimmedDestination.length > 0 && !isSubmitting;
+  // A place is only "selected" while `query` still matches exactly what was
+  // picked -- any further edit clears it, so the destination search can't
+  // silently submit a place the user has since typed over (code review
+  // precedent: the same "edit invalidates the prior pick" rule search UIs
+  // like this one are expected to follow).
+  useEffect(() => {
+    if (selectedPlace && query !== selectedPlace.placeName) {
+      setSelectedPlace(null);
+    }
+  }, [query, selectedPlace]);
+
+  useEffect(() => {
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+
+    const trimmed = query.trim();
+    if (selectedPlace || trimmed.length < MIN_QUERY_LENGTH) {
+      setSuggestions([]);
+      return;
+    }
+
+    const token = ++searchToken.current;
+    debounceTimer.current = setTimeout(async () => {
+      const { data } = await geocodingRepository.searchDestinations(trimmed);
+      if (!isMounted.current || searchToken.current !== token) return;
+      setSuggestions(data ?? []);
+    }, SEARCH_DEBOUNCE_MS);
+
+    return () => {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    };
+  }, [query, selectedPlace]);
+
+  function handleSelectSuggestion(suggestion: PlaceSuggestion) {
+    setQuery(suggestion.placeName);
+    setSelectedPlace(suggestion);
+    setSuggestions([]);
+  }
+
+  const canSubmit = !!selectedPlace && !isSubmitting;
 
   async function handleStartVoyage() {
+    if (!selectedPlace) return;
     setIsSubmitting(true);
     setError(null);
 
     try {
-      const { data, error: startError } = await voyageRepository.startVoyage(trimmedDestination);
+      const { data, error: startError } = await voyageRepository.startVoyage(selectedPlace.placeName, {
+        lat: selectedPlace.lat,
+        lng: selectedPlace.lng,
+      });
       if (!isMounted.current) return;
       if (startError || !data || !data.joinCode) {
         setError(startError?.message ?? GENERIC_ERROR);
@@ -56,6 +109,8 @@ export default function DestinationPickerScreen() {
     }
   }
 
+  const showSuggestions = suggestions.length > 0 && !selectedPlace;
+
   return (
     <View style={screenStyles.container}>
       <SafeAreaView style={styles.safeArea}>
@@ -69,13 +124,28 @@ export default function DestinationPickerScreen() {
           <TextInput
             testID="destination-input"
             style={styles.input}
-            placeholder="Enter a destination"
+            placeholder="Search for a destination"
             placeholderTextColor={Colors.inkSecondary}
             maxLength={200}
-            value={destination}
-            onChangeText={setDestination}
+            value={query}
+            onChangeText={setQuery}
             editable={!isSubmitting}
+            autoCorrect={false}
           />
+          {showSuggestions ? (
+            <View testID="destination-suggestions" style={styles.suggestionList}>
+              {suggestions.map((suggestion) => (
+                <Pressable
+                  key={suggestion.id}
+                  testID={`destination-suggestion-${suggestion.id}`}
+                  onPress={() => handleSelectSuggestion(suggestion)}
+                  style={styles.suggestionRow}
+                >
+                  <Text style={styles.suggestionText}>{suggestion.placeName}</Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
         </View>
 
         <View style={styles.ctaWrap}>
@@ -86,7 +156,9 @@ export default function DestinationPickerScreen() {
             onPress={handleStartVoyage}
           />
           <Text style={styles.hint}>
-            {trimmedDestination.length > 0 ? 'This creates the Voyage and starts live tracking.' : 'Type a destination to begin.'}
+            {selectedPlace
+              ? 'This creates the Voyage and starts live tracking.'
+              : 'Search and pick a real place -- your Voyagers will see how far they are from it.'}
           </Text>
         </View>
 
@@ -142,6 +214,24 @@ const styles = StyleSheet.create({
     borderRadius: Rounded.sm,
     backgroundColor: Colors.surfaceDuskHigh,
     paddingHorizontal: Spacing['4'],
+  },
+  suggestionList: {
+    borderWidth: 1,
+    borderColor: Colors.borderHairline,
+    borderRadius: Rounded.sm,
+    backgroundColor: Colors.surfaceDuskHigh,
+    overflow: 'hidden',
+  },
+  suggestionRow: {
+    paddingVertical: Spacing['3'],
+    paddingHorizontal: Spacing['4'],
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.borderHairline,
+  },
+  suggestionText: {
+    color: Colors.inkPrimary,
+    fontFamily: Typography.body.fontFamily,
+    fontSize: Typography.body.fontSize,
   },
   ctaWrap: {
     gap: Spacing['3'],
