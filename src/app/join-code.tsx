@@ -83,7 +83,7 @@ export default function JoinCodeScreen() {
           ) : null}
         </LinearGradient>
         <IgnitionButton testID="share-button" label="Share" disabled={false} onPress={handleShare} variant="secondary" />
-        <IgnitionButton testID="join-code-continue-button" label="Continue" disabled={false} onPress={() => router.push('/')} />
+        <IgnitionButton testID="join-code-continue-button" label="Continue" disabled={false} onPress={() => router.back()} />
       </SafeAreaView>
     </View>
   );
