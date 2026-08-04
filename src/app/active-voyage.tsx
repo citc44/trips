@@ -36,6 +36,39 @@ import { outbox } from '@/shared/services/outbox/outbox';
 const GENERIC_ERROR = 'Something went wrong. Please try again.';
 const DEFAULT_ZOOM = 13;
 
+// User-reported bug, fixed: both the first-load auto-center and the
+// recenter button used to average every marker's lat/lng into one point,
+// then move to it at a *fixed* zoom (DEFAULT_ZOOM). For Voyagers spread out
+// by more than a couple miles, that midpoint can land on empty road between
+// everyone at that zoom level -- nobody actually visible, reading as "some
+// random place," not a recognizable view of the group. fitBounds computes
+// the zoom that actually shows every marker, instead of assuming one.
+// [top, right, bottom, left] -- accounts for the map banner/HUD bar chrome
+// overlaying the map's top/bottom edges, so a marker can't end up hidden
+// underneath either.
+const CAMERA_FIT_PADDING: [number, number, number, number] = [
+  MapBanner.height + Spacing['4'],
+  Spacing['5'],
+  HudBar.height + Spacing['4'],
+  Spacing['5'],
+];
+
+function fitCameraToMarkers(camera: Camera, markers: { location: LiveLocation }[], duration: number) {
+  if (markers.length === 0) return;
+  if (markers.length === 1) {
+    // fitBounds needs two distinct corners -- a single marker is just a
+    // point to center on, not a box to fit, so this keeps DEFAULT_ZOOM
+    // rather than fitBounds zooming in to its own arbitrary minimum.
+    camera.moveTo([markers[0].location.lng, markers[0].location.lat], duration);
+    return;
+  }
+  const lats = markers.map((m) => m.location.lat);
+  const lngs = markers.map((m) => m.location.lng);
+  const ne: [number, number] = [Math.max(...lngs), Math.max(...lats)];
+  const sw: [number, number] = [Math.min(...lngs), Math.min(...lats)];
+  camera.fitBounds(ne, sw, CAMERA_FIT_PADDING, duration);
+}
+
 // Wayfinder v2 (Story 4.3): switched from Mapbox.StyleURL.Dark to .Street.
 // A prior headless-browser investigation (see this file's git history)
 // confirmed .Dark was *missing* from @rnmapbox/maps' web shim and that
@@ -493,17 +526,16 @@ export default function ActiveVoyageScreen() {
   // doesn't read `defaultSettings` at all (only flat `centerCoordinate`/
   // `zoomLevel` props, which this screen never sets), so on web the map
   // silently stayed on Mapbox's global default view forever. Fixed the same
-  // way for both platforms: once real marker positions first arrive, center
-  // on them exactly once -- reusing handleRecenter's own averaging math, not
-  // duplicating it. Once-only via the ref (not every markers change) so
-  // this never fights a user's own subsequent pan/zoom/manual recenter.
+  // way for both platforms: once real marker positions first arrive, fit
+  // them all in view exactly once -- reusing handleRecenter's own
+  // fitCameraToMarkers helper, not duplicating it. Once-only via the ref
+  // (not every markers change) so this never fights a user's own subsequent
+  // pan/zoom/manual recenter.
   const hasAutoCenteredRef = useRef(false);
   useEffect(() => {
     if (hasAutoCenteredRef.current || markers.length === 0 || !cameraRef.current) return;
     hasAutoCenteredRef.current = true;
-    const avgLng = markers.reduce((sum, m) => sum + m.location.lng, 0) / markers.length;
-    const avgLat = markers.reduce((sum, m) => sum + m.location.lat, 0) / markers.length;
-    cameraRef.current.moveTo([avgLng, avgLat], 0);
+    fitCameraToMarkers(cameraRef.current, markers, 0);
   }, [markers]);
 
   if (!activeVoyage) {
@@ -706,10 +738,8 @@ export default function ActiveVoyageScreen() {
   }
 
   function handleRecenter() {
-    if (markers.length === 0 || !cameraRef.current) return;
-    const avgLng = markers.reduce((sum, m) => sum + m.location.lng, 0) / markers.length;
-    const avgLat = markers.reduce((sum, m) => sum + m.location.lat, 0) / markers.length;
-    cameraRef.current.moveTo([avgLng, avgLat], 500);
+    if (!cameraRef.current) return;
+    fitCameraToMarkers(cameraRef.current, markers, 500);
   }
 
   // Serves both the first-landing role prompt's choice and every later
@@ -842,18 +872,24 @@ export default function ActiveVoyageScreen() {
               the mockup's count badge -- accessibilityLabel keeps the words
               a screen reader needs, since the rendered glyph alone doesn't
               (code review-style fidelity note, same reasoning Story 4.2
-              applied to its own icon-only controls). */}
-          <View
+              applied to its own icon-only controls). User-reported bug,
+              fixed: this rendered as a plain, non-interactive View -- tapping
+              it visibly did nothing. Opens the same Organizer/member drawer
+              as the hamburger button, since that's where the actual roster
+              lives; a count badge that does nothing when tapped reads as
+              broken, not decorative. */}
+          <Pressable
             testID="voyager-count-badge"
-            accessible
+            accessibilityRole="button"
             accessibilityLabel={`${markers.length} ${markers.length === 1 ? 'Voyager' : 'Voyagers'} riding with you`}
-            style={styles.mapBannerCount}
+            onPress={() => setShowOrganizerMenu(true)}
+            style={({ pressed }) => [styles.mapBannerCount, pressed && styles.pressedScale]}
           >
             {/* ☺ matches mockups/key-live-map.html's .voyagers-count content
                 exactly ("3☺") -- code review finding: this was previously
                 just the bare number. */}
             <Text style={styles.mapBannerCountLabel}>{markers.length}☺</Text>
-          </View>
+          </Pressable>
         </View>
         {/* Subtle, not a blocking banner (AC1) -- deliberately not an
             alarm-red treatment; a calm status note, not an error. Markers

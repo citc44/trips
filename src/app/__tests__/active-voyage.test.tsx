@@ -26,6 +26,7 @@ jest.mock('@/lib/mapbox', () => ({ initMapbox: jest.fn() }));
 jest.mock('react-native-safe-area-context', () => mockSafeAreaContext);
 
 const mockCameraMoveTo = jest.fn();
+const mockCameraFitBounds = jest.fn();
 // require(), not import -- jest.mock() factories may only reference
 // out-of-scope bindings that are either "mock"-prefixed or obtained via
 // require() inside the factory itself (Jest's own hoisting rule, not an
@@ -41,7 +42,12 @@ jest.mock('@rnmapbox/maps', () => {
     default: { StyleURL: { Street: 'mapbox://styles/mapbox/streets-v12' } },
     MapView: ({ children, testID }: any) => ReactActual.createElement(View, { testID }, children),
     Camera: ReactActual.forwardRef((_props: any, ref: any) => {
-      ReactActual.useImperativeHandle(ref, () => ({ moveTo: mockCameraMoveTo, flyTo: jest.fn(), zoomTo: jest.fn(), fitBounds: jest.fn() }));
+      ReactActual.useImperativeHandle(ref, () => ({
+        moveTo: mockCameraMoveTo,
+        flyTo: jest.fn(),
+        zoomTo: jest.fn(),
+        fitBounds: mockCameraFitBounds,
+      }));
       return null;
     }),
     MarkerView: ({ children }: any) => children,
@@ -249,6 +255,19 @@ test('the voyager-count badge counts markers.length (live locations), not member
   await waitFor(() => expect(getByTestId('voyager-count-badge')).toBeTruthy());
   expect(within(getByTestId('voyager-count-badge')).getByText('1☺')).toBeTruthy();
   expect(getByTestId('voyager-count-badge').props.accessibilityLabel).toBe('1 Voyager riding with you');
+});
+
+test('tapping the voyager-count badge opens the Organizer/member drawer, same as the hamburger button (user-reported bug: it rendered as a plain, non-interactive View)', async () => {
+  mockActiveVoyage('organizer');
+
+  const { getByTestId } = await render(<ActiveVoyageScreen />);
+  await waitFor(() => expect(getByTestId('voyager-count-badge')).toBeTruthy());
+
+  await act(async () => {
+    fireEvent.press(getByTestId('voyager-count-badge'));
+  });
+
+  expect(getByTestId('end-voyage-button')).toBeTruthy();
 });
 
 test('the bottom HUD (Story 4.3, hud-bar) shows an Elapsed stat instead of the old always-visible per-Voyager roster', async () => {
@@ -693,7 +712,7 @@ test('does not render a trail line for a Voyager with fewer than 2 recent trail 
   expect(queryByTestId('trail-layer-user-1')).toBeNull();
 });
 
-test('tapping recenter moves the camera to the average of all live locations', async () => {
+test('tapping recenter fits the camera to every live location, not just their average point (user-reported bug: an averaged point at a fixed zoom could land on empty road between spread-out Voyagers)', async () => {
   mockActiveVoyage('organizer');
 
   const { getByTestId } = await render(<ActiveVoyageScreen />);
@@ -703,7 +722,35 @@ test('tapping recenter moves the camera to the average of all live locations', a
     fireEvent.press(getByTestId('recenter-button'));
   });
 
-  expect(mockCameraMoveTo).toHaveBeenCalledWith([-120.05, 39.150000000000006], 500);
+  // user-1 {lat: 39.1, lng: -120.0}, user-2 {lat: 39.2, lng: -120.1} -- NE is
+  // the max of each, SW the min. Padding is [top, right, bottom, left]:
+  // MapBanner/HudBar height + a margin, so a marker can't land hidden
+  // underneath either.
+  expect(mockCameraFitBounds).toHaveBeenCalledWith([-120.0, 39.2], [-120.1, 39.1], [126, 24, 120, 24], 500);
+  expect(mockCameraMoveTo).not.toHaveBeenCalled();
+});
+
+test('recentering with only one live location moves to it directly instead of calling fitBounds (which needs two distinct corners)', async () => {
+  mockActiveVoyage('organizer');
+  mockUseLiveLocations.mockReturnValue({
+    locations: { 'user-1': locationsFixture['user-1'] },
+    trails: {},
+    isLoading: false,
+    hasError: false,
+    isConnected: true,
+  });
+
+  const { getByTestId } = await render(<ActiveVoyageScreen />);
+  await waitFor(() => expect(getByTestId('voyager-marker-user-1')).toBeTruthy());
+
+  mockCameraMoveTo.mockClear();
+
+  await act(async () => {
+    fireEvent.press(getByTestId('recenter-button'));
+  });
+
+  expect(mockCameraMoveTo).toHaveBeenCalledWith([-120.0, 39.1], 500);
+  expect(mockCameraFitBounds).not.toHaveBeenCalled();
 });
 
 test('tapping the organizer menu button opens the relocated Organizer actions', async () => {
