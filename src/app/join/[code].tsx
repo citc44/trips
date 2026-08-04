@@ -3,14 +3,14 @@ import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Colors, Spacing, Typography } from '@/constants/design-tokens';
+import { Spacing, Typography, WayfinderColors } from '@/constants/design-tokens';
 import { voyageRepository, type VoyagePreview } from '@/repositories/voyage-repository';
 import { IgnitionButton } from '@/shared/components/ignition-button';
+import { RoadMotif } from '@/shared/components/road-motif';
 import { useAuth } from '@/shared/hooks/use-auth';
 import { usePendingJoin } from '@/shared/hooks/use-pending-join';
 import { useProfile } from '@/shared/hooks/use-profile';
 import { resolveRoute } from '@/shared/navigation/resolve-route';
-import { screenStyles } from '@/shared/styles/screen';
 
 // Note: this is /join/<code> -- the invitee's landing screen -- distinct from
 // the already-existing /join-code route (Story 2.2, the Organizer's own
@@ -144,17 +144,23 @@ export default function JoinInvitationScreen() {
 
   if (notFound) {
     return (
-      <View style={screenStyles.container}>
-        <SafeAreaView style={screenStyles.safeArea}>
-          <Text testID="invitation-invalid" style={screenStyles.headline}>
+      <View style={styles.recoveryContainer}>
+        <SafeAreaView style={styles.recoverySafeArea}>
+          <Text testID="invitation-invalid" style={styles.recoveryHeadline}>
             This invite link isn&apos;t valid.
           </Text>
+          {/* Code review finding: no mockup covers this branch (same as the
+              `ended` branch below), so -- consistent with every other
+              mockup-less button this story touched -- "text" preserves the
+              prior plain-link appearance instead of silently picking up
+              "secondary"'s new bordered-pill look with zero visual
+              verification. */}
           <IgnitionButton
             testID="invitation-invalid-home-button"
             label="Continue"
             disabled={false}
             onPress={handleGoHome}
-            variant="secondary"
+            variant="text"
           />
         </SafeAreaView>
       </View>
@@ -163,9 +169,9 @@ export default function JoinInvitationScreen() {
 
   if (preview?.status === 'ended') {
     return (
-      <View style={screenStyles.container}>
-        <SafeAreaView style={screenStyles.safeArea}>
-          <Text testID="invitation-ended" style={screenStyles.headline}>
+      <View style={styles.recoveryContainer}>
+        <SafeAreaView style={styles.recoverySafeArea}>
+          <Text testID="invitation-ended" style={styles.recoveryHeadline}>
             This trip&apos;s already wrapped up.
           </Text>
           <IgnitionButton
@@ -181,8 +187,14 @@ export default function JoinInvitationScreen() {
 
   return (
     <View style={styles.container}>
+      <RoadMotif rotateDeg={-8} style={styles.roadMotif} />
       <SafeAreaView style={styles.safeArea}>
-        <View>
+        <View style={styles.content}>
+          {/* key-join-invitation.html's own "Chintan invited you" eyebrow and
+              3-avatar stack are new personalization/content this re-skin
+              doesn't add (Story 4.4 Scope decision -- no inviter-name or
+              per-Voyager-color data exists yet). Keep the existing generic
+              copy, re-skinned to the mockup's blue-hero eyebrow treatment. */}
           <Text style={styles.eyebrow}>You&apos;re invited</Text>
           <Text style={styles.headline}>A road trip worth remembering.</Text>
           <Text style={styles.subhead}>
@@ -200,8 +212,14 @@ export default function JoinInvitationScreen() {
               riding with you, and only while it&apos;s active.
             </Text>
           </View>
+          <IgnitionButton
+            testID="join-the-voyage-button"
+            label="Join the Voyage"
+            disabled={false}
+            onPress={handleJoin}
+            variant="inverse"
+          />
         </View>
-        <IgnitionButton testID="join-the-voyage-button" label="Join the Voyage" disabled={false} onPress={handleJoin} />
       </SafeAreaView>
     </View>
   );
@@ -210,63 +228,91 @@ export default function JoinInvitationScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.surfaceMidnight,
+    backgroundColor: WayfinderColors.accentPrimary,
+    overflow: 'hidden',
+  },
+  roadMotif: {
+    top: -40,
+    left: 70,
   },
   safeArea: {
+    flex: 1,
+  },
+  content: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: Spacing['4'],
+    paddingHorizontal: Spacing.heroGap,
+  },
+  eyebrow: {
+    color: '#D6E6FF',
+    fontFamily: Typography.label.fontFamily,
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
+  },
+  headline: {
+    color: '#FFFFFF',
+    fontFamily: Typography.displayHero.fontFamily,
+    fontSize: 34,
+    fontWeight: '700',
+    lineHeight: 41,
+    textAlign: 'center',
+  },
+  subhead: {
+    color: '#D6E6FF',
+    fontFamily: Typography.body.fontFamily,
+    fontSize: 15.5,
+    lineHeight: 24.8,
+    maxWidth: 300,
+    textAlign: 'center',
+  },
+  voyagerCount: {
+    color: '#D6E6FF',
+    fontFamily: Typography.body.fontFamily,
+    fontSize: 13,
+    textAlign: 'center',
+  },
+  trustLine: {
+    padding: Spacing['3'],
+    borderRadius: Spacing['3'],
+    borderWidth: 1,
+    borderColor: '#4C93FF',
+    maxWidth: 340,
+  },
+  trustLineText: {
+    color: '#D6E6FF',
+    fontFamily: Typography.body.fontFamily,
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: 'center',
+  },
+  trustLineBold: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  // notFound/ended branches: no dedicated mockup frame exists for either, so
+  // these follow the app's light-canvas convention already established by
+  // Voyage Ended/Home rather than the invited branch's blue hero above.
+  recoveryContainer: {
+    flex: 1,
+    backgroundColor: WayfinderColors.surfaceSecondary,
+  },
+  recoverySafeArea: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'flex-start',
     gap: Spacing.heroGap,
     paddingHorizontal: Spacing.gutter,
   },
-  eyebrow: {
-    color: Colors.accentViolet,
-    fontFamily: Typography.label.fontFamily,
-    fontSize: Typography.label.fontSize,
-    fontWeight: Typography.label.fontWeight,
-    lineHeight: Typography.label.lineHeight,
-    letterSpacing: Typography.label.letterSpacing,
-    textTransform: 'uppercase',
-  },
-  headline: {
-    marginTop: Spacing['3'],
-    color: Colors.inkPrimary,
+  recoveryHeadline: {
+    color: WayfinderColors.inkPrimary,
     fontFamily: Typography.displayHero.fontFamily,
     fontSize: Typography.displayHero.fontSize,
     fontWeight: Typography.displayHero.fontWeight,
     lineHeight: Typography.displayHero.lineHeight,
     letterSpacing: Typography.displayHero.letterSpacing,
-  },
-  subhead: {
-    marginTop: Spacing['4'],
-    color: Colors.inkSecondary,
-    fontFamily: Typography.body.fontFamily,
-    fontSize: Typography.body.fontSize,
-    lineHeight: Typography.body.lineHeight,
-    maxWidth: 300,
-  },
-  voyagerCount: {
-    marginTop: Spacing['3'],
-    color: Colors.inkSecondary,
-    fontFamily: Typography.body.fontFamily,
-    fontSize: 13,
-  },
-  trustLine: {
-    marginTop: Spacing['4'],
-    padding: Spacing['3'],
-    borderRadius: Spacing['3'],
-    borderWidth: 1,
-    borderColor: Colors.borderHairline,
-    maxWidth: 340,
-  },
-  trustLineText: {
-    color: Colors.inkSecondary,
-    fontFamily: Typography.body.fontFamily,
-    fontSize: 13,
-    lineHeight: 19,
-  },
-  trustLineBold: {
-    color: Colors.inkPrimary,
-    fontWeight: '700',
   },
 });

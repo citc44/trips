@@ -49,7 +49,11 @@ export default function SettingsScreen() {
     <View style={screenStyles.container}>
       <SafeAreaView style={screenStyles.safeArea}>
         <Text style={screenStyles.headline}>Settings</Text>
-        <IgnitionButton testID="sign-out-button" label="Sign out" disabled={isSigningOut} onPress={handleSignOut} variant="secondary" />
+        {/* Story 4.4: "secondary" now means a bordered pill (see
+            ignition-button.tsx) -- this screen isn't in that story's
+            re-skin scope and stays Night-Drive-styled, so "text" preserves
+            this control's current plain-text-link appearance instead. */}
+        <IgnitionButton testID="sign-out-button" label="Sign out" disabled={isSigningOut} onPress={handleSignOut} variant="text" />
         <Text style={styles.caption}>Signs you out on every device, not just this one.</Text>
         {error ? (
           <Text testID="error-message" style={screenStyles.error}>

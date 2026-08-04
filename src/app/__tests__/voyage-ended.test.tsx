@@ -20,14 +20,18 @@ beforeEach(() => {
   });
 });
 
-test('shows a calm summary: duration, Voyager count, and destination', async () => {
-  const { getByText } = await render(<VoyageEndedScreen />);
+test('shows a calm summary: destination, duration, and Voyager count as independent segments', async () => {
+  const { getByText, getByTestId } = await render(<VoyageEndedScreen />);
 
   expect(getByText('Voyage ended.')).toBeTruthy();
-  expect(getByText('5h 30m · 3 Voyagers · Lake Tahoe')).toBeTruthy();
+  expect(getByText('Lake Tahoe')).toBeTruthy();
+  expect(getByText('Duration')).toBeTruthy();
+  expect(getByTestId('voyage-ended-duration-value').props.children).toBe('5h 30m');
+  expect(getByText('Voyagers')).toBeTruthy();
+  expect(getByTestId('voyage-ended-voyager-count-value').props.children).toBe(3);
 });
 
-test('singular "Voyager" when the count is exactly 1', async () => {
+test('singular "Voyager" label when the count is exactly 1', async () => {
   mockUseLocalSearchParams.mockReturnValue({
     destination: 'Big Sur',
     createdAt: '2026-07-26T00:00:00Z',
@@ -35,12 +39,14 @@ test('singular "Voyager" when the count is exactly 1', async () => {
     voyagerCount: '1',
   });
 
-  const { getByText } = await render(<VoyageEndedScreen />);
+  const { getByText, getByTestId, queryByText } = await render(<VoyageEndedScreen />);
 
-  expect(getByText('1h 0m · 1 Voyager · Big Sur')).toBeTruthy();
+  expect(getByText('Voyager')).toBeTruthy();
+  expect(queryByText('Voyagers')).toBeNull();
+  expect(getByTestId('voyage-ended-voyager-count-value').props.children).toBe(1);
 });
 
-test('omits the Voyager-count segment (never renders "NaN") when voyagerCount is missing', async () => {
+test('omits the Voyager-count stat entirely (never renders "NaN") when voyagerCount is missing', async () => {
   mockUseLocalSearchParams.mockReturnValue({
     destination: 'Lake Tahoe',
     createdAt: '2026-07-26T00:00:00Z',
@@ -48,13 +54,16 @@ test('omits the Voyager-count segment (never renders "NaN") when voyagerCount is
     voyagerCount: undefined,
   });
 
-  const { getByText, queryByText } = await render(<VoyageEndedScreen />);
+  const { getByTestId, queryByTestId, queryByText, queryAllByText } = await render(<VoyageEndedScreen />);
 
-  expect(getByText('5h 30m · Lake Tahoe')).toBeTruthy();
-  expect(queryByText(/NaN/)).toBeNull();
+  expect(getByTestId('voyage-ended-duration-value').props.children).toBe('5h 30m');
+  expect(queryByTestId('voyage-ended-voyager-count-value')).toBeNull();
+  expect(queryByText('Voyager')).toBeNull();
+  expect(queryByText('Voyagers')).toBeNull();
+  expect(queryAllByText(/NaN/)).toHaveLength(0);
 });
 
-test('omits the duration segment (never renders "NaN") when createdAt/endedAt are not parseable', async () => {
+test('omits the Duration stat entirely (never renders "NaN") when createdAt/endedAt are not parseable', async () => {
   mockUseLocalSearchParams.mockReturnValue({
     destination: 'Lake Tahoe',
     createdAt: 'not-a-date',
@@ -62,10 +71,11 @@ test('omits the duration segment (never renders "NaN") when createdAt/endedAt ar
     voyagerCount: '3',
   });
 
-  const { getByText, queryByText } = await render(<VoyageEndedScreen />);
+  const { getByTestId, queryByTestId, queryAllByText } = await render(<VoyageEndedScreen />);
 
-  expect(getByText('3 Voyagers · Lake Tahoe')).toBeTruthy();
-  expect(queryByText(/NaN/)).toBeNull();
+  expect(queryByTestId('voyage-ended-duration-value')).toBeNull();
+  expect(getByTestId('voyage-ended-voyager-count-value').props.children).toBe(3);
+  expect(queryAllByText(/NaN/)).toHaveLength(0);
 });
 
 test('tapping Back to Home routes to /', async () => {

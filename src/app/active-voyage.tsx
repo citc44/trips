@@ -1,49 +1,54 @@
 import Mapbox, { Camera, LineLayer, MapView, MarkerView, ShapeSource } from '@rnmapbox/maps';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AccessibilityInfo, Animated, Easing, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { AccessibilityInfo, Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Colors, HudCard, MapMarker, PlayerColors, Spacing, StatusPill, Typography } from '@/constants/design-tokens';
+import {
+  ActionDrawer as ActionDrawerTokens,
+  CutToGameplayMotion,
+  Hamburger,
+  HudBar,
+  MapBanner,
+  MapMarker,
+  PlayerColors,
+  Rounded,
+  Spacing,
+  StatusPill,
+  Typography,
+  WayfinderColors,
+} from '@/constants/design-tokens';
 import { initMapbox } from '@/lib/mapbox';
 import type { LiveLocation } from '@/repositories/location-repository';
 import { voyageRepository, type VoyageMember } from '@/repositories/voyage-repository';
+import { ActionDrawer } from '@/shared/components/action-drawer';
 import { IgnitionButton } from '@/shared/components/ignition-button';
 import { Toast } from '@/shared/components/toast';
 import { useActiveVoyage } from '@/shared/hooks/use-active-voyage';
 import { useAuth } from '@/shared/hooks/use-auth';
+import { useJustStartedVoyage } from '@/shared/hooks/use-just-started-voyage';
 import { useLiveLocations, type TrailPoint } from '@/shared/hooks/use-live-locations';
 import { useLocationTracking } from '@/shared/hooks/use-location-tracking';
+import { usePendingEntryTransition } from '@/shared/hooks/use-pending-entry-transition';
 import { formatDistanceMiles, haversineMiles } from '@/shared/lib/geo';
 import { outbox } from '@/shared/services/outbox/outbox';
-import { screenStyles } from '@/shared/styles/screen';
 
 const GENERIC_ERROR = 'Something went wrong. Please try again.';
 const DEFAULT_ZOOM = 13;
 
-// Both floating controls below (status pill, recenter button) are
-// absolutely positioned over the map, in the same top-right/bottom-right
-// corners their respective HUD cards would otherwise occupy. Reserving this
-// much horizontal space on the cards themselves (verified against a real
-// screenshot: without it, the status pill visibly overlapped hud-top's own
-// destination text/menu button, worse whenever "Reconnecting..." made the
-// card taller) keeps them from ever running underneath, regardless of how
-// tall either card gets. STATUS_PILL_CLEARANCE comfortably covers the
-// pill's rendered width (StatusPill.minWidth is only a floor -- its actual
-// width also includes horizontal padding plus "Riding"/"Driving" text).
-// RECENTER_BUTTON_CLEARANCE covers its fixed 48px circle plus breathing
-// room.
-const STATUS_PILL_CLEARANCE = 110;
-const RECENTER_BUTTON_CLEARANCE = 80;
-
-// @rnmapbox/maps' web shim (verified via a headless browser) only defines
-// StyleURL.Street and StyleURL.Satellite -- Dark isn't there, so
-// Mapbox.StyleURL.Dark silently evaluates to undefined on web and MapView's
-// own fallback ('mapbox://styles/mapbox/streets-v11') kicks in instead,
-// with no error or warning. Native's Mapbox.StyleURL.Dark is resolved by
-// the native SDK, not a JS constant this repo defines, so it's left
-// untouched there -- only web substitutes a real, literal dark style URL.
-const MAP_STYLE_URL = Platform.OS === 'web' ? 'mapbox://styles/mapbox/dark-v11' : Mapbox.StyleURL.Dark;
+// Wayfinder v2 (Story 4.3): switched from Mapbox.StyleURL.Dark to .Street.
+// A prior headless-browser investigation (see this file's git history)
+// confirmed .Dark was *missing* from @rnmapbox/maps' web shim and that
+// .Street/.Satellite were the ones actually defined there -- that's the
+// basis for using .Street here too, not a fresh re-verification of this
+// specific switch. If that assumption turns out stale, this no longer
+// needs the separate literal-URL/Platform branch the old Dark style did.
+// DESIGN.md's
+// `map-*` tokens describe a literal stylized-flat-terrain look that would
+// need a custom Mapbox Studio style asset -- out of this repo's reach, so
+// Street is the closest built-in approximation, not a pixel-match of the
+// mockup's flat CSS terrain (Story 4.3's own Scope decision).
+const MAP_STYLE_URL = Mapbox.StyleURL.Street;
 
 // None of endVoyage/grantOrganizerStatus/removeVoyager's own RPCs ever
 // legitimately return this code themselves -- every real business/conflict
@@ -83,7 +88,7 @@ function VoyagerMarker({
   // react-hooks/refs the way sign-in.tsx's pre-existing Animated.Value ref
   // does.
   const [pulseValue] = useState(() => new Animated.Value(0));
-  const ringColor = member.playerColor ? PlayerColors[member.playerColor] : Colors.inkSecondary;
+  const ringColor = member.playerColor ? PlayerColors[member.playerColor] : WayfinderColors.inkSecondary;
 
   useEffect(() => {
     if (reduceMotion) return;
@@ -125,11 +130,13 @@ function VoyagerMarker({
             ]}
           />
         )}
-        <View style={[styles.markerDot, { borderColor: ringColor }]}>
+        <View style={[styles.markerDot, { backgroundColor: ringColor }]}>
           <Text style={styles.markerInitial}>{initial}</Text>
         </View>
         {location.heading != null ? (
-          <View style={[styles.markerChevron, { borderBottomColor: ringColor, transform: [{ rotate: `${location.heading}deg` }] }]} />
+          <View
+            style={[styles.markerChevron, { borderBottomColor: MapMarker.chevronColor, transform: [{ rotate: `${location.heading}deg` }] }]}
+          />
         ) : null}
         <Text style={styles.markerLabel}>{member.userId === location.userId && member.displayName ? member.displayName : ''}</Text>
       </Pressable>
@@ -164,6 +171,50 @@ function VoyagerTrail({ userId, color, points }: { userId: string; color: string
   );
 }
 
+// action-drawer row (Story 4.2, DESIGN.md#components) -- plain
+// Pressable+Text, not IgnitionButton (which is still Night-Drive-styled
+// and would look broken against the drawer's new white panel; re-skinning
+// IgnitionButton itself is Story 4.3/4.4's job, not this one's).
+function DrawerRow({
+  testID,
+  label,
+  onPress,
+  disabled = false,
+  variant = 'default',
+}: {
+  testID: string;
+  label: string;
+  onPress: () => void;
+  disabled?: boolean;
+  variant?: 'default' | 'primary' | 'danger';
+}) {
+  return (
+    <Pressable
+      testID={testID}
+      accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      style={[
+        styles.drawerRow,
+        variant === 'primary' && styles.drawerRowPrimary,
+        variant === 'danger' && styles.drawerRowDanger,
+        disabled && styles.drawerRowDisabled,
+      ]}
+    >
+      <Text
+        style={[
+          styles.drawerRowLabel,
+          variant === 'primary' && styles.drawerRowLabelPrimary,
+          variant === 'danger' && styles.drawerRowLabelDanger,
+        ]}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
 // The real Live Map (Story 3.2). Reached via _layout.tsx's
 // `route === 'home' && hasActiveVoyage && !needsLocationPermission` guard,
 // so `activeVoyage` should always be populated when this renders. Organizer
@@ -178,17 +229,45 @@ export default function ActiveVoyageScreen() {
 
   const { locations, trails, hasError: hasLocationsError, isConnected } = useLiveLocations(voyageId);
   useLocationTracking(voyageId);
-  // skyStrip (below) masks the map bleeding under a phone's notch/status
-  // bar, sized to match. A hardcoded height assumed SafeAreaView's real
-  // inset would always clear it (true on native, where that inset is
-  // ~44-59px) -- verified in a real browser that react-native-safe-area-
-  // context's web polyfill always reports insets.top: 0 (no notch to
-  // simulate), so the HUD's own content started rendering almost at y=0,
-  // directly underneath the strip's opaque fixed height instead of below
-  // it. Deriving the strip's height from the real inset fixes both
-  // platforms at once: it shrinks to (correctly) ~0 on web, and keeps
-  // matching whatever real inset native reports instead of guessing 54.
+  // Feeds map-banner's/hud-bar's own top/bottom padding directly (Story
+  // 4.3) -- react-native-safe-area-context's web polyfill always reports
+  // insets.top/bottom: 0 (no notch to simulate), which is correct there;
+  // native reports the real device inset. No separate masking strip is
+  // needed now that the banner/hud-bar are themselves opaque, non-floating,
+  // full-width bars painting through their own inset padding.
   const insets = useSafeAreaInsets();
+
+  // "Cut to gameplay" entry transition (EXPERIENCE.md#Motion & Transitions,
+  // Story 4.3) -- fires only when this mount was reached via join-code.tsx's
+  // or voyage-joined.tsx's own Continue button (both call
+  // triggerEntryTransition() right before the navigation that lands here),
+  // never on a cold relaunch mid-Voyage. Captured once via a lazy
+  // initializer, not read fresh on every render: consumeEntryTransition()
+  // below flips the context's own value back to false almost immediately
+  // after mount, and re-reading it later would incorrectly look like no
+  // transition was ever pending.
+  const { hasPendingEntryTransition, consumeEntryTransition } = usePendingEntryTransition();
+  const [showEntryTransition] = useState(() => hasPendingEntryTransition);
+  const [flashProgress] = useState(() => new Animated.Value(0));
+  const [entryProgress] = useState(() => new Animated.Value(0));
+  // "Invite More Voyagers" (below, in the drawer) re-enters join-code.tsx
+  // mid-Voyage -- that screen's own Stack.Protected guard (_layout.tsx) is
+  // keyed on this same flag, so this push needs it marked too, exactly like
+  // destination-picker.tsx's original entry does (code review finding: this
+  // second call site was missed when Task 7 first wired the flag through,
+  // silently breaking the mid-Voyage re-invite feature).
+  const { markVoyageStarted } = useJustStartedVoyage();
+
+  useEffect(() => {
+    if (!hasPendingEntryTransition) return;
+    // Deferred via microtask, not called synchronously in the effect body --
+    // same react-hooks/set-state-in-effect workaround this codebase already
+    // uses elsewhere (use-live-locations.tsx, action-drawer.tsx). Updates
+    // PendingEntryTransitionProvider's own state, not this component's --
+    // consumed once so a later remount (e.g. a genuine second Voyage
+    // started in the same session) doesn't replay a stale flag.
+    Promise.resolve().then(() => consumeEntryTransition());
+  }, [hasPendingEntryTransition, consumeEntryTransition]);
 
   const [showConfirm, setShowConfirm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -206,9 +285,45 @@ export default function ActiveVoyageScreen() {
   const [isTogglingRole, setIsTogglingRole] = useState(false);
   const [roleError, setRoleError] = useState<string | null>(null);
   const [reduceMotion, setReduceMotion] = useState(false);
+  // Distinct from `reduceMotion` itself (code review finding): that value
+  // defaults to `false` until `AccessibilityInfo.isReduceMotionEnabled()`
+  // resolves, so gating the entry transition on `!reduceMotion` alone let a
+  // Reduce-Motion user see a blank/transitioning first frame before the
+  // real value landed and corrected it -- a real violation of
+  // EXPERIENCE.md's "Live Map simply appears" requirement. Until this
+  // flips true, the transition doesn't start at all (content renders at
+  // its normal, fully-visible rest state); this delay is a native async
+  // bridge call, not a network request, so in practice it resolves well
+  // under a frame and isn't perceptible as a startup delay in the common
+  // (non-Reduce-Motion) case.
+  const [reduceMotionResolved, setReduceMotionResolved] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const isMounted = useRef(true);
   const cameraRef = useRef<Camera>(null);
+  // Guards against Animated.timing().start() firing more than once if
+  // `reduceMotion` itself changes again later (the OS setting toggling
+  // mid-session, via reduceMotionChanged) after the transition has already
+  // started -- the transition is a one-shot entrance, not a state to
+  // continuously resync.
+  const hasStartedEntryTransitionRef = useRef(false);
+
+  useEffect(() => {
+    if (!showEntryTransition || !reduceMotionResolved || reduceMotion || hasStartedEntryTransitionRef.current) return;
+    hasStartedEntryTransitionRef.current = true;
+    Animated.timing(flashProgress, {
+      toValue: 1,
+      duration: CutToGameplayMotion.flashDurationMs,
+      easing: Easing.bezier(...CutToGameplayMotion.flashEasing),
+      useNativeDriver: true,
+    }).start();
+    Animated.timing(entryProgress, {
+      toValue: 1,
+      duration: CutToGameplayMotion.mapEnterDurationMs,
+      delay: CutToGameplayMotion.mapEnterDelayMs,
+      easing: Easing.bezier(...CutToGameplayMotion.mapEnterEasing),
+      useNativeDriver: true,
+    }).start();
+  }, [showEntryTransition, reduceMotionResolved, reduceMotion, flashProgress, entryProgress]);
 
   useEffect(() => {
     return () => {
@@ -242,7 +357,10 @@ export default function ActiveVoyageScreen() {
   useEffect(() => {
     let isEffectMounted = true;
     AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
-      if (isEffectMounted) setReduceMotion(enabled);
+      if (isEffectMounted) {
+        setReduceMotion(enabled);
+        setReduceMotionResolved(true);
+      }
     });
     const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
     return () => {
@@ -251,16 +369,17 @@ export default function ActiveVoyageScreen() {
     };
   }, []);
 
-  // Only ticks while the default map view is actually showing the elapsed
-  // text (code review finding: this previously ran unconditionally, causing
-  // a once-a-second re-render even while a sub-view like the Organizer menu
-  // or a confirm screen -- where the elapsed text isn't rendered at all --
-  // was up).
+  // Only ticks while the elapsed text isn't covered by the action drawer's
+  // opaque scrim (code review finding: this previously ran unconditionally,
+  // causing a once-a-second re-render even while it was covered). Story 4.2:
+  // showConfirm/removeTarget no longer independently unmount the HUD -- they're
+  // just internal drawer steps while showOrganizerMenu is still true -- so
+  // showOrganizerMenu alone is now the correct (and sufficient) gate.
   useEffect(() => {
-    if (showOrganizerMenu || showConfirm || removeTarget) return;
+    if (showOrganizerMenu) return;
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
-  }, [showOrganizerMenu, showConfirm, removeTarget]);
+  }, [showOrganizerMenu]);
 
   const loadMembers = useRef(async (id: string) => {
     const { data, error: fetchError } = await voyageRepository.getVoyageMembers(id);
@@ -303,6 +422,7 @@ export default function ActiveVoyageScreen() {
           const endedData = data as { destination: string; createdAt: string; endedAt: string | null; voyagerCount: number };
           await refetch();
           if (!isMounted.current) return;
+          resetDrawerState();
           router.push({
             pathname: '/voyage-ended',
             params: {
@@ -442,6 +562,9 @@ export default function ActiveVoyageScreen() {
       }
       await refetch();
       if (!isMounted.current) return;
+      // Defensive: real navigation unmounts this screen anyway, but resetting
+      // the drawer's own state keeps it consistent if that ever changes.
+      resetDrawerState();
       router.push({
         pathname: '/voyage-ended',
         params: {
@@ -550,6 +673,38 @@ export default function ActiveVoyageScreen() {
     }
   }
 
+  // Full reset of every piece of drawer step-state (which confirm step, and
+  // any error left over from a failed attempt) back to the drawer's default
+  // (menu) step, nothing stale carried forward.
+  function resetDrawerState() {
+    setShowOrganizerMenu(false);
+    setShowConfirm(false);
+    setRemoveTarget(null);
+    setError(null);
+    setRemoveError(null);
+  }
+
+  // Fires the instant a close is requested (tap, scrim, Android back) --
+  // only flips `showOrganizerMenu`, which is what actually starts the
+  // drawer's close animation. Deliberately does NOT reset showConfirm/
+  // removeTarget here (code review finding): drawerStep is derived from
+  // those on every render, so resetting them synchronously would recompute
+  // ActionDrawer's children mid-animation, visibly flashing back to the
+  // menu step while the panel is still sliding out. handleDrawerClosed
+  // (below) does that reset once the animation has actually finished.
+  function handleCloseDrawer() {
+    setShowOrganizerMenu(false);
+  }
+
+  // Fires once the drawer's close animation has actually finished (right
+  // before its content unmounts) -- safe to reset step-level state now,
+  // since nothing is visibly animating anymore. Ensures re-opening always
+  // lands back on the menu step, not whatever confirm step (or its error)
+  // was showing when it was last dismissed.
+  function handleDrawerClosed() {
+    resetDrawerState();
+  }
+
   function handleRecenter() {
     if (markers.length === 0 || !cameraRef.current) return;
     const avgLng = markers.reduce((sum, m) => sum + m.location.lng, 0) / markers.length;
@@ -581,156 +736,13 @@ export default function ActiveVoyageScreen() {
     }
   }
 
-  if (removeTarget) {
-    return (
-      <View style={screenStyles.container}>
-        <SafeAreaView style={screenStyles.safeArea}>
-          <Text style={styles.confirmTitle}>Remove {removeTarget.displayName ?? 'them'} from this Voyage?</Text>
-          <IgnitionButton
-            testID="confirm-remove-voyager-button"
-            label="Remove"
-            disabled={isRemoving}
-            onPress={handleRemoveVoyager}
-            variant="destructive"
-          />
-          <IgnitionButton
-            testID="keep-voyager-button"
-            label="Never mind"
-            disabled={isRemoving}
-            onPress={() => {
-              setRemoveTarget(null);
-              setRemoveError(null);
-            }}
-            variant="secondary"
-          />
-          {removeError ? (
-            <Text testID="remove-voyager-error" style={screenStyles.error}>
-              {removeError}
-            </Text>
-          ) : null}
-        </SafeAreaView>
-      </View>
-    );
-  }
+  const isSelf = (memberId: string) => memberId === session?.user.id;
 
-  if (showConfirm) {
-    return (
-      <View style={screenStyles.container}>
-        <SafeAreaView style={screenStyles.safeArea}>
-          <Text style={styles.eyebrow}>End Voyage</Text>
-          <Text style={styles.confirmTitle}>Ready to close out the trip?</Text>
-          <Text style={styles.confirmSub}>
-            New recording stops right away. Anything already in progress finishes normally and makes it into the story.
-          </Text>
-          <IgnitionButton testID="confirm-end-voyage-button" label="End Voyage" disabled={isSubmitting} onPress={handleEndVoyage} />
-          <IgnitionButton
-            testID="keep-going-button"
-            label="Keep going"
-            disabled={isSubmitting}
-            onPress={() => setShowConfirm(false)}
-            variant="secondary"
-          />
-          {error ? (
-            <Text testID="end-voyage-error" style={screenStyles.error}>
-              {error}
-            </Text>
-          ) : null}
-        </SafeAreaView>
-      </View>
-    );
-  }
-
-  if (showOrganizerMenu) {
-    return (
-      <View style={screenStyles.container}>
-        <SafeAreaView style={screenStyles.safeArea}>
-          <Text
-            testID="organizer-menu-close-button"
-            accessibilityRole="button"
-            onPress={() => setShowOrganizerMenu(false)}
-            style={styles.removeLabel}
-          >
-            Close
-          </Text>
-          <Text style={screenStyles.headline}>You&apos;re on your way to {activeVoyage.voyage.destination}.</Text>
-          {activeVoyage.voyage.joinCode ? (
-            <IgnitionButton
-              testID="invite-more-voyagers-button"
-              label="Invite More Voyagers"
-              disabled={false}
-              onPress={() =>
-                router.push({
-                  pathname: '/join-code',
-                  params: { destination: activeVoyage.voyage.destination, joinCode: activeVoyage.voyage.joinCode! },
-                })
-              }
-              variant="secondary"
-            />
-          ) : null}
-          {isOrganizer ? (
-            <IgnitionButton
-              testID="end-voyage-button"
-              label="End Voyage"
-              disabled={false}
-              onPress={() => setShowConfirm(true)}
-              variant="secondary"
-            />
-          ) : null}
-
-          <View style={styles.memberList}>
-            {members.map((member) => {
-              const isSelf = member.userId === session?.user.id;
-              return (
-                <View key={member.userId} style={styles.memberRow}>
-                  <Text style={styles.memberName}>{member.displayName ?? 'Voyager'}</Text>
-                  <View style={styles.memberRowActions}>
-                    {member.role === 'organizer' ? <Text style={styles.memberRoleLabel}>Organizer</Text> : null}
-                    {member.role !== 'organizer' && isOrganizer ? (
-                      <IgnitionButton
-                        testID={`grant-organizer-button-${member.userId}`}
-                        label="Grant Organizer"
-                        disabled={grantingUserIds.has(member.userId)}
-                        onPress={() => handleGrantOrganizer(member)}
-                        variant="secondary"
-                      />
-                    ) : null}
-                    {isOrganizer && !isSelf ? (
-                      <Text
-                        testID={`remove-voyager-button-${member.userId}`}
-                        accessibilityRole="button"
-                        accessibilityState={{ disabled: false }}
-                        onPress={() => setRemoveTarget(member)}
-                        style={styles.removeLabel}
-                      >
-                        Remove
-                      </Text>
-                    ) : null}
-                  </View>
-                </View>
-              );
-            })}
-          </View>
-          {membersError ? (
-            <Text testID="voyager-list-error" style={screenStyles.error}>
-              {membersError}
-            </Text>
-          ) : null}
-          {membersError && members.length === 0 ? (
-            <IgnitionButton
-              testID="voyager-list-retry-button"
-              label="Retry"
-              disabled={false}
-              onPress={handleRetryMembers}
-              variant="secondary"
-            />
-          ) : null}
-          {toastMessage ? (
-            <Toast testID="grant-organizer-toast" message={toastMessage} onDismiss={() => setToastMessage(null)} />
-          ) : null}
-        </SafeAreaView>
-      </View>
-    );
-  }
+  const drawerStep: 'menu' | 'end-voyage-confirm' | 'remove-confirm' = removeTarget
+    ? 'remove-confirm'
+    : showConfirm
+      ? 'end-voyage-confirm'
+      : 'menu';
 
   const selectedMember = selectedUserId ? members.find((m) => m.userId === selectedUserId) : null;
 
@@ -741,32 +753,158 @@ export default function ActiveVoyageScreen() {
   const myTravelRole = myMember?.travelRole ?? null;
   const showRolePrompt = !!myMember && myTravelRole === null;
 
-  return (
-    <View style={screenStyles.container}>
-      <View style={[styles.skyStrip, { height: insets.top }]} />
-      <MapView testID="live-map" style={styles.map} styleURL={MAP_STYLE_URL}>
-        <Camera ref={cameraRef} defaultSettings={{ zoomLevel: DEFAULT_ZOOM }} />
-        {markers.map(({ member }) => (
-          <VoyagerTrail
-            key={`trail-${member.userId}`}
-            userId={member.userId}
-            color={member.playerColor ? PlayerColors[member.playerColor] : Colors.inkSecondary}
-            points={trails[member.userId] ?? []}
-          />
-        ))}
-        {markers.map(({ member, location }) => (
-          <VoyagerMarker
-            key={member.userId}
-            member={member}
-            location={location}
-            reduceMotion={reduceMotion}
-            onPress={() => setSelectedUserId(member.userId)}
-          />
-        ))}
-      </MapView>
+  // "Cut to gameplay" entry transition -- only meaningful while it's
+  // actually playing; harmless (and never rendered) once
+  // showEntryTransition/reduceMotion say it shouldn't be, per the effect
+  // above that gates whether these Animated.Values ever move at all.
+  const flashOpacity = flashProgress.interpolate({
+    inputRange: [...CutToGameplayMotion.flashKeyframeStops],
+    outputRange: [...CutToGameplayMotion.flashOpacityStops],
+  });
+  const flashScale = flashProgress.interpolate({
+    inputRange: [...CutToGameplayMotion.flashKeyframeStops],
+    outputRange: [...CutToGameplayMotion.flashScaleStops],
+  });
+  const mapEnterScale = entryProgress.interpolate({ inputRange: [0, 1], outputRange: [CutToGameplayMotion.mapEnterScaleFrom, 1] });
+  const isEntryTransitionActive = showEntryTransition && reduceMotionResolved && !reduceMotion;
 
-      <SafeAreaView style={styles.hudOverlay} pointerEvents="box-none">
-        <View style={styles.statusPillWrapper}>
+  return (
+    // Not screenStyles.container -- that's a shared style whose dark
+    // (Night Drive) background still backs every screen Story 4.4 hasn't
+    // re-skinned yet. This screen's own root needs a Wayfinder-family
+    // background instead (matches hud-bar's own surface-secondary fog, the
+    // most likely color to briefly show through before map tiles/content
+    // finish laying out).
+    <View style={styles.rootContainer}>
+      {/* This group wraps the map/HUD together with the drawer itself, kept
+          separate from the toast below -- the drawer's own root carries
+          accessibilityViewIsModal (see action-drawer.tsx), which per iOS/
+          RNTL's modal semantics hides every *host sibling* of that node from
+          assistive tech. The map/HUD are meant to be hidden that way while
+          the drawer is open (reinforced explicitly below too); the toast is
+          not -- it announces the result of actions taken from inside the
+          drawer (e.g. Grant Organizer) and must stay reachable regardless of
+          drawer state, so it lives outside this group entirely rather than
+          as the drawer's direct sibling (code review finding). */}
+      <Animated.View
+        style={[
+          styles.mainContentGroup,
+          isEntryTransitionActive ? { opacity: entryProgress, transform: [{ scale: mapEnterScale }] } : null,
+        ]}
+        // Code review finding: without this, a tap on the hamburger/status-
+        // pill/recenter/a marker could land while the screen is still
+        // fading/scaling in from the "cut to gameplay" transition -- the
+        // content underneath isn't meant to be interactive until it's
+        // actually settled at rest.
+        pointerEvents={isEntryTransitionActive ? 'none' : 'auto'}
+      >
+      {/* The map/HUD/overlays below stay mounted while the action drawer is
+          open (that's the whole point of Story 4.2), so they need to be
+          explicitly hidden from assistive tech while it's up -- otherwise a
+          screen-reader user can navigate into content that's visually
+          covered by the drawer's opaque scrim (code review finding).
+          importantForAccessibility is Android's mechanism for this;
+          accessibilityElementsHidden is iOS's. */}
+      <View
+        style={styles.mainContent}
+        importantForAccessibility={showOrganizerMenu ? 'no-hide-descendants' : 'auto'}
+        accessibilityElementsHidden={showOrganizerMenu}
+      >
+      {/* map-banner (DESIGN.md#components, Wayfinder v2 -- Story 4.3): solid,
+          non-floating, docked to the very top -- replaces the old floating
+          hud-top HudCard. Its own top padding (not a separate skyStrip mask)
+          absorbs the notch/status-bar inset, the same way action-drawer.tsx
+          handles its panel's paddingTop, so the banner's solid background
+          paints all the way to the physical top edge. */}
+      <View testID="hud-top" style={[styles.mapBanner, { paddingTop: insets.top + Spacing['3'] }]}>
+        <View style={styles.mapBannerRow}>
+          <Pressable
+            testID="organizer-menu-button"
+            accessibilityRole="button"
+            accessibilityLabel="Organizer menu"
+            onPress={() => setShowOrganizerMenu(true)}
+            style={({ pressed }) => [styles.hamburgerButton, pressed && styles.pressedScale]}
+          >
+            <Text style={styles.hamburgerIcon}>{'☰'}</Text>
+          </Pressable>
+          <View style={styles.mapBannerDestWrap}>
+            <Text style={styles.mapBannerEyebrow}>Voyage destination</Text>
+            <View style={styles.mapBannerDestRow}>
+              <View style={styles.mapBannerPinIcon}>
+                <Text style={styles.mapBannerPinIconLabel}>{'📍'}</Text>
+              </View>
+              <Text style={styles.mapBannerDestName} numberOfLines={1}>
+                {activeVoyage.voyage.destination}
+              </Text>
+            </View>
+          </View>
+          {/* Replaces the old "{n} Voyager(s) riding with you" subtext with
+              the mockup's count badge -- accessibilityLabel keeps the words
+              a screen reader needs, since the rendered glyph alone doesn't
+              (code review-style fidelity note, same reasoning Story 4.2
+              applied to its own icon-only controls). */}
+          <View
+            testID="voyager-count-badge"
+            accessible
+            accessibilityLabel={`${markers.length} ${markers.length === 1 ? 'Voyager' : 'Voyagers'} riding with you`}
+            style={styles.mapBannerCount}
+          >
+            {/* ☺ matches mockups/key-live-map.html's .voyagers-count content
+                exactly ("3☺") -- code review finding: this was previously
+                just the bare number. */}
+            <Text style={styles.mapBannerCountLabel}>{markers.length}☺</Text>
+          </View>
+        </View>
+        {/* Subtle, not a blocking banner (AC1) -- deliberately not an
+            alarm-red treatment; a calm status note, not an error. Markers
+            keep rendering whatever `locations` last held -- useLiveLocations
+            simply stops receiving new broadcasts while disconnected, it
+            never clears them, so no extra logic is needed here to preserve
+            last-known positions. Neither state appears in the static
+            mockup, but both are binding EXPERIENCE.md behavior (State
+            Patterns: "Connectivity loss mid-drive") -- not dropped, only
+            restyled for the new banner. */}
+        {!isConnected ? (
+          <Text testID="reconnecting-note" style={styles.mapBannerReconnecting}>
+            Reconnecting…
+          </Text>
+        ) : null}
+        {hasLocationsError ? (
+          <Text testID="locations-error" style={styles.mapBannerError}>
+            Couldn&apos;t load everyone&apos;s position. Pull down or reopen the trip to try again.
+          </Text>
+        ) : null}
+      </View>
+
+      <View style={styles.mapWrapper}>
+        <MapView testID="live-map" style={styles.map} styleURL={MAP_STYLE_URL}>
+          <Camera ref={cameraRef} defaultSettings={{ zoomLevel: DEFAULT_ZOOM }} />
+          {markers.map(({ member }) => (
+            <VoyagerTrail
+              key={`trail-${member.userId}`}
+              userId={member.userId}
+              color={member.playerColor ? PlayerColors[member.playerColor] : WayfinderColors.inkSecondary}
+              points={trails[member.userId] ?? []}
+            />
+          ))}
+          {markers.map(({ member, location }) => (
+            <VoyagerMarker
+              key={member.userId}
+              member={member}
+              location={location}
+              reduceMotion={reduceMotion}
+              onPress={() => setSelectedUserId(member.userId)}
+            />
+          ))}
+        </MapView>
+
+        {/* No mockup shows this control (key-live-map.html omits it
+            entirely) -- kept in its established top-right-of-the-map
+            placement, re-skinned to the new tokens, per DESIGN.md's
+            status-pill spec (still a required, binding component; the
+            mockup gap is a mockup omission, not an instruction to remove
+            it). */}
+        <View style={styles.statusPillWrapper} pointerEvents="box-none">
           <Pressable
             testID="status-pill"
             accessibilityRole="button"
@@ -793,69 +931,30 @@ export default function ActiveVoyageScreen() {
             </Text>
           ) : null}
         </View>
+      </View>
 
-        <View testID="hud-top" style={styles.hudTop}>
-          <View style={styles.hudTopRow}>
-            <View>
-              <Text style={styles.hudDestination}>{activeVoyage.voyage.destination}</Text>
-              <Text style={styles.hudSubtext}>
-                {markers.length} {markers.length === 1 ? 'Voyager' : 'Voyagers'} riding with you
-              </Text>
-            </View>
-            <Text
-              testID="organizer-menu-button"
-              accessibilityRole="button"
-              accessibilityLabel="Organizer menu"
-              onPress={() => setShowOrganizerMenu(true)}
-              style={styles.organizerMenuButton}
-            >
-              {'⋯'}
-            </Text>
-          </View>
-          <Text style={styles.hudElapsed}>{formatElapsed(activeVoyage.voyage.createdAt, now)}</Text>
-          {/* Subtle, not a blocking banner (AC1) -- deliberately not
-              hudError's alarm-red treatment; a calm status note, not an
-              error. Markers keep rendering whatever `locations` last held --
-              useLiveLocations simply stops receiving new broadcasts while
-              disconnected, it never clears them, so no extra logic is needed
-              here to preserve last-known positions. */}
-          {!isConnected ? (
-            <Text testID="reconnecting-note" style={styles.hudReconnecting}>
-              Reconnecting…
-            </Text>
-          ) : null}
-          {hasLocationsError ? (
-            <Text testID="locations-error" style={styles.hudError}>
-              Couldn&apos;t load everyone&apos;s position. Pull down or reopen the trip to try again.
-            </Text>
-          ) : null}
+      {/* hud-bar (DESIGN.md#components, Wayfinder v2 -- Story 4.3): solid,
+          non-floating, docked to the bottom edge -- replaces the old
+          floating hud-bottom HudCard and its always-visible per-Voyager
+          roster (Story 4.3's own Scope decision: that roster is dropped,
+          not relocated, to match mockups/key-live-map.html exactly --
+          names/roles stay reachable via the Action Drawer's member list,
+          distance via the marker peek card below). */}
+      <View testID="hud-bottom" style={[styles.hudBar, { paddingBottom: insets.bottom + Spacing['3'] }]}>
+        <View style={styles.hudBarStatChip}>
+          <Text style={styles.hudBarStatLabel}>Elapsed</Text>
+          <Text style={styles.hudBarStatValue}>{formatElapsed(activeVoyage.voyage.createdAt, now)}</Text>
         </View>
-
-        <View testID="hud-bottom" style={styles.hudBottom}>
-          {members.map((member) => {
-            const distanceLabel = getDistanceLabel(member.userId);
-            return (
-              <View key={member.userId} style={styles.hudBottomRow}>
-                <Text style={styles.hudBottomName}>{member.displayName ?? 'Voyager'}</Text>
-                <View style={styles.hudBottomMeta}>
-                  <Text style={styles.hudBottomRole}>
-                    {member.role === 'organizer' ? 'Organizer' : member.travelRole === 'driving' ? 'Driving' : 'Riding'}
-                  </Text>
-                  {distanceLabel ? (
-                    <Text testID={`hud-bottom-distance-${member.userId}`} style={styles.hudBottomDistance}>
-                      {distanceLabel}
-                    </Text>
-                  ) : null}
-                </View>
-              </View>
-            );
-          })}
-        </View>
-
-        <Text testID="recenter-button" accessibilityRole="button" accessibilityLabel="Recenter" onPress={handleRecenter} style={styles.recenterButton}>
-          {'◎'}
-        </Text>
-      </SafeAreaView>
+        <Pressable
+          testID="recenter-button"
+          accessibilityRole="button"
+          accessibilityLabel="Recenter"
+          onPress={handleRecenter}
+          style={({ pressed }) => [styles.recenterButton, pressed && styles.pressedScale]}
+        >
+          <Text style={styles.recenterButtonIcon}>{'◎'}</Text>
+        </Pressable>
+      </View>
 
       {selectedMember ? (
         <View testID="marker-peek-card" style={styles.peekScrim}>
@@ -866,7 +965,7 @@ export default function ActiveVoyageScreen() {
                   testID="marker-peek-color-swatch"
                   style={[
                     styles.peekColorSwatch,
-                    { backgroundColor: selectedMember.playerColor ? PlayerColors[selectedMember.playerColor] : Colors.inkSecondary },
+                    { backgroundColor: selectedMember.playerColor ? PlayerColors[selectedMember.playerColor] : WayfinderColors.inkSecondary },
                   ]}
                 />
                 <Text style={styles.peekName}>{selectedMember.displayName ?? 'Voyager'}</Text>
@@ -912,38 +1011,199 @@ export default function ActiveVoyageScreen() {
               onPress={() => handleSetTravelRole('driving')}
             />
             {roleError ? (
-              <Text testID="role-prompt-error" style={screenStyles.error}>
+              <Text testID="role-prompt-error" style={styles.peekError}>
                 {roleError}
               </Text>
             ) : null}
           </View>
         </View>
       ) : null}
+      </View>
 
-      {/* A flush-triggered success/conflict toast (Story 3.5) can legitimately
-          fire while the user is looking at the map, not just from within the
-          Organizer menu -- the organizer-menu block above keeps its own copy
-          of this for its existing synchronous-action toasts. */}
+      <ActionDrawer
+        visible={showOrganizerMenu}
+        onClose={handleCloseDrawer}
+        onClosed={handleDrawerClosed}
+        reduceMotion={reduceMotion}
+        closeButtonTestID="organizer-menu-close-button"
+      >
+        {drawerStep === 'menu' ? (
+          <>
+            <Text style={styles.drawerTitle}>Voyage actions</Text>
+            <Text style={styles.drawerSubtitle}>You&apos;re on your way to {activeVoyage.voyage.destination}.</Text>
+            {activeVoyage.voyage.joinCode ? (
+              <DrawerRow
+                testID="invite-more-voyagers-button"
+                label="Invite More Voyagers"
+                onPress={() => {
+                  markVoyageStarted();
+                  router.push({
+                    pathname: '/join-code',
+                    params: { destination: activeVoyage.voyage.destination, joinCode: activeVoyage.voyage.joinCode! },
+                  });
+                }}
+              />
+            ) : null}
+            {isOrganizer ? <DrawerRow testID="end-voyage-button" label="End Voyage" variant="danger" onPress={() => setShowConfirm(true)} /> : null}
+
+            <View testID="drawer-member-list" style={styles.drawerMemberList}>
+              {members.map((member) => (
+                <View key={member.userId} style={styles.drawerMemberRow}>
+                  <Text style={styles.drawerMemberName}>{member.displayName ?? 'Voyager'}</Text>
+                  <View style={styles.drawerMemberRowActions}>
+                    {/* Code review finding: this was Organizer-only before,
+                        silently dropping the only remaining UI surface for
+                        a member's Driving/Riding status once hud-bottom's
+                        roster was removed -- mirrors marker-peek-card's own
+                        existing role/travelRole precedent. */}
+                    <Text testID={`drawer-member-role-${member.userId}`} style={styles.drawerMemberRoleLabel}>
+                      {member.role === 'organizer' ? 'Organizer' : member.travelRole === 'driving' ? 'Driving' : 'Riding'}
+                    </Text>
+                    {member.role !== 'organizer' && isOrganizer ? (
+                      <Pressable
+                        testID={`grant-organizer-button-${member.userId}`}
+                        accessibilityRole="button"
+                        accessibilityState={{ disabled: grantingUserIds.has(member.userId) }}
+                        disabled={grantingUserIds.has(member.userId)}
+                        onPress={() => handleGrantOrganizer(member)}
+                        style={[styles.drawerGrantButton, grantingUserIds.has(member.userId) && styles.drawerRowDisabled]}
+                      >
+                        <Text style={styles.drawerGrantButtonLabel}>Grant Organizer</Text>
+                      </Pressable>
+                    ) : null}
+                    {isOrganizer && !isSelf(member.userId) ? (
+                      <Text
+                        testID={`remove-voyager-button-${member.userId}`}
+                        accessibilityRole="button"
+                        accessibilityState={{ disabled: false }}
+                        onPress={() => setRemoveTarget(member)}
+                        style={styles.drawerRemoveLabel}
+                      >
+                        Remove
+                      </Text>
+                    ) : null}
+                  </View>
+                </View>
+              ))}
+            </View>
+            {membersError ? (
+              <Text testID="voyager-list-error" style={styles.drawerError}>
+                {membersError}
+              </Text>
+            ) : null}
+            {membersError && members.length === 0 ? (
+              <DrawerRow testID="voyager-list-retry-button" label="Retry" onPress={handleRetryMembers} />
+            ) : null}
+            <Text style={styles.drawerFooter}>Every journey tells a story.</Text>
+          </>
+        ) : null}
+
+        {drawerStep === 'end-voyage-confirm' ? (
+          <>
+            <Text style={styles.drawerEyebrow}>End Voyage</Text>
+            <Text style={styles.drawerConfirmTitle}>Ready to close out the trip?</Text>
+            <Text style={styles.drawerConfirmSub}>
+              New recording stops right away. Anything already in progress finishes normally and makes it into the story.
+            </Text>
+            {/* variant="primary" (not "danger") -- this is the ceremonial,
+                primary confirm action; EXPERIENCE.md UJ-4 explicitly
+                contrasts it with Remove Voyager's destructive treatment
+                below (code review finding). */}
+            <DrawerRow testID="confirm-end-voyage-button" label="End Voyage" variant="primary" disabled={isSubmitting} onPress={handleEndVoyage} />
+            <DrawerRow
+              testID="keep-going-button"
+              label="Keep going"
+              disabled={isSubmitting}
+              onPress={() => {
+                setShowConfirm(false);
+                setError(null);
+              }}
+            />
+            {error ? (
+              <Text testID="end-voyage-error" style={styles.drawerError}>
+                {error}
+              </Text>
+            ) : null}
+          </>
+        ) : null}
+
+        {drawerStep === 'remove-confirm' && removeTarget ? (
+          <>
+            <Text style={styles.drawerConfirmTitle}>Remove {removeTarget.displayName ?? 'them'} from this Voyage?</Text>
+            <DrawerRow testID="confirm-remove-voyager-button" label="Remove" variant="danger" disabled={isRemoving} onPress={handleRemoveVoyager} />
+            <DrawerRow
+              testID="keep-voyager-button"
+              label="Never mind"
+              disabled={isRemoving}
+              onPress={() => {
+                setRemoveTarget(null);
+                setRemoveError(null);
+              }}
+            />
+            {removeError ? (
+              <Text testID="remove-voyager-error" style={styles.drawerError}>
+                {removeError}
+              </Text>
+            ) : null}
+          </>
+        ) : null}
+      </ActionDrawer>
+      </Animated.View>
+
+      {/* Single toast for both synchronous handler successes (e.g. Grant
+          Organizer) and async flush-triggered results (Story 3.5) -- the
+          action drawer is now an overlay within this same persistent tree
+          (not a separate full-screen), so one render site covers both,
+          replacing the old organizer-menu's own separate copy. Grant
+          Organizer's toast in particular fires almost exclusively while the
+          drawer is open (it's the only place to trigger it), so this needs
+          an explicit zIndex above the drawer's own (scrim 20 / panel 21) --
+          without it, the toast has no stacking guarantee and can render
+          invisibly behind the open drawer (code review finding). */}
       {toastMessage ? (
-        <Toast testID="outbox-toast" message={toastMessage} onDismiss={() => setToastMessage(null)} />
+        <View style={styles.toastWrapper} pointerEvents="box-none">
+          <Toast testID="outbox-toast" message={toastMessage} onDismiss={() => setToastMessage(null)} />
+        </View>
+      ) : null}
+
+      {/* "Cut to gameplay" flash (EXPERIENCE.md#Motion & Transitions, Story
+          4.3) -- the topmost layer while playing, above the toast's own
+          zIndex 30. pointerEvents="none": nothing here is interactive, and
+          it must never block a tap on what's revealed underneath as it
+          fades. Not conditionally unmounted once its own animation finishes
+          -- flashOpacity's own keyframe stops (0, 1, 0) already end at fully
+          transparent, so it simply sits inert afterward, the same way
+          action-drawer.tsx's scrim/panel don't need special-case cleanup
+          once settled at rest. */}
+      {isEntryTransitionActive ? (
+        <Animated.View
+          testID="cut-to-gameplay-flash"
+          pointerEvents="none"
+          style={[styles.cutToGameplayFlash, { opacity: flashOpacity, transform: [{ scale: flashScale }] }]}
+        >
+          <Text style={styles.cutToGameplayFlashLabel} numberOfLines={1}>
+            {activeVoyage.voyage.destination}
+          </Text>
+        </Animated.View>
       ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  eyebrow: {
-    color: Colors.inkSecondary,
-    fontFamily: Typography.label.fontFamily,
-    fontSize: Typography.label.fontSize,
-    fontWeight: Typography.label.fontWeight,
-    lineHeight: Typography.label.lineHeight,
-    letterSpacing: Typography.label.letterSpacing,
-    textTransform: 'uppercase',
-  },
+  // Still used by role-prompt (untouched by this story's behavior). Colors
+  // switched to WayfinderColors as part of Task 6's peekCard re-skin --
+  // role-prompt renders inside peekCard, which is now a solid white
+  // (surface-primary) card; the old Colors.inkPrimary/inkSecondary are
+  // Night Drive's light-on-dark text tones and would be nearly invisible on
+  // a white background. The old showConfirm/showOrganizerMenu screens' own
+  // use of these two (plus the removed `eyebrow` style, which role-prompt
+  // never referenced) moved into the new drawer's own drawer*-prefixed
+  // styles below instead (code review finding: an earlier version of this
+  // comment incorrectly attributed eyebrow's continued use to role-prompt).
   confirmTitle: {
     marginTop: Spacing['3'],
-    color: Colors.inkPrimary,
+    color: WayfinderColors.inkPrimary,
     fontFamily: Typography.display.fontFamily,
     fontSize: Typography.display.fontSize,
     fontWeight: Typography.display.fontWeight,
@@ -951,64 +1211,200 @@ const styles = StyleSheet.create({
   },
   confirmSub: {
     marginTop: Spacing['4'],
-    color: Colors.inkSecondary,
+    color: WayfinderColors.inkSecondary,
     fontFamily: Typography.body.fontFamily,
     fontSize: Typography.body.fontSize,
     lineHeight: Typography.body.lineHeight,
   },
-  memberList: {
-    width: '100%',
-    gap: Spacing['3'],
+  pressedScale: {
+    transform: [{ scale: 0.9 }],
   },
-  memberRow: {
-    flexDirection: 'row',
+  hamburgerButton: {
+    width: Hamburger.size,
+    height: Hamburger.size,
+    borderRadius: Hamburger.radius,
+    backgroundColor: Hamburger.background,
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Spacing['3'],
+    justifyContent: 'center',
   },
-  memberName: {
-    color: Colors.inkPrimary,
+  hamburgerIcon: {
+    color: Hamburger.iconColor,
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  drawerTitle: {
+    color: ActionDrawerTokens.ink,
+    fontFamily: Typography.headline.fontFamily,
+    fontSize: 19,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  drawerSubtitle: {
+    color: ActionDrawerTokens.inkSecondary,
     fontFamily: Typography.body.fontFamily,
-    fontSize: Typography.body.fontSize,
+    fontSize: 12,
+    marginBottom: 18,
   },
-  memberRowActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing['3'],
-  },
-  memberRoleLabel: {
-    color: Colors.inkSecondary,
+  drawerEyebrow: {
+    color: ActionDrawerTokens.inkSecondary,
     fontFamily: Typography.label.fontFamily,
     fontSize: Typography.label.fontSize,
     fontWeight: Typography.label.fontWeight,
     letterSpacing: Typography.label.letterSpacing,
     textTransform: 'uppercase',
   },
-  removeLabel: {
-    color: Colors.error,
+  drawerConfirmTitle: {
+    marginTop: Spacing['2'],
+    color: ActionDrawerTokens.ink,
+    fontFamily: Typography.headline.fontFamily,
+    fontSize: Typography.headline.fontSize,
+    fontWeight: Typography.headline.fontWeight,
+  },
+  drawerConfirmSub: {
+    marginTop: Spacing['3'],
+    marginBottom: Spacing['3'],
+    color: ActionDrawerTokens.inkSecondary,
     fontFamily: Typography.body.fontFamily,
     fontSize: Typography.body.fontSize,
+  },
+  drawerMemberList: {
+    width: '100%',
+    gap: Spacing['3'],
+    marginTop: Spacing['3'],
+  },
+  drawerMemberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing['2'],
+  },
+  drawerMemberName: {
+    flexShrink: 1,
+    color: ActionDrawerTokens.ink,
+    fontFamily: Typography.body.fontFamily,
+    fontSize: 14,
+  },
+  drawerMemberRowActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing['2'],
+  },
+  drawerMemberRoleLabel: {
+    color: ActionDrawerTokens.inkSecondary,
+    fontFamily: Typography.label.fontFamily,
+    fontSize: 11,
+    fontWeight: Typography.label.fontWeight,
+    textTransform: 'uppercase',
+  },
+  drawerRemoveLabel: {
+    color: ActionDrawerTokens.rowBackgroundDangerText,
+    fontFamily: Typography.body.fontFamily,
+    fontSize: 13,
+    // Restored to Spacing['3'] (was shrunk to Spacing['1'] -- a real
+    // touch-target regression against EXPERIENCE.md's Accessibility Floor
+    // for a destructive, hard-to-undo action; code review finding).
     padding: Spacing['3'],
   },
-  map: {
+  drawerError: {
+    marginTop: Spacing['2'],
+    color: ActionDrawerTokens.rowBackgroundDangerText,
+    fontFamily: Typography.body.fontFamily,
+    fontSize: Typography.body.fontSize,
+  },
+  drawerFooter: {
+    marginTop: Spacing['6'],
+    color: ActionDrawerTokens.footerText,
+    fontSize: 11,
+    fontStyle: 'italic',
+  },
+  // Values transcribed directly from the mockup's real .drawer-row CSS, not
+  // approximated to the Rounded/Spacing scale (code review finding -- see
+  // ActionDrawer token's own comment in design-tokens.ts).
+  drawerRow: {
+    borderRadius: ActionDrawerTokens.rowRadius,
+    backgroundColor: ActionDrawerTokens.rowBackground,
+    paddingVertical: ActionDrawerTokens.rowPaddingVertical,
+    paddingHorizontal: ActionDrawerTokens.rowPaddingHorizontal,
+    marginBottom: ActionDrawerTokens.rowMarginBottom,
+  },
+  drawerRowPrimary: {
+    backgroundColor: ActionDrawerTokens.rowBackgroundPrimary,
+  },
+  drawerRowDanger: {
+    backgroundColor: ActionDrawerTokens.rowBackgroundDanger,
+  },
+  drawerRowDisabled: {
+    opacity: 0.5,
+  },
+  drawerRowLabel: {
+    color: ActionDrawerTokens.ink,
+    fontFamily: Typography.body.fontFamily,
+    fontSize: ActionDrawerTokens.rowFontSize,
+    fontWeight: '600',
+  },
+  drawerRowLabelPrimary: {
+    color: ActionDrawerTokens.rowBackgroundPrimaryText,
+  },
+  drawerRowLabelDanger: {
+    color: ActionDrawerTokens.rowBackgroundDangerText,
+  },
+  drawerGrantButton: {
+    borderRadius: ActionDrawerTokens.rowRadius,
+    backgroundColor: ActionDrawerTokens.rowBackgroundPrimary,
+    paddingVertical: Spacing['1'],
+    paddingHorizontal: Spacing['2'],
+  },
+  drawerGrantButtonLabel: {
+    color: ActionDrawerTokens.rowBackgroundPrimaryText,
+    fontFamily: Typography.label.fontFamily,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  rootContainer: {
+    flex: 1,
+    backgroundColor: WayfinderColors.surfaceSecondary,
+  },
+  mainContentGroup: {
     flex: 1,
   },
-  skyStrip: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: Colors.surfaceMidnight,
-    zIndex: 1,
-  },
-  hudOverlay: {
+  cutToGameplayFlash: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    justifyContent: 'space-between',
+    zIndex: 40,
+    backgroundColor: WayfinderColors.accentPrimary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cutToGameplayFlashLabel: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: 3,
+    textTransform: 'uppercase',
+    opacity: 0.9,
+  },
+  mainContent: {
+    flex: 1,
+  },
+  toastWrapper: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 30,
+    justifyContent: 'flex-end',
     padding: Spacing.gutter,
+  },
+  mapWrapper: {
+    flex: 1,
+    position: 'relative',
+  },
+  map: {
+    flex: 1,
   },
   statusPillWrapper: {
     position: 'absolute',
@@ -1024,20 +1420,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing['4'],
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
+    borderWidth: 2,
   },
   statusPillRiding: {
     backgroundColor: StatusPill.riding.background,
     borderColor: StatusPill.riding.borderColor,
   },
+  // No glow -- Wayfinder has no glow treatment anywhere (DESIGN.md#Elevation
+  // & Depth); the old shadow*/elevation glow properties are gone, not
+  // re-colored.
   statusPillDriving: {
     backgroundColor: StatusPill.driving.background,
     borderColor: StatusPill.driving.background,
-    shadowColor: StatusPill.driving.glowColor,
-    shadowOpacity: 1,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 8,
   },
   statusPillLabel: {
     fontFamily: Typography.label.fontFamily,
@@ -1047,117 +1441,128 @@ const styles = StyleSheet.create({
   statusPillErrorText: {
     maxWidth: 140,
     textAlign: 'right',
-    color: Colors.error,
+    color: WayfinderColors.error,
     fontFamily: Typography.label.fontFamily,
     fontSize: Typography.label.fontSize,
   },
-  hudTop: {
-    backgroundColor: HudCard.background,
-    borderRadius: HudCard.radius,
-    borderWidth: 1,
-    borderColor: HudCard.borderColor,
-    padding: Spacing['4'],
-    marginRight: STATUS_PILL_CLEARANCE,
-    gap: Spacing['2'],
+  // map-banner (mockups/key-live-map.html .banner) -- solid, non-floating,
+  // docked to the top. paddingTop is set inline (insets.top + Spacing['3']).
+  mapBanner: {
+    minHeight: MapBanner.height,
+    backgroundColor: MapBanner.background,
+    justifyContent: 'center',
+    paddingHorizontal: Spacing['4'],
+    paddingBottom: Spacing['3'],
+    gap: Spacing['1'],
   },
-  hudTopRow: {
+  mapBannerRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    gap: Spacing['3'],
   },
-  hudDestination: {
-    color: Colors.inkPrimary,
-    fontFamily: Typography.headline.fontFamily,
-    fontSize: Typography.headline.fontSize,
-    fontWeight: Typography.headline.fontWeight,
+  mapBannerDestWrap: {
+    flex: 1,
   },
-  hudSubtext: {
-    color: Colors.inkSecondary,
-    fontFamily: Typography.body.fontFamily,
-    fontSize: Typography.label.fontSize,
-  },
-  organizerMenuButton: {
-    color: Colors.inkPrimary,
-    fontSize: Typography.headline.fontSize,
-    padding: Spacing['2'],
-  },
-  hudElapsed: {
-    color: Colors.inkPrimary,
-    fontFamily: Typography.statNumeral.fontFamily,
-    fontSize: Typography.statNumeral.fontSize * 0.5,
-    fontWeight: Typography.statNumeral.fontWeight,
-  },
-  hudError: {
-    color: Colors.error,
-    fontFamily: Typography.label.fontFamily,
-    fontSize: Typography.label.fontSize,
-  },
-  hudReconnecting: {
-    color: Colors.inkSecondary,
-    fontFamily: Typography.label.fontFamily,
-    fontSize: Typography.label.fontSize,
-  },
-  hudBottom: {
-    backgroundColor: HudCard.background,
-    borderRadius: HudCard.radius,
-    borderWidth: 1,
-    borderColor: HudCard.borderColor,
-    padding: Spacing['4'],
-    marginRight: RECENTER_BUTTON_CLEARANCE,
-    gap: Spacing['2'],
-  },
-  hudBottomRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: Spacing['1'],
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: HudCard.borderColor,
-  },
-  hudBottomName: {
-    color: Colors.inkPrimary,
-    fontFamily: Typography.body.fontFamily,
-    fontSize: Typography.label.fontSize,
-  },
-  hudBottomMeta: {
-    alignItems: 'flex-end',
-  },
-  hudBottomRole: {
-    color: Colors.inkSecondary,
-    fontFamily: Typography.label.fontFamily,
-    fontSize: Typography.label.fontSize,
-  },
-  hudBottomDistance: {
-    color: Colors.inkSecondary,
+  mapBannerEyebrow: {
+    color: MapBanner.eyebrowColor,
     fontFamily: Typography.label.fontFamily,
     fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+  },
+  mapBannerDestRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing['2'],
+  },
+  mapBannerPinIcon: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: MapBanner.pinIconBackground,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mapBannerPinIconLabel: {
+    fontSize: 12,
+  },
+  mapBannerDestName: {
+    flex: 1,
+    color: MapBanner.destNameColor,
+    fontFamily: Typography.headline.fontFamily,
+    fontSize: 24,
+    fontWeight: '700',
+  },
+  // Reuses Hamburger.size/radius, not a coincidence -- the mockup's
+  // .voyagers-count measures identically to .hamburger (42x42, 12px radius),
+  // so this borrows those dimension fields rather than duplicating the same
+  // two literals in a new token.
+  mapBannerCount: {
+    width: Hamburger.size,
+    height: Hamburger.size,
+    borderRadius: Hamburger.radius,
+    backgroundColor: MapBanner.voyagerCountBackground,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mapBannerCountLabel: {
+    color: '#FFFFFF',
+    fontFamily: Typography.label.fontFamily,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  mapBannerReconnecting: {
+    color: MapBanner.eyebrowColor,
+    fontFamily: Typography.label.fontFamily,
+    fontSize: Typography.label.fontSize,
+  },
+  mapBannerError: {
+    color: '#FFFFFF',
+    fontFamily: Typography.label.fontFamily,
+    fontSize: Typography.label.fontSize,
+  },
+  // hud-bar (mockups/key-live-map.html .hud) -- solid, non-floating, docked
+  // to the bottom. paddingBottom is set inline (insets.bottom + Spacing['3']).
+  hudBar: {
+    minHeight: HudBar.height,
+    backgroundColor: HudBar.background,
+    borderTopWidth: 1,
+    borderTopColor: HudBar.borderTopColor,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.gutter,
+    paddingTop: Spacing['3'],
+  },
+  hudBarStatChip: {
+    gap: Spacing['1'],
+  },
+  hudBarStatLabel: {
+    color: WayfinderColors.inkSecondary,
+    fontFamily: Typography.label.fontFamily,
+    fontSize: 10.5,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+  },
+  hudBarStatValue: {
+    color: WayfinderColors.inkPrimary,
+    fontFamily: Typography.statNumeral.fontFamily,
+    fontSize: 26,
+    fontWeight: '700',
   },
   recenterButton: {
-    // Absolute, not a normal-flow flex child: hudOverlay uses `justifyContent:
-    // 'space-between'` to pin its first/last in-flow children to the top and
-    // bottom edges -- with this button previously a third in-flow child
-    // *after* hud-bottom, space-between pinned hud-top to the top and this
-    // button to the bottom correctly, but floated hud-bottom (the middle
-    // item) in the vertical *center* of the screen instead of at the bottom,
-    // since space-between distributes ALL in-flow children evenly, not just
-    // the first/last (verified against a real screenshot: the roster card
-    // was floating mid-map, not pinned above this button). Taking this
-    // button out of the flex flow entirely leaves hud-top/hud-bottom as the
-    // only two in-flow children, which space-between now correctly pins to
-    // the true top and bottom.
-    position: 'absolute',
-    bottom: Spacing.gutter,
-    right: Spacing.gutter,
-    minHeight: 48,
-    minWidth: 48,
-    borderRadius: 24,
-    textAlign: 'center',
-    textAlignVertical: 'center',
-    backgroundColor: HudCard.background,
-    borderWidth: 1,
-    borderColor: HudCard.borderColor,
-    color: Colors.inkPrimary,
-    fontSize: Typography.headline.fontSize,
-    overflow: 'hidden',
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: HudBar.recenterBackground,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recenterButtonIcon: {
+    color: '#FFFFFF',
+    fontSize: 22,
   },
   markerHitRegion: {
     width: MapMarker.hitRegion,
@@ -1180,53 +1585,98 @@ const styles = StyleSheet.create({
     borderWidth: MapMarker.ringWidth,
     backgroundColor: 'transparent',
   },
+  // Fill is the per-Voyager player color itself, passed inline
+  // (backgroundColor) -- a structural inversion from Night Drive's neutral-
+  // fill/colored-ring treatment (see design-tokens.ts's MapMarker comment).
+  // shadowRadius/shadowOpacity below are a literal transcription of the
+  // mockup's `.avatar` box-shadow (`0 2px 4px 0 #10182833`) -- a soft,
+  // blurred shadow, which reads as in tension with DESIGN.md's Elevation &
+  // Depth section ("flat offset shadows... not soft drop shadows"). Per
+  // this story's own fidelity rule, the mockup wins on *how it looks*; this
+  // is the same class of DESIGN.md/mockup drift already flagged for
+  // MapMarker.size (40px token vs. the mockup's real 44px).
   markerDot: {
     width: MapMarker.size,
     height: MapMarker.size,
     borderRadius: MapMarker.radius,
     borderWidth: MapMarker.ringWidth,
-    backgroundColor: MapMarker.fill,
+    borderColor: MapMarker.ringBorderColor,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: WayfinderColors.inkPrimary,
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
   },
   markerInitial: {
-    color: Colors.inkPrimary,
+    color: '#FFFFFF',
     fontFamily: Typography.label.fontFamily,
     fontSize: Typography.label.fontSize,
     fontWeight: Typography.label.fontWeight,
   },
+  // Always ink-primary, not per-player (mockups/key-live-map.html .chevron
+  // is a fixed dark triangle regardless of marker color).
+  // Dimensions match the mockup's real .chevron exactly (6/6/10px,
+  // top:-12px) -- corrected from the Night Drive original's 5/5/8px/-6px
+  // approximation as part of this story's re-skin, not just its color.
   markerChevron: {
     position: 'absolute',
-    top: -6,
+    top: -12,
     width: 0,
     height: 0,
-    borderLeftWidth: 5,
-    borderRightWidth: 5,
-    borderBottomWidth: 8,
+    borderLeftWidth: 6,
+    borderRightWidth: 6,
+    borderBottomWidth: 10,
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
   },
   markerLabel: {
     position: 'absolute',
-    bottom: -16,
-    color: Colors.inkPrimary,
-    fontSize: 10,
+    bottom: -18,
+    backgroundColor: MapMarker.chevronColor,
+    color: '#FFFFFF',
+    fontSize: 10.5,
+    fontWeight: '700',
+    paddingHorizontal: Spacing['2'],
+    paddingVertical: 2,
+    borderRadius: 8,
+    overflow: 'hidden',
   },
+  // Solid navy scrim (reusing action-drawer's own scrim value), not a
+  // translucent overlay -- Wayfinder has no transparency anywhere (Story
+  // 4.3's Scope decision; no mockup exists for this overlay, re-skinned by
+  // analogy to action-drawer's established solid-scrim pattern).
   peekScrim: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: `${Colors.surfaceMidnight}8C`,
+    backgroundColor: ActionDrawerTokens.scrimColor,
     justifyContent: 'flex-end',
   },
+  // shadow* below is DESIGN.md's `card` token's flat offset shadow
+  // (`0 2px 0 border-hairline`) -- code review finding: this was missing
+  // entirely despite Task 6's own explicit "flat shadow, no blur/glow"
+  // instruction. Direction flipped to -2 (upward), not the token's literal
+  // +2: unlike a normal card, peekCard is anchored to the bottom screen
+  // edge with only its top edge exposed (rounded corners are top-only), so
+  // the shadow needs to read at that exposed edge, not the hidden bottom
+  // one.
   peekCard: {
-    backgroundColor: HudCard.background,
-    borderTopLeftRadius: HudCard.radius,
-    borderTopRightRadius: HudCard.radius,
+    backgroundColor: WayfinderColors.surfacePrimary,
+    borderTopLeftRadius: Rounded.lg,
+    borderTopRightRadius: Rounded.lg,
+    borderTopWidth: 1,
+    borderColor: WayfinderColors.borderHairline,
     padding: Spacing['5'],
     gap: Spacing['2'],
+    shadowColor: WayfinderColors.borderHairline,
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 2,
   },
   peekHeaderRow: {
     flexDirection: 'row',
@@ -1244,19 +1694,24 @@ const styles = StyleSheet.create({
     borderRadius: 7,
   },
   peekName: {
-    color: Colors.inkPrimary,
+    color: WayfinderColors.inkPrimary,
     fontFamily: Typography.headline.fontFamily,
     fontSize: Typography.headline.fontSize,
     fontWeight: Typography.headline.fontWeight,
   },
   peekClose: {
-    color: Colors.inkSecondary,
+    color: WayfinderColors.inkSecondary,
     fontSize: Typography.headline.fontSize,
     padding: Spacing['2'],
   },
   peekStatus: {
-    color: Colors.inkSecondary,
+    color: WayfinderColors.inkSecondary,
     fontFamily: Typography.label.fontFamily,
     fontSize: Typography.label.fontSize,
+  },
+  peekError: {
+    color: WayfinderColors.error,
+    fontFamily: Typography.body.fontFamily,
+    fontSize: Typography.body.fontSize,
   },
 });

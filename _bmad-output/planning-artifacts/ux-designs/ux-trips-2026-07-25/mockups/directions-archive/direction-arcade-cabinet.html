@@ -1,0 +1,318 @@
+<title>Voylo — Direction: Arcade Cabinet</title>
+<style>
+/*
+  palette: arcade-cabinet
+  hot magenta         #FF2E63   (destination banner, End Voyage row)
+  electric purple     #7B2FFF   (drawer fill, background base)
+  acid green          #C4FF3D   (elapsed-time chip, Meera marker, highlight text)
+  cyber yellow        #FFEC00   (Chintan marker / crown, callouts)
+  deep violet base    #1A0033   (screen background / sunburst dark stripes)
+  paper white         #FFFFFF   (text on dark, drawer rows)
+  ink                 #14001F   (outlines)
+  player - Chintan (Organizer)  #FFEC00  (cyber yellow)
+  player - Meera                #C4FF3D  (acid green)
+  player - Sam                  #FF2E63  (hot magenta)
+
+  Font substitutions (web-safe stand-ins for the brand type system):
+  display  -> "Impact", "Arial Black", "Segoe UI Black", system-ui, sans-serif  (stand-in for Clash Display: bold geometric headline face, pushed to max size here)
+  body     -> "Segoe UI", "Helvetica Neue", Arial, sans-serif                   (stand-in for General Sans: functional label/body face)
+  numeral  -> "Consolas", "SF Mono", "Courier New", monospace                   (stand-in for Space Mono: tabular numerals for stats)
+*/
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #0A0014;
+  color: #fff;
+  font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  padding: 32px;
+}
+.rationale {
+  max-width: 900px;
+  margin: 0 auto 32px;
+  background: #FFEC00;
+  border-radius: 4px;
+  padding: 22px 26px;
+  transform: skewX(-1deg);
+}
+.rationale h1 {
+  font-family: "Impact", "Arial Black", "Segoe UI Black", system-ui, sans-serif;
+  font-size: 28px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+  color: #14001F;
+}
+.rationale p { font-size: 15px; line-height: 1.5; color: #14001F; font-weight: 600; }
+.stage { display: flex; gap: 40px; justify-content: center; flex-wrap: wrap; align-items: flex-start; }
+.frame-block { text-align: center; }
+.frame-label {
+  color: #C4FF3D;
+  font-family: "Impact", "Arial Black", "Segoe UI Black", system-ui, sans-serif;
+  font-size: 14px; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 14px;
+}
+.phone {
+  width: 390px; height: 844px;
+  border-radius: 40px;
+  border: 8px solid #14001F;
+  background: #14001F;
+  position: relative;
+  overflow: hidden;
+}
+.screen {
+  position: absolute; inset: 0;
+  border-radius: 32px;
+  overflow: hidden;
+  background: #1A0033;
+  background-image: repeating-conic-gradient(#22004A 0deg 10deg, #1A0033 10deg 20deg);
+}
+
+/* ---- Top banner ---- */
+.banner {
+  position: absolute; top: 0; left: 0; right: 0;
+  height: 150px;
+  background: #FF2E63;
+  z-index: 5;
+  padding: 14px 16px 10px;
+}
+.banner-row { display: flex; align-items: center; justify-content: space-between; }
+.hamburger {
+  width: 46px; height: 46px;
+  background: #14001F;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; color: #FFEC00; font-weight: 900;
+}
+.badge {
+  background: #FFEC00;
+  color: #14001F;
+  font-size: 11px;
+  font-weight: 900;
+  padding: 4px 10px;
+  border-radius: 20px;
+  letter-spacing: 1px;
+}
+.dest-name {
+  font-family: "Impact", "Arial Black", "Segoe UI Black", system-ui, sans-serif;
+  color: #fff;
+  font-size: 46px;
+  line-height: 0.95;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 8px;
+  text-shadow: 3px 3px 0 #14001F;
+}
+.dest-sub { color: #FFC4D6; font-size: 12px; font-weight: 700; margin-top: 4px; letter-spacing: 0.5px; }
+
+/* ---- Map area ---- */
+.map {
+  position: absolute; top: 150px; left: 0; right: 0; bottom: 116px;
+  overflow: hidden;
+}
+.lake {
+  position: absolute;
+  width: 260px; height: 200px;
+  left: -40px; top: 70px;
+  border-radius: 50%;
+  background: #00B4D8;
+  box-shadow: inset 0 0 0 6px #7B2FFF;
+}
+.road {
+  position: absolute;
+  background: #FFEC00;
+}
+.road-1 { width: 30px; height: 520px; top: -20px; right: 80px; transform: rotate(10deg); }
+.road-2 { width: 24px; height: 300px; bottom: 30px; left: 30px; transform: rotate(-20deg); }
+.trail-dot { position: absolute; border-radius: 50%; }
+.marker { position: absolute; z-index: 4; text-align: center; }
+.avatar {
+  width: 52px; height: 52px;
+  border-radius: 50%;
+  border: 4px solid #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-family: "Impact", "Arial Black", "Segoe UI Black", system-ui, sans-serif;
+  color: #14001F; font-size: 20px;
+  position: relative;
+}
+.chevron {
+  position: absolute; width: 0; height: 0;
+  border-left: 8px solid transparent; border-right: 8px solid transparent;
+  border-bottom: 13px solid #fff;
+}
+.tag {
+  margin-top: 6px;
+  background: #fff;
+  border-radius: 20px;
+  font-size: 11.5px; font-weight: 900;
+  padding: 3px 10px;
+  display: inline-block;
+  color: #14001F;
+  text-transform: uppercase;
+}
+.crown-badge { position: absolute; top: -18px; left: 50%; transform: translateX(-50%); font-size: 18px; }
+
+/* ---- Bottom HUD ---- */
+.hud {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  height: 116px;
+  background: #14001F;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 20px;
+}
+.stat-chip {
+  background: #C4FF3D;
+  border-radius: 14px;
+  padding: 8px 18px;
+  transform: skewX(-4deg);
+}
+.stat-inner { transform: skewX(4deg); }
+.stat-label { font-size: 10px; font-weight: 900; letter-spacing: 1.5px; color: #14001F; }
+.stat-value {
+  font-family: "Consolas", "SF Mono", "Courier New", monospace;
+  font-size: 30px; font-weight: 700; color: #14001F;
+}
+.recenter-btn {
+  width: 64px; height: 64px;
+  border-radius: 50%;
+  background: #FF2E63;
+  border: 4px solid #fff;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 26px;
+}
+
+/* ---- Drawer (state 2) ---- */
+.scrim { position: absolute; inset: 0; background: #14001F; }
+.drawer {
+  position: absolute; top: 0; bottom: 0; right: 0;
+  width: 290px;
+  background: #7B2FFF;
+  padding: 30px 18px;
+  z-index: 10;
+  border-left: 6px solid #FFEC00;
+}
+.drawer-close {
+  width: 40px; height: 40px; border-radius: 10px;
+  background: #FFEC00;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 900; color: #14001F;
+  margin-bottom: 22px;
+}
+.drawer-title {
+  font-family: "Impact", "Arial Black", "Segoe UI Black", system-ui, sans-serif;
+  color: #FFEC00; font-size: 28px; text-transform: uppercase; margin-bottom: 18px;
+}
+.drawer-row {
+  background: #fff;
+  border-radius: 14px;
+  padding: 14px 14px;
+  margin-bottom: 12px;
+  display: flex; align-items: center; gap: 10px;
+  font-weight: 900; font-size: 14px; color: #14001F;
+  text-transform: uppercase;
+}
+.drawer-row.gold { background: #FFEC00; }
+.drawer-row.green { background: #C4FF3D; }
+.drawer-row.danger { background: #FF2E63; color: #fff; }
+.row-icon { font-size: 18px; }
+.drawer-footer {
+  margin-top: 24px; color: #E8D4FF; font-size: 12px; font-style: italic; font-weight: 700;
+}
+</style>
+
+<div class="rationale">
+  <h1>Direction: Arcade Cabinet</h1>
+  <p>The maximalist swing: type sized to fill the banner, a spinning-sunburst map field, skewed chips and rows that feel like they're mid-animation, and the boldest color blocking of the four. This is the closest to an actual arcade-cabinet marquee — meant to feel loud, exciting, and unmistakably a game.</p>
+</div>
+
+<div class="stage">
+  <div class="frame-block">
+    <div class="frame-label">Live Map</div>
+    <div class="phone"><div class="screen">
+      <div class="banner">
+        <div class="banner-row">
+          <div class="hamburger">&#9776;</div>
+          <div class="badge">LIVE &#9679;</div>
+        </div>
+        <div class="dest-name">Lake<br>Tahoe</div>
+        <div class="dest-sub">3 Voyagers on the road</div>
+      </div>
+
+      <div class="map">
+        <div class="lake"></div>
+        <div class="road road-1"></div>
+        <div class="road road-2"></div>
+
+        <!-- Chintan - organizer -->
+        <div class="marker" style="top:180px; left:150px;">
+          <div class="crown-badge">&#128081;</div>
+          <div class="trail-dot" style="width:16px;height:16px;background:#FFF48A;left:38px;top:36px;"></div>
+          <div class="trail-dot" style="width:11px;height:11px;background:#FFF9C2;left:48px;top:47px;"></div>
+          <div class="avatar" style="background:#FFEC00;">
+            <div class="chevron" style="top:-15px; transform:rotate(20deg);"></div>
+            C
+          </div>
+          <div class="tag">Chintan</div>
+        </div>
+
+        <!-- Meera -->
+        <div class="marker" style="top:280px; left:60px;">
+          <div class="trail-dot" style="width:16px;height:16px;background:#DBFF9C;left:36px;top:-8px;"></div>
+          <div class="trail-dot" style="width:11px;height:11px;background:#EBFFC7;left:46px;top:-16px;"></div>
+          <div class="avatar" style="background:#C4FF3D;">
+            <div class="chevron" style="top:-15px; transform:rotate(-40deg);"></div>
+            M
+          </div>
+          <div class="tag">Meera</div>
+        </div>
+
+        <!-- Sam -->
+        <div class="marker" style="top:90px; left:250px;">
+          <div class="trail-dot" style="width:16px;height:16px;background:#FF8FAD;left:-18px;top:32px;"></div>
+          <div class="trail-dot" style="width:11px;height:11px;background:#FFC0D2;left:-26px;top:42px;"></div>
+          <div class="avatar" style="background:#FF2E63; color:#fff;">
+            <div class="chevron" style="top:-15px; transform:rotate(80deg);"></div>
+            S
+          </div>
+          <div class="tag">Sam</div>
+        </div>
+      </div>
+
+      <div class="hud">
+        <div class="stat-chip"><div class="stat-inner">
+          <div class="stat-label">ELAPSED</div>
+          <div class="stat-value">2h 14m</div>
+        </div></div>
+        <div class="recenter-btn">&#8982;</div>
+      </div>
+    </div></div>
+  </div>
+
+  <div class="frame-block">
+    <div class="frame-label">Action Drawer Open</div>
+    <div class="phone"><div class="screen">
+      <div class="banner">
+        <div class="banner-row">
+          <div class="hamburger">&#9776;</div>
+          <div class="badge">LIVE &#9679;</div>
+        </div>
+        <div class="dest-name">Lake<br>Tahoe</div>
+        <div class="dest-sub">3 Voyagers on the road</div>
+      </div>
+      <div class="map"><div class="lake"></div></div>
+      <div class="scrim"></div>
+      <div class="drawer">
+        <div class="drawer-close">&#10005;</div>
+        <div class="drawer-title">Power Up</div>
+        <div class="drawer-row gold"><span class="row-icon">&#128081;</span> Grant Organizer</div>
+        <div class="drawer-row green"><span class="row-icon">&#128683;</span> Remove Voyager</div>
+        <div class="drawer-row danger"><span class="row-icon">&#127937;</span> End Voyage</div>
+        <div class="drawer-footer">Every journey tells a story.</div>
+      </div>
+      <div class="hud">
+        <div class="stat-chip"><div class="stat-inner">
+          <div class="stat-label">ELAPSED</div>
+          <div class="stat-value">2h 14m</div>
+        </div></div>
+        <div class="recenter-btn">&#8982;</div>
+      </div>
+    </div></div>
+  </div>
+</div>

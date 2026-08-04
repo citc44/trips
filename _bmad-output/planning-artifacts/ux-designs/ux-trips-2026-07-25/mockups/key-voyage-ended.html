@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Voylo — Voyage Ended (Wayfinder)</title>
+<style>
+/* Screen: Voyage Ended — Ships: v1 */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #EDEFF3;
+  color: #101828;
+  font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  padding: 32px;
+}
+.rationale {
+  max-width: 900px;
+  margin: 0 auto 32px;
+  background: #fff;
+  border: 1px solid #DCE1EA;
+  border-radius: 20px;
+  padding: 20px 24px;
+  box-shadow: 0 2px 0 #DCE1EA;
+}
+.rationale h1 { font-size: 21px; font-weight: 700; margin-bottom: 8px; color: #0B6FFF; }
+.rationale p { font-size: 15px; line-height: 1.5; color: #344054; }
+.stage { display: flex; gap: 40px; justify-content: center; flex-wrap: wrap; align-items: flex-start; }
+.frame-block { text-align: center; }
+.frame-label { color: #101828; font-weight: 700; font-size: 13px; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 14px; }
+.phone {
+  width: 390px; height: 844px;
+  border-radius: 44px;
+  border: 9px solid #101828;
+  background: #101828;
+  position: relative;
+  overflow: hidden;
+}
+.screen { position: absolute; inset: 0; border-radius: 36px; overflow: hidden; background: #F4F6FA; }
+
+.content {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 0 30px;
+  text-align: center;
+}
+
+.eyebrow-icon {
+  width: 64px; height: 64px;
+  border-radius: 20px;
+  background: #DCEBD3;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 28px;
+  margin-bottom: 22px;
+}
+
+.title {
+  font-family: "Segoe UI Semibold", "Helvetica Neue", system-ui, sans-serif;
+  font-size: 22px; font-weight: 700; color: #101828;
+  margin-bottom: 30px;
+}
+
+.card {
+  width: 100%;
+  background: #fff;
+  border: 1px solid #DCE1EA;
+  border-radius: 20px;
+  padding: 26px 20px;
+  box-shadow: 0 2px 0 #DCE1EA;
+  margin-bottom: 28px;
+}
+.card-dest { font-size: 14px; font-weight: 700; color: #667085; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+.card-dest-name {
+  font-family: "Segoe UI Semibold", "Helvetica Neue", system-ui, sans-serif;
+  font-size: 20px; font-weight: 700; color: #101828; margin-bottom: 22px;
+}
+.stat-row { display: flex; justify-content: space-between; border-top: 1px solid #EEF1F6; padding-top: 18px; }
+.stat-chip { display: flex; flex-direction: column; }
+.stat-label { font-size: 10.5px; font-weight: 700; letter-spacing: 1.2px; color: #667085; text-transform: uppercase; margin-bottom: 4px; }
+.stat-value {
+  font-family: "Consolas", "SF Mono", "Courier New", monospace;
+  font-size: 22px; font-weight: 700; color: #101828;
+}
+
+.btn-secondary {
+  background: #F4F6FA;
+  color: #101828;
+  border: 2px solid #DCE1EA;
+  border-radius: 999px;
+  padding: 16px 40px;
+  font-size: 15.5px; font-weight: 700;
+}
+</style>
+</head>
+<body>
+
+<div class="rationale">
+  <h1>Direction: Wayfinder — Voyage Ended</h1>
+  <p>V1's actual terminal state is a calm confirmation, not a highlight reel, so it deliberately steps back from Voyage Intro and Join Invitation's cinematic energy: a plain fog canvas, a single summary card in the same card style as the direction file's own rationale block, and a muted fog-fill "Back to Home" button rather than the bold primary blue — this moment doesn't need to sell anything.</p>
+</div>
+
+<div class="stage">
+  <div class="frame-block">
+    <div class="frame-label">Voyage Ended</div>
+    <div class="phone"><div class="screen">
+      <div class="content">
+        <div class="eyebrow-icon">&#127937;</div>
+        <div class="title">Voyage complete</div>
+
+        <div class="card">
+          <div class="card-dest">Destination</div>
+          <div class="card-dest-name">Lake Tahoe</div>
+          <div class="stat-row">
+            <div class="stat-chip">
+              <div class="stat-label">Duration</div>
+              <div class="stat-value">5h 30m</div>
+            </div>
+            <div class="stat-chip">
+              <div class="stat-label">Voyagers</div>
+              <div class="stat-value">3</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="btn-secondary">Back to Home</div>
+      </div>
+    </div></div>
+  </div>
+</div>
+
+</body>
+</html>

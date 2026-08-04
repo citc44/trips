@@ -31,6 +31,11 @@ jest.mock('@/shared/hooks/use-active-voyage', () => ({
   useActiveVoyage: () => ({ activeVoyage: null, isLoading: false, hasError: false, refetch: mockRefetch }),
 }));
 
+const mockMarkVoyageStarted = jest.fn();
+jest.mock('@/shared/hooks/use-just-started-voyage', () => ({
+  useJustStartedVoyage: () => ({ hasJustStartedVoyage: false, markVoyageStarted: mockMarkVoyageStarted, clearJustStartedVoyage: jest.fn() }),
+}));
+
 const TAHOE_SUGGESTION = { id: 'place.1', placeName: 'Lake Tahoe, California, United States', lat: 39.0968, lng: -120.0324 };
 
 beforeEach(() => {
@@ -153,6 +158,25 @@ test('navigates to the Join-code screen with the created Voyage\'s destination a
     pathname: '/join-code',
     params: { destination: TAHOE_SUGGESTION.placeName, joinCode: 'ABCD2345' },
   });
+});
+
+test('marks the Voyage as just-started before navigating (Story 4.3) -- otherwise join-code.tsx\'s own Stack.Protected guard never admits it', async () => {
+  mockStartVoyage.mockResolvedValue({
+    data: { id: 'voyage-1', destination: TAHOE_SUGGESTION.placeName, joinCode: 'ABCD2345' },
+    error: null,
+  });
+
+  const { getByTestId } = await render(<DestinationPickerScreen />);
+
+  await typeAndWaitForSuggestions(getByTestId, 'Lake');
+  await act(async () => {
+    fireEvent.press(getByTestId('destination-suggestion-place.1'));
+  });
+  await act(async () => {
+    fireEvent.press(getByTestId('start-the-voyage-button'));
+  });
+
+  expect(mockMarkVoyageStarted).toHaveBeenCalledTimes(1);
 });
 
 test('refetches activeVoyage on success, before navigating -- otherwise the new active-voyage routing never engages this session', async () => {

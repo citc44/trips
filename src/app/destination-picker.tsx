@@ -3,12 +3,13 @@ import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Colors, Rounded, Spacing, Typography } from '@/constants/design-tokens';
+import { Spacing, Typography, WayfinderColors } from '@/constants/design-tokens';
 import { geocodingRepository, type PlaceSuggestion } from '@/repositories/geocoding-repository';
 import { voyageRepository } from '@/repositories/voyage-repository';
+import { HorizonStrip } from '@/shared/components/horizon-strip';
 import { IgnitionButton } from '@/shared/components/ignition-button';
 import { useActiveVoyage } from '@/shared/hooks/use-active-voyage';
-import { screenStyles } from '@/shared/styles/screen';
+import { useJustStartedVoyage } from '@/shared/hooks/use-just-started-voyage';
 
 const GENERIC_ERROR = 'Something went wrong. Please try again.';
 const SEARCH_DEBOUNCE_MS = 300;
@@ -16,6 +17,7 @@ const MIN_QUERY_LENGTH = 3;
 
 export default function DestinationPickerScreen() {
   const { refetch: refetchActiveVoyage } = useActiveVoyage();
+  const { markVoyageStarted } = useJustStartedVoyage();
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
   const [selectedPlace, setSelectedPlace] = useState<PlaceSuggestion | null>(null);
@@ -97,9 +99,14 @@ export default function DestinationPickerScreen() {
       // this session, leaving active-voyage.tsx (and its End Voyage control)
       // unreachable until a full app relaunch (code review finding).
       await refetchActiveVoyage();
-      // Interim landing (see Story 2.2's Dev Notes): the Join-code card is its
-      // own full screen for now, not an overlay on Live Map -- Epic 3 will
-      // change this destination again once Live Map exists.
+      // Interim landing (see Story 2.2's Dev Notes): the Join-code card is
+      // its own full screen, shown once before Live Map, per EXPERIENCE.md's
+      // IA table ("Auto-shown after Destination Picker confirm"). Marking
+      // the flag before navigating is what makes join-code.tsx's own
+      // Stack.Protected guard (Story 4.3, _layout.tsx) admit this screen at
+      // all -- without it the guard stays false and this push would have
+      // nowhere to land.
+      markVoyageStarted();
       router.push({ pathname: '/join-code', params: { destination: data.destination, joinCode: data.joinCode } });
     } catch {
       if (!isMounted.current) return;
@@ -110,136 +117,149 @@ export default function DestinationPickerScreen() {
   }
 
   const showSuggestions = suggestions.length > 0 && !selectedPlace;
+  const isFilled = query.trim().length > 0;
 
   return (
-    <View style={screenStyles.container}>
+    <View style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <View>
-          <Text style={styles.eyebrow}>Destination</Text>
-          <Text style={styles.prompt}>Where are you headed?</Text>
-        </View>
+        <View style={styles.content}>
+          <View>
+            <Text style={styles.headline}>Where are you headed?</Text>
 
-        <View style={styles.fieldWrap}>
-          <Text style={styles.fieldLabel}>DESTINATION</Text>
-          <TextInput
-            testID="destination-input"
-            style={styles.input}
-            placeholder="Search for a destination"
-            placeholderTextColor={Colors.inkSecondary}
-            maxLength={200}
-            value={query}
-            onChangeText={setQuery}
-            editable={!isSubmitting}
-            autoCorrect={false}
-          />
-          {showSuggestions ? (
-            <View testID="destination-suggestions" style={styles.suggestionList}>
-              {suggestions.map((suggestion) => (
-                <Pressable
-                  key={suggestion.id}
-                  testID={`destination-suggestion-${suggestion.id}`}
-                  onPress={() => handleSelectSuggestion(suggestion)}
-                  style={styles.suggestionRow}
-                >
-                  <Text style={styles.suggestionText}>{suggestion.placeName}</Text>
-                </Pressable>
-              ))}
+            <View style={styles.fieldWrap}>
+              <Text style={styles.fieldLabel}>Destination</Text>
+              <TextInput
+                testID="destination-input"
+                style={[styles.input, isFilled && styles.inputFilled]}
+                placeholder="Enter a city or place"
+                placeholderTextColor={WayfinderColors.inkDisabled}
+                maxLength={200}
+                value={query}
+                onChangeText={setQuery}
+                editable={!isSubmitting}
+                autoCorrect={false}
+              />
+              {showSuggestions ? (
+                <View testID="destination-suggestions" style={styles.suggestionList}>
+                  {suggestions.map((suggestion) => (
+                    <Pressable
+                      key={suggestion.id}
+                      testID={`destination-suggestion-${suggestion.id}`}
+                      onPress={() => handleSelectSuggestion(suggestion)}
+                      style={styles.suggestionRow}
+                    >
+                      <Text style={styles.suggestionText}>{suggestion.placeName}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : null}
             </View>
+          </View>
+
+          <View style={styles.ctaWrap}>
+            <IgnitionButton
+              testID="start-the-voyage-button"
+              label="Start the Voyage"
+              disabled={!canSubmit}
+              onPress={handleStartVoyage}
+            />
+            <Text style={styles.hint}>
+              {selectedPlace
+                ? 'This creates the Voyage and starts live tracking.'
+                : 'Search and pick a real place -- your Voyagers will see how far they are from it.'}
+            </Text>
+          </View>
+
+          {error ? (
+            <Text testID="error-message" style={styles.error}>
+              {error}
+            </Text>
           ) : null}
         </View>
-
-        <View style={styles.ctaWrap}>
-          <IgnitionButton
-            testID="start-the-voyage-button"
-            label="Start the Voyage"
-            disabled={!canSubmit}
-            onPress={handleStartVoyage}
-          />
-          <Text style={styles.hint}>
-            {selectedPlace
-              ? 'This creates the Voyage and starts live tracking.'
-              : 'Search and pick a real place -- your Voyagers will see how far they are from it.'}
-          </Text>
-        </View>
-
-        {error ? (
-          <Text testID="error-message" style={screenStyles.error}>
-            {error}
-          </Text>
-        ) : null}
+        <HorizonStrip />
       </SafeAreaView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: WayfinderColors.surfacePrimary,
+  },
   safeArea: {
     flex: 1,
-    justifyContent: 'center',
+  },
+  content: {
+    flex: 1,
+    justifyContent: 'space-between',
     gap: Spacing['6'],
     paddingHorizontal: Spacing.gutter,
+    paddingTop: Spacing['6'],
+    paddingBottom: Spacing['5'],
   },
-  eyebrow: {
-    color: Colors.accentViolet,
-    fontFamily: Typography.body.fontFamily,
-    fontSize: 13,
-    fontWeight: '600',
-    letterSpacing: 1.8,
-    textTransform: 'uppercase',
-  },
-  prompt: {
-    marginTop: Spacing['3'],
-    color: Colors.inkPrimary,
-    fontFamily: Typography.headline.fontFamily,
-    fontSize: Typography.headline.fontSize,
-    fontWeight: Typography.headline.fontWeight,
-    lineHeight: Typography.headline.lineHeight,
+  headline: {
+    color: WayfinderColors.inkPrimary,
+    fontFamily: Typography.display.fontFamily,
+    fontSize: 27,
+    fontWeight: '700',
+    lineHeight: 35,
+    marginBottom: Spacing['5'],
   },
   fieldWrap: {
     gap: Spacing['2'],
   },
   fieldLabel: {
-    color: Colors.inkSecondary,
-    fontFamily: Typography.body.fontFamily,
-    fontSize: 13,
-    fontWeight: '600',
-    letterSpacing: 0.5,
+    color: WayfinderColors.inkSecondary,
+    fontFamily: Typography.label.fontFamily,
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
   },
   input: {
     minHeight: 56,
-    color: Colors.inkPrimary,
-    fontSize: Typography.body.fontSize,
-    borderWidth: 1,
-    borderColor: Colors.borderHairline,
-    borderRadius: Rounded.sm,
-    backgroundColor: Colors.surfaceDuskHigh,
+    color: WayfinderColors.inkPrimary,
+    fontSize: 17,
+    borderWidth: 2,
+    borderColor: WayfinderColors.borderHairline,
+    borderRadius: 14,
+    backgroundColor: WayfinderColors.surfacePrimary,
     paddingHorizontal: Spacing['4'],
   },
+  inputFilled: {
+    borderColor: WayfinderColors.accentPrimary,
+  },
   suggestionList: {
-    borderWidth: 1,
-    borderColor: Colors.borderHairline,
-    borderRadius: Rounded.sm,
-    backgroundColor: Colors.surfaceDuskHigh,
+    borderWidth: 2,
+    borderColor: WayfinderColors.borderHairline,
+    borderRadius: 14,
+    backgroundColor: WayfinderColors.surfacePrimary,
     overflow: 'hidden',
   },
   suggestionRow: {
     paddingVertical: Spacing['3'],
     paddingHorizontal: Spacing['4'],
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.borderHairline,
+    borderTopColor: WayfinderColors.borderHairline,
   },
   suggestionText: {
-    color: Colors.inkPrimary,
+    color: WayfinderColors.inkPrimary,
     fontFamily: Typography.body.fontFamily,
     fontSize: Typography.body.fontSize,
   },
   ctaWrap: {
     gap: Spacing['3'],
-    alignItems: 'flex-start',
+    alignItems: 'stretch',
   },
   hint: {
-    color: Colors.inkSecondary,
+    color: WayfinderColors.inkSecondary,
     fontFamily: Typography.body.fontFamily,
     fontSize: 13,
+    textAlign: 'center',
+  },
+  error: {
+    color: WayfinderColors.error,
+    fontSize: Typography.body.fontSize,
   },
 });

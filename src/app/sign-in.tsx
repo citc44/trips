@@ -1,17 +1,23 @@
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Animated, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Animated, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Colors, Spacing, Typography } from '@/constants/design-tokens';
+import { Spacing, Typography, WayfinderColors } from '@/constants/design-tokens';
+import { HorizonStrip } from '@/shared/components/horizon-strip';
 import { IgnitionButton } from '@/shared/components/ignition-button';
 import { useAuth } from '@/shared/hooks/use-auth';
-import { screenStyles } from '@/shared/styles/screen';
 
 const RESEND_COOLDOWN_SECONDS = 30;
 const GENERIC_ERROR = 'Something went wrong. Please try again.';
 // Must match supabase/config.toml's auth.email.otp_length (also set on the
 // hosted project's Auth settings, which config.toml does not push).
+// Story 4.4: mockups/key-otp-signin.html's own mockup shows 6 code boxes and
+// "6-digit code" copy -- that's a mockup authoring inaccuracy, not a spec to
+// follow (verified directly against config.toml: this app's real
+// [auth.email] otp_length is 8; a different otp_length=6 entry elsewhere in
+// that file is under the unrelated [auth.mfa.phone] section). This constant,
+// and every render site below, stays at 8.
 const CODE_LENGTH = 8;
 
 function isPlausibleEmail(value: string) {
@@ -114,77 +120,154 @@ export default function SignInScreen() {
   const emailIsValid = isPlausibleEmail(email);
 
   return (
-    <View style={screenStyles.container}>
-      <SafeAreaView style={screenStyles.safeArea}>
-        {step === 'entry' ? (
-          <>
-            <Text style={screenStyles.headline}>Enter your email</Text>
-            <TextInput
-              testID="email-input"
-              style={styles.input}
-              placeholder="you@example.com"
-              placeholderTextColor={Colors.inkSecondary}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="email-address"
-              value={email}
-              onChangeText={setEmail}
-              editable={!isSubmitting}
-            />
-            <IgnitionButton testID="send-code-button" label="Send code" disabled={!emailIsValid || isSubmitting} onPress={sendCode} />
-            <Text
-              testID="have-a-join-code-link"
-              accessibilityRole="button"
-              onPress={() => router.push('/join')}
-              style={styles.joinCodeLink}
-            >
-              Have a join code?
-            </Text>
-          </>
-        ) : (
-          <>
-            <Text style={screenStyles.headline}>Enter the code</Text>
-            <Animated.View style={[styles.codeBoxRow, { transform: [{ translateX: shakeX }] }]}>
-              {Array.from({ length: CODE_LENGTH }, (_, index) => (
-                <View key={index} style={[styles.codeBox, index === code.length && styles.codeBoxActive]}>
-                  <Text style={styles.codeBoxText}>{code[index] ?? ''}</Text>
-                </View>
-              ))}
+    <View style={styles.container}>
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.content}>
+          {step === 'entry' ? (
+            <>
+              <Text style={styles.headline}>Enter your email</Text>
+              <Text style={styles.subtext}>Enter your email and we&apos;ll send you a one-time code — no password to remember.</Text>
+              <Text style={styles.fieldLabel}>Email</Text>
               <TextInput
-                testID="code-input"
-                style={styles.codeHiddenInput}
-                keyboardType="number-pad"
-                maxLength={CODE_LENGTH}
-                value={code}
-                onChangeText={handleCodeChange}
+                testID="email-input"
+                style={styles.input}
+                placeholder="you@example.com"
+                placeholderTextColor={WayfinderColors.inkDisabled}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="email-address"
+                value={email}
+                onChangeText={setEmail}
                 editable={!isSubmitting}
-                autoFocus
-                caretHidden
               />
-            </Animated.View>
-            <IgnitionButton
-              testID="resend-button"
-              label={cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend code'}
-              disabled={cooldown > 0 || isSubmitting}
-              onPress={handleResend}
-              variant="secondary"
-            />
-            <IgnitionButton testID="back-to-entry" label="Wrong email? Go back" disabled={false} onPress={backToEntry} variant="secondary" />
-          </>
-        )}
-        {error ? (
-          <Text testID="error-message" style={screenStyles.error}>
-            {error}
-          </Text>
-        ) : null}
+              <IgnitionButton testID="send-code-button" label="Send code" disabled={!emailIsValid || isSubmitting} onPress={sendCode} />
+              <Text
+                testID="have-a-join-code-link"
+                accessibilityRole="button"
+                onPress={() => router.push('/join')}
+                style={styles.joinCodeLink}
+              >
+                Have a join code?
+              </Text>
+            </>
+          ) : (
+            <>
+              {/* Restyled from the old "Wrong email? Go back" text link to
+                  the mockup's icon-arrow treatment (Story 4.4 Scope
+                  decision) -- same testID/onPress, accessibilityLabel keeps
+                  the meaning for screen readers. Not built on the entry
+                  step: no equivalent control exists there today, and adding
+                  one would be new navigation behavior AC #2 doesn't
+                  authorize. */}
+              <Pressable
+                testID="back-to-entry"
+                accessibilityRole="button"
+                accessibilityLabel="Wrong email? Go back"
+                onPress={backToEntry}
+                style={({ pressed }) => [styles.backArrow, pressed && styles.pressedScale]}
+              >
+                <Text style={styles.backArrowLabel}>{'‹'}</Text>
+              </Pressable>
+              <Text style={styles.headline}>Enter the code</Text>
+              <Text style={styles.subtext}>We sent an {CODE_LENGTH}-digit code to {email}</Text>
+              <Animated.View style={[styles.codeBoxRow, { transform: [{ translateX: shakeX }] }]}>
+                {Array.from({ length: CODE_LENGTH }, (_, index) => {
+                  const isFilled = index < code.length;
+                  const isActive = index === code.length;
+                  return (
+                    <View key={index} style={[styles.codeBox, isFilled && styles.codeBoxFilled, isActive && styles.codeBoxActive]}>
+                      <Text style={[styles.codeBoxText, !isFilled && styles.codeBoxTextEmpty]}>{code[index] ?? '•'}</Text>
+                    </View>
+                  );
+                })}
+                <TextInput
+                  testID="code-input"
+                  style={styles.codeHiddenInput}
+                  keyboardType="number-pad"
+                  maxLength={CODE_LENGTH}
+                  value={code}
+                  onChangeText={handleCodeChange}
+                  editable={!isSubmitting}
+                  autoFocus
+                  caretHidden
+                />
+              </Animated.View>
+              <IgnitionButton
+                testID="resend-button"
+                label={cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend code'}
+                disabled={cooldown > 0 || isSubmitting}
+                onPress={handleResend}
+                variant="text"
+              />
+            </>
+          )}
+          {error ? (
+            <Text testID="error-message" style={styles.error}>
+              {error}
+            </Text>
+          ) : null}
+        </View>
+        <HorizonStrip />
       </SafeAreaView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: WayfinderColors.surfacePrimary,
+  },
+  safeArea: {
+    flex: 1,
+  },
+  content: {
+    flex: 1,
+    justifyContent: 'center',
+    gap: Spacing['3'],
+    paddingHorizontal: Spacing.gutter,
+  },
+  backArrow: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: WayfinderColors.surfaceSecondary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing['4'],
+  },
+  pressedScale: {
+    transform: [{ scale: 0.9 }],
+  },
+  backArrowLabel: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: WayfinderColors.inkPrimary,
+  },
+  headline: {
+    color: WayfinderColors.inkPrimary,
+    fontFamily: Typography.display.fontFamily,
+    fontSize: 30,
+    fontWeight: '700',
+    lineHeight: 36,
+  },
+  subtext: {
+    color: WayfinderColors.inkSecondary,
+    fontFamily: Typography.body.fontFamily,
+    fontSize: 14.5,
+    lineHeight: 21.75,
+  },
+  fieldLabel: {
+    color: WayfinderColors.inkSecondary,
+    fontFamily: Typography.label.fontFamily,
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginTop: Spacing['2'],
+  },
   joinCodeLink: {
-    color: Colors.inkSecondary,
+    color: WayfinderColors.inkSecondary,
     fontFamily: Typography.body.fontFamily,
     fontSize: 13,
     textAlign: 'center',
@@ -192,38 +275,51 @@ const styles = StyleSheet.create({
   },
   input: {
     width: '100%',
-    color: Colors.inkPrimary,
+    color: WayfinderColors.inkPrimary,
+    fontSize: 16,
+    borderWidth: 2,
+    borderColor: WayfinderColors.borderHairline,
+    borderRadius: 14,
+    padding: Spacing['4'],
+    backgroundColor: WayfinderColors.surfacePrimary,
+  },
+  error: {
+    color: WayfinderColors.error,
     fontSize: Typography.body.fontSize,
-    lineHeight: Typography.body.lineHeight,
-    borderWidth: 1,
-    borderColor: Colors.borderHairline,
-    borderRadius: Spacing['2'],
-    paddingVertical: Spacing['3'],
-    paddingHorizontal: Spacing['4'],
   },
   codeBoxRow: {
     position: 'relative',
     width: '100%',
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    gap: 9,
   },
   codeBox: {
-    width: 32,
-    height: 48,
+    flex: 1,
+    height: 58,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: Colors.borderHairline,
-    borderRadius: Spacing['2'],
+    borderWidth: 2,
+    borderColor: WayfinderColors.borderHairline,
+    borderRadius: 14,
+    backgroundColor: '#FAFBFC',
+  },
+  codeBoxFilled: {
+    backgroundColor: WayfinderColors.surfaceSecondary,
   },
   codeBoxActive: {
-    borderColor: Colors.accentViolet,
+    borderColor: WayfinderColors.accentPrimary,
+    backgroundColor: WayfinderColors.surfacePrimary,
   },
   codeBoxText: {
-    color: Colors.inkPrimary,
+    color: WayfinderColors.inkPrimary,
     fontFamily: Typography.statNumeral.fontFamily,
-    fontSize: Typography.headline.fontSize,
-    fontWeight: Typography.headline.fontWeight,
+    fontSize: 22,
+    fontWeight: '700',
+  },
+  // Literal mockup value -- an even lighter tone than WayfinderColors.
+  // inkDisabled, used only for the empty-box bullet placeholder.
+  codeBoxTextEmpty: {
+    color: '#C0C6D2',
   },
   codeHiddenInput: {
     position: 'absolute',

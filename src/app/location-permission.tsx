@@ -109,12 +109,16 @@ export default function LocationPermissionScreen() {
             disabled={false}
             onPress={handleOpenSettings}
           />
+          {/* Story 4.4: "secondary" now means a bordered pill (see
+              ignition-button.tsx) -- this screen isn't in that story's
+              re-skin scope and stays Night-Drive-styled, so "text"
+              preserves this control's current plain-text-link appearance. */}
           <IgnitionButton
             testID="location-permission-continue-anyway-button"
             label="Continue anyway"
             disabled={false}
             onPress={handleContinueAnyway}
-            variant="secondary"
+            variant="text"
           />
         </SafeAreaView>
       </View>

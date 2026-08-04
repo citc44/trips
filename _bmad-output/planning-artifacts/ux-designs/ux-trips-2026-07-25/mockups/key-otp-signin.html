@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Voylo — OTP Sign-In / Verify (Wayfinder)</title>
+<style>
+/* Screen: OTP Sign-In / Verify — Ships: v1 */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #EDEFF3;
+  color: #101828;
+  font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  padding: 32px;
+}
+.rationale {
+  max-width: 900px;
+  margin: 0 auto 32px;
+  background: #fff;
+  border: 1px solid #DCE1EA;
+  border-radius: 20px;
+  padding: 20px 24px;
+  box-shadow: 0 2px 0 #DCE1EA;
+}
+.rationale h1 { font-size: 21px; font-weight: 700; margin-bottom: 8px; color: #0B6FFF; }
+.rationale p { font-size: 15px; line-height: 1.5; color: #344054; }
+.stage { display: flex; gap: 40px; justify-content: center; flex-wrap: wrap; align-items: flex-start; }
+.frame-block { text-align: center; }
+.frame-label { color: #101828; font-weight: 700; font-size: 13px; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 14px; }
+.phone {
+  width: 390px; height: 844px;
+  border-radius: 44px;
+  border: 9px solid #101828;
+  background: #101828;
+  position: relative;
+  overflow: hidden;
+}
+.screen { position: absolute; inset: 0; border-radius: 36px; overflow: hidden; background: #FFFFFF; }
+
+.content { position: absolute; inset: 0; z-index: 2; padding: 76px 28px 128px; display: flex; flex-direction: column; }
+.back-arrow {
+  width: 38px; height: 38px;
+  border-radius: 12px;
+  background: #F4F6FA;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; font-weight: 700; color: #101828;
+  margin-bottom: 40px;
+}
+.headline {
+  font-family: "Segoe UI Semibold", "Helvetica Neue", system-ui, sans-serif;
+  font-size: 30px; font-weight: 700; color: #101828;
+  line-height: 1.2; margin-bottom: 10px;
+}
+.subtext { font-size: 14.5px; color: #667085; line-height: 1.5; margin-bottom: 36px; }
+
+.field-label { font-size: 12px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; color: #667085; margin-bottom: 8px; }
+.input {
+  width: 100%;
+  border: 2px solid #DCE1EA;
+  border-radius: 14px;
+  padding: 16px 16px;
+  font-size: 16px;
+  color: #101828;
+  margin-bottom: 24px;
+  background: #fff;
+}
+.input.placeholder { color: #98A2B3; }
+
+.btn-primary {
+  background: #0B6FFF;
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 17px 0;
+  font-size: 16px; font-weight: 700;
+  text-align: center;
+  width: 100%;
+  box-shadow: 0 6px 0 #0653C7;
+}
+
+.code-row { display: flex; gap: 9px; margin-bottom: 22px; }
+.code-box {
+  flex: 1;
+  height: 58px;
+  border: 2px solid #DCE1EA;
+  border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: "Consolas", "SF Mono", "Courier New", monospace;
+  font-size: 22px; font-weight: 700; color: #101828;
+  background: #FAFBFC;
+}
+.code-box.filled { border-color: #DCE1EA; background: #F4F6FA; }
+.code-box.active { border-color: #0B6FFF; background: #fff; }
+.code-box.empty { color: #C0C6D2; }
+
+.resend { font-size: 13.5px; color: #98A2B3; text-align: center; margin-top: 6px; }
+.resend .cooldown { font-family: "Consolas", "SF Mono", "Courier New", monospace; font-weight: 700; color: #667085; }
+.hint { font-size: 12.5px; color: #98A2B3; text-align: center; margin-top: auto; }
+
+/* ---- Horizon Drift ambient strip (shared component: horizon-strip) ---- */
+.horizon {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 96px;
+  background: linear-gradient(180deg, #EDF3FF 0%, #E1EDFF 55%, #D6E6FF 100%);
+  overflow: hidden; z-index: 1;
+  border-top: 1px solid #DCE9FF;
+}
+.horizon-sky-glow {
+  position: absolute; top: -30px; left: 50%; width: 220px; height: 60px;
+  background: radial-gradient(ellipse at center, #FFE9BE 0%, transparent 70%);
+  transform: translateX(-50%); opacity: 0.7;
+}
+.road-strip { position: absolute; left: 0; right: 0; bottom: 22px; height: 6px; background: #C7D6EC; }
+.dash-track { position: absolute; left: 0; bottom: 22px; height: 6px; width: 200%; display: flex; animation: drift 3.2s linear infinite; }
+.dash { width: 26px; height: 6px; background: #FFB020; margin-right: 22px; border-radius: 3px; flex-shrink: 0; }
+@keyframes drift { from { transform: translateX(0); } to { transform: translateX(-152px); } }
+@media (prefers-reduced-motion: reduce) { .dash-track { animation: none; } }
+</style>
+</head>
+<body>
+
+<div class="rationale">
+  <h1>Direction: Wayfinder — OTP Sign-In / Verify (with Horizon Drift)</h1>
+  <p>Still plumbing, not a brand moment — no color-blocking on the content itself — but the flat-white canvas that read as unfinished now ends in a quiet animated horizon: a pale sky gradient and slow-scrolling amber lane dashes along the bottom edge. Motion freezes under <code>prefers-reduced-motion</code>.</p>
+</div>
+
+<div class="stage">
+  <div class="frame-block">
+    <div class="frame-label">Sign-In</div>
+    <div class="phone"><div class="screen">
+      <div class="horizon">
+        <div class="horizon-sky-glow"></div>
+        <div class="road-strip"></div>
+        <div class="dash-track">
+          <div class="dash"></div><div class="dash"></div><div class="dash"></div>
+          <div class="dash"></div><div class="dash"></div><div class="dash"></div>
+          <div class="dash"></div><div class="dash"></div>
+        </div>
+      </div>
+      <div class="content">
+        <div class="back-arrow">&#8249;</div>
+        <div class="headline">Sign in to Voylo</div>
+        <div class="subtext">Enter your email and we'll send you a one-time code — no password to remember.</div>
+
+        <div class="field-label">Email</div>
+        <div class="input placeholder">you@email.com</div>
+
+        <div class="btn-primary">Send code</div>
+      </div>
+    </div></div>
+  </div>
+
+  <div class="frame-block">
+    <div class="frame-label">Verify</div>
+    <div class="phone"><div class="screen">
+      <div class="horizon">
+        <div class="horizon-sky-glow"></div>
+        <div class="road-strip"></div>
+        <div class="dash-track">
+          <div class="dash"></div><div class="dash"></div><div class="dash"></div>
+          <div class="dash"></div><div class="dash"></div><div class="dash"></div>
+          <div class="dash"></div><div class="dash"></div>
+        </div>
+      </div>
+      <div class="content">
+        <div class="back-arrow">&#8249;</div>
+        <div class="headline">Enter your code</div>
+        <div class="subtext">We sent a 6-digit code to you@email.com</div>
+
+        <div class="code-row">
+          <div class="code-box filled">4</div>
+          <div class="code-box filled">2</div>
+          <div class="code-box filled">9</div>
+          <div class="code-box active">0</div>
+          <div class="code-box empty">&#8226;</div>
+          <div class="code-box empty">&#8226;</div>
+        </div>
+
+        <div class="resend">Resend code in <span class="cooldown">0:24</span></div>
+        <div class="hint">Each digit auto-advances to the next box — the code verifies automatically once all 6 are entered.</div>
+      </div>
+    </div></div>
+  </div>
+</div>
+
+</body>
+</html>

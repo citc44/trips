@@ -2,26 +2,30 @@ import { router } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Colors, Spacing, Typography } from '@/constants/design-tokens';
+import { Spacing, Typography, WayfinderColors } from '@/constants/design-tokens';
 import { IgnitionButton } from '@/shared/components/ignition-button';
+import { RoadMotif } from '@/shared/components/road-motif';
 
 export default function VoyageIntroScreen() {
   return (
     <View style={styles.container}>
+      <RoadMotif rotateDeg={9} style={styles.roadMotif} />
+      <View style={styles.destDot} pointerEvents="none" />
       <SafeAreaView style={styles.safeArea}>
-        <View>
+        <View style={styles.content}>
           <Text style={styles.headline}>Every journey tells a story.</Text>
           <Text style={styles.subhead}>
             Voylo rides along live and turns the trip into a memory reel — inside jokes, wrong turns, and all — ready the moment you
             arrive.
           </Text>
+          <IgnitionButton
+            testID="choose-destination-button"
+            label="Choose Your Destination"
+            disabled={false}
+            onPress={() => router.push('/destination-picker')}
+            variant="inverse"
+          />
         </View>
-        <IgnitionButton
-          testID="choose-destination-button"
-          label="Choose Your Destination"
-          disabled={false}
-          onPress={() => router.push('/destination-picker')}
-        />
       </SafeAreaView>
     </View>
   );
@@ -30,29 +34,46 @@ export default function VoyageIntroScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.surfaceMidnight,
+    backgroundColor: WayfinderColors.accentPrimary,
+    overflow: 'hidden',
+  },
+  roadMotif: {
+    top: -40,
+    right: 40,
+  },
+  destDot: {
+    position: 'absolute',
+    top: 96,
+    right: 56,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: WayfinderColors.accentAmber,
   },
   safeArea: {
     flex: 1,
+  },
+  content: {
+    flex: 1,
     justifyContent: 'center',
-    alignItems: 'flex-start',
-    gap: Spacing.heroGap,
-    paddingHorizontal: Spacing.gutter,
+    alignItems: 'center',
+    gap: Spacing['5'],
+    paddingHorizontal: Spacing.heroGap,
   },
   headline: {
-    color: Colors.inkPrimary,
+    color: '#FFFFFF',
     fontFamily: Typography.displayHero.fontFamily,
-    fontSize: Typography.displayHero.fontSize,
-    fontWeight: Typography.displayHero.fontWeight,
-    lineHeight: Typography.displayHero.lineHeight,
-    letterSpacing: Typography.displayHero.letterSpacing,
+    fontSize: 40,
+    fontWeight: '700',
+    lineHeight: 46,
+    textAlign: 'center',
   },
   subhead: {
-    marginTop: Spacing['4'],
-    color: Colors.inkSecondary,
+    color: '#D6E6FF',
     fontFamily: Typography.body.fontFamily,
-    fontSize: Typography.body.fontSize,
-    lineHeight: Typography.body.lineHeight,
+    fontSize: 16,
+    lineHeight: 25.6,
     maxWidth: 300,
+    textAlign: 'center',
   },
 });

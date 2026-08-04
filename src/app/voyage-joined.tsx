@@ -7,6 +7,7 @@ import { Colors, Typography } from '@/constants/design-tokens';
 import { voyageRepository } from '@/repositories/voyage-repository';
 import { IgnitionButton } from '@/shared/components/ignition-button';
 import { useActiveVoyage } from '@/shared/hooks/use-active-voyage';
+import { usePendingEntryTransition } from '@/shared/hooks/use-pending-entry-transition';
 import { usePendingJoin } from '@/shared/hooks/use-pending-join';
 import { screenStyles } from '@/shared/styles/screen';
 
@@ -21,6 +22,7 @@ const GENERIC_ERROR = 'Something went wrong. Please try again.';
 // called, regardless of which path got the user here.
 export default function VoyageJoinedScreen() {
   const { pendingJoinCode, clearPendingJoinCode } = usePendingJoin();
+  const { triggerEntryTransition } = usePendingEntryTransition();
   const { refetch: refetchActiveVoyage } = useActiveVoyage();
   const [destination, setDestination] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -74,10 +76,14 @@ export default function VoyageJoinedScreen() {
   }
 
   function handleContinue() {
-    // Clears pendingJoinCode -- this is what flips _layout.tsx's guard back to
-    // the plain Home block and redirects there, same mechanism as the rest of
-    // the onboarding cascade. Never leaves a stale pending code behind that
+    // Story 4.3: triggers active-voyage.tsx's "cut to gameplay" transition
+    // on its next mount (see use-pending-entry-transition.tsx) before
+    // clearing pendingJoinCode -- this is what flips _layout.tsx's guard,
+    // redirecting onto active-voyage.tsx (or location-permission.tsx first,
+    // if that's still outstanding), same mechanism as the rest of the
+    // onboarding cascade. Never leaves a stale pending code behind that
     // could re-trigger a join on some future, unrelated `home` transition.
+    triggerEntryTransition();
     clearPendingJoinCode();
   }
 
@@ -93,12 +99,17 @@ export default function VoyageJoinedScreen() {
                 {error}
               </Text>
             ) : null}
+            {/* Story 4.4: "secondary" now means a bordered pill (see
+                ignition-button.tsx) -- this screen isn't in that story's
+                re-skin scope and stays Night-Drive-styled, so "text"
+                preserves this control's current plain-text-link
+                appearance. */}
             <IgnitionButton
               testID="voyage-joined-continue-button"
               label="Continue"
               disabled={false}
               onPress={handleContinue}
-              variant="secondary"
+              variant="text"
             />
           </>
         )}

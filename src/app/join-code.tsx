@@ -1,13 +1,15 @@
 import * as Clipboard from 'expo-clipboard';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Linking from 'expo-linking';
-import { Redirect, router, useLocalSearchParams } from 'expo-router';
+import { Redirect, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Share, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Colors, JoinCodeCard, Spacing, Typography } from '@/constants/design-tokens';
 import { IgnitionButton } from '@/shared/components/ignition-button';
+import { useJustStartedVoyage } from '@/shared/hooks/use-just-started-voyage';
+import { usePendingEntryTransition } from '@/shared/hooks/use-pending-entry-transition';
 import { screenStyles } from '@/shared/styles/screen';
 
 const COPIED_LABEL_DURATION_MS = 2000;
@@ -23,6 +25,8 @@ const GRADIENT_END = { x: 0.67, y: 0.97 };
 // a domain is configured.
 export default function JoinCodeScreen() {
   const { destination, joinCode } = useLocalSearchParams<{ destination: string; joinCode: string }>();
+  const { clearJustStartedVoyage } = useJustStartedVoyage();
+  const { triggerEntryTransition } = usePendingEntryTransition();
   const [copied, setCopied] = useState(false);
   const isMounted = useRef(true);
   const copiedTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -31,8 +35,16 @@ export default function JoinCodeScreen() {
     return () => {
       isMounted.current = false;
       if (copiedTimeout.current) clearTimeout(copiedTimeout.current);
+      // Code review finding: previously only cleared by tapping Continue --
+      // any other way off this screen (e.g. Android hardware back) left
+      // hasJustStartedVoyage stuck true, which could re-admit this screen's
+      // own Stack.Protected guard (_layout.tsx) unexpectedly on some later,
+      // unrelated navigation. Clearing on unmount covers every exit path,
+      // not just the one explicit button. Calling it again here after
+      // Continue's own explicit clear is harmless (idempotent).
+      clearJustStartedVoyage();
     };
-  }, []);
+  }, [clearJustStartedVoyage]);
 
   if (!destination || !joinCode) {
     return <Redirect href="/" />;
@@ -82,8 +94,30 @@ export default function JoinCodeScreen() {
             </Text>
           ) : null}
         </LinearGradient>
-        <IgnitionButton testID="share-button" label="Share" disabled={false} onPress={handleShare} variant="secondary" />
-        <IgnitionButton testID="join-code-continue-button" label="Continue" disabled={false} onPress={() => router.back()} />
+        {/* Story 4.4: "secondary" now means a bordered pill (see
+            ignition-button.tsx) -- this screen isn't in that story's
+            re-skin scope and stays Night-Drive-styled, so "text" preserves
+            this control's current plain-text-link appearance instead. */}
+        <IgnitionButton testID="share-button" label="Share" disabled={false} onPress={handleShare} variant="text" />
+        {/* Clears the flag that admits this screen's own Stack.Protected
+            guard (Story 4.3, _layout.tsx) -- once it's false, the router
+            evicts this screen the same way voyage-joined.tsx's own Continue
+            already does for the Join flow, landing on active-voyage.tsx (or
+            location-permission.tsx first, if that's still outstanding). Not
+            router.back(): this screen isn't Protected on a route param, so
+            back() had nowhere correct to return to. triggerEntryTransition()
+            is a separate flag (see its own file comment for why) that
+            active-voyage.tsx reads on its own next mount to fire the "cut to
+            gameplay" transition. */}
+        <IgnitionButton
+          testID="join-code-continue-button"
+          label="Continue"
+          disabled={false}
+          onPress={() => {
+            triggerEntryTransition();
+            clearJustStartedVoyage();
+          }}
+        />
       </SafeAreaView>
     </View>
   );

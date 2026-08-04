@@ -1,7 +1,9 @@
 import { beforeEach, expect, jest, test } from '@jest/globals';
 import { act, fireEvent, render } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
 
 import TrustMomentScreen from '@/app/trust-moment';
+import { WayfinderColors } from '@/constants/design-tokens';
 
 const mockMarkTrustMomentSeen = jest.fn<() => Promise<any>>();
 
@@ -22,6 +24,13 @@ test('renders the locked Trust Moment copy', async () => {
   expect(
     getByText("We never sell your location data. It's visible only to people in your Voyage, and only while it's active."),
   ).toBeTruthy();
+});
+
+test('shows the teal shield icon badge (Story 4.4 -- distinct from Driver Consent\'s amber car badge)', async () => {
+  const { getByTestId } = await render(<TrustMomentScreen />);
+
+  const flatStyle = StyleSheet.flatten(getByTestId('trust-moment-icon-badge').props.style);
+  expect(flatStyle.backgroundColor).toBe(WayfinderColors.accentTeal);
 });
 
 test('tapping "Got it" calls markTrustMomentSeen', async () => {

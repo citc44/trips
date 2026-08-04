@@ -1,0 +1,33 @@
+the end voyager must be as stunning and complelling as starting experience.  
+User must feel exteremly anxious and excited and eger to see what comes next when they end the joruney.
+
+
+
+We are oging to use the island alert for iPhone and whatever similar thing we have for android.
+Like is someone spotted the cop, everyone behind them will get that nice little check on island
+
+
+
+So to avoid diver distdaction, I want have option to add companion or as family member travelling in same car.  It will not show multiple members on map, but it just the one who is added as companion or member will be able to do eveyrthing 
+same as whoever's comapnionion  they are. so for example, I join the voyager using a link, then I can add my wife as companion. She would get the invitatin link from me, and she would join, but she won't be as other person on the map, she will part of my own thing.  Both of our activitu recored as one group fom both of our phone.
+
+
+Once the voager start, the exoerience start right then and there. Everytime after I open the app,
+it will show me that exciting map and I can see who is where. Map must show all on the screen, so zooming must be adjusted accordingly.
+
+
+I can swipe down to see the dashboard about all the fun fact  that are gonig to collect
+I can swiple to go back to map again.
+
+
+Everything is experience, the best experience ever while interacting with app, and should feel as if they are leaving in the game collecting real life memory.
+Someone should be able to leave the voyage option as well.
+
+
+One of the fun fact that we should really start recoring is how many time yovager loses the interet connection. Everytime they lost the network along the way, we wil log it. The downtime must be minimum 5 min to log otherwise and when internet is back, it must stay up for next 15 min, before starting the next network down time flag starts.
+We will keep this all in local phone in app, and upload it all on server as soon as opportunity comes.
+
+
+What would happen when voyage ends? What will happen to others voyager? Once organizer set the voyage end,
+other can continue and every one will have option to end their on voyage. That's easy experience. Basically the moemnet they end vovage, no more location tracking will happen.  That's it. all other offline data will be uploaded to srver. 
+

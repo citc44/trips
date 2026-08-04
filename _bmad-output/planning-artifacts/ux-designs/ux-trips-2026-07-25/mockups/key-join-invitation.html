@@ -1,171 +1,121 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<title>Voylo — Join Invitation</title>
+<meta charset="UTF-8">
+<title>Voylo — Join Invitation (Wayfinder)</title>
 <style>
-/* =====================================================================
-   GOVERNING SPINE SECTIONS — Join Invitation
-   DESIGN.md:
-     - Components: "Join Invitation" row ("Same hero treatment as Start
-       Voyage but built around anticipation of a group: a stack of
-       circular avatar placeholders in player colors ... display-hero
-       copy sells the trip rather than the app, and the accept action is
-       a button-ignition labeled around joining the Voyage, not a
-       generic 'Continue.'")
-     - Typography (display-hero reserved for Start Voyage + Join, the
-       two PRD-named "wow" screens)
-     - Layout & Spacing (hero-gap — cinematic, uncrowded whitespace)
-     - Colors (player-color palette for the avatar stack; Ignition Coral
-       reserved for the primary action)
-   EXPERIENCE.md:
-     - Information Architecture ("Join Invitation" row — "the 'luring'
-       second aha — sells the trip before any auth is requested"; reached
-       via deep link at any auth state)
-     - State Patterns ("Join link opened, unauthenticated" → "Join
-       Invitation first, always — auth is never requested before the
-       invitation is seen")
-     - Trust, Privacy & Consent ("the Join Invitation screen itself...
-       carries a short reinforcing line of the same promise" as the
-       Trust Moment, since Meera is sharing location with people she may
-       only loosely trust — exact copy placement flagged ASSUMPTION,
-       wording anchored to the Trust Moment's own line)
-     - Key Flows UJ-2, steps 1–4 ("she's already looking at something
-       that feels like an invitation to an event, not a login wall")
-   ===================================================================== */
-:root{
-  --surface-midnight:#0A0D1C;
-  --ink-primary:#F7F6FF;
-  --ink-secondary:#A6ADD1;
-  --border-hairline:#2A3156;
-  --accent-ignition:#FF5677;
-  --accent-violet:#9B6BFF;
-  --player-coral:#FF6B6B;
-  --player-teal:#2FE6C0;
-  --r-full:9999px;
-  --hero-gap:56px;
-  --margin-mobile:20px;
-  --font-display:'Clash Display','Poppins','Segoe UI Semibold',system-ui,sans-serif;
-  --font-body:'General Sans','Segoe UI',system-ui,-apple-system,sans-serif;
+/* Screen: Join Invitation — Ships: v1 */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #EDEFF3;
+  color: #101828;
+  font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  padding: 32px;
 }
-*{box-sizing:border-box;margin:0;padding:0;}
-body{
-  background:#05060c;font-family:var(--font-body);
-  display:flex;align-items:flex-start;justify-content:center;
-  padding:48px 24px;color:var(--ink-primary);
+.rationale {
+  max-width: 900px;
+  margin: 0 auto 32px;
+  background: #fff;
+  border: 1px solid #DCE1EA;
+  border-radius: 20px;
+  padding: 20px 24px;
+  box-shadow: 0 2px 0 #DCE1EA;
 }
-.column{display:flex;flex-direction:column;align-items:center;gap:16px;}
-.caption{margin-top:4px;font-size:13px;color:var(--ink-secondary);max-width:390px;text-align:center;}
+.rationale h1 { font-size: 21px; font-weight: 700; margin-bottom: 8px; color: #0B6FFF; }
+.rationale p { font-size: 15px; line-height: 1.5; color: #344054; }
+.stage { display: flex; gap: 40px; justify-content: center; flex-wrap: wrap; align-items: flex-start; }
+.frame-block { text-align: center; }
+.frame-label { color: #101828; font-weight: 700; font-size: 13px; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 14px; }
+.phone {
+  width: 390px; height: 844px;
+  border-radius: 44px;
+  border: 9px solid #101828;
+  background: #101828;
+  position: relative;
+  overflow: hidden;
+}
+.screen { position: absolute; inset: 0; border-radius: 36px; overflow: hidden; background: #0B6FFF; }
 
-.phone{
-  width:390px;padding:12px;border-radius:54px;
-  background:linear-gradient(160deg,#22263a,#08090f);
-  box-shadow:0 40px 80px -30px rgba(0,0,0,.7), inset 0 0 0 1px rgba(255,255,255,.05);
-}
-.screen{
-  position:relative;width:100%;height:844px;border-radius:44px;overflow:hidden;
-  background:var(--surface-midnight);
-}
-.notch{position:absolute;top:0;left:50%;transform:translateX(-50%);width:130px;height:30px;background:#08090f;border-radius:0 0 20px 20px;z-index:10;}
-.statusbar{position:absolute;top:14px;left:0;right:0;z-index:8;display:flex;justify-content:space-between;padding:0 30px;font-family:'Space Mono',monospace;font-size:13px;font-weight:700;}
-
-.wash{
-  position:absolute;inset:0;
-  background:
-    radial-gradient(ellipse 500px 560px at 85% -10%, rgba(155,107,255,.30) 0%, transparent 55%),
-    radial-gradient(ellipse 480px 600px at 10% 115%, rgba(255,86,119,.14) 0%, transparent 55%),
-    var(--surface-midnight);
+.road-motif {
+  position: absolute;
+  width: 5px; height: 620px;
+  top: -40px; left: 70px;
+  background: repeating-linear-gradient(180deg, #4C93FF 0 16px, transparent 16px 30px);
+  transform: rotate(-8deg);
+  opacity: 0.9;
 }
 
-.content{
-  position:absolute;inset:0;
-  display:flex;flex-direction:column;justify-content:center;
-  padding:0 var(--margin-mobile);gap:var(--hero-gap);
+.content {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 0 30px;
+  text-align: center;
 }
 
-/* avatar stack */
-.avatar-stack{display:flex;align-items:center;}
-.avatar{
-  width:56px;height:56px;border-radius:50%;
-  border:3px solid var(--ring,var(--player-coral));
-  background:var(--surface-dusk-high,#1E2547);
-  display:flex;align-items:center;justify-content:center;
-  margin-left:-16px;
-  box-shadow:0 0 0 4px #0A0D1C;
+.avatar-stack { display: flex; margin-bottom: 34px; }
+.avatar-stack .avatar {
+  width: 58px; height: 58px;
+  border-radius: 50%;
+  border: 4px solid #0B6FFF;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 21px; font-weight: 700;
+  font-family: "Segoe UI Semibold", "Helvetica Neue", system-ui, sans-serif;
+  box-shadow: 0 2px 4px 0 #10182833;
 }
-.avatar:first-child{margin-left:0;}
-.avatar.silhouette::after{
-  content:'';display:block;width:22px;height:22px;border-radius:50%;
-  background:rgba(247,246,255,.28);
-}
-.avatar.you{
-  border:2.5px dashed var(--ink-secondary);
-  background:transparent;
-}
-.avatar.you span{font-size:11px;font-weight:700;color:var(--ink-secondary);letter-spacing:.02em;}
+.avatar-stack .avatar:not(:first-child) { margin-left: -16px; }
+.avatar.coral { background: #FF5A5F; z-index: 3; }
+.avatar.teal { background: #00C2A8; z-index: 2; }
+.avatar.amber { background: #FFB020; z-index: 1; }
 
-.eyebrow{font-size:13px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--player-teal);margin-top:26px;}
-.headline{
-  font-family:var(--font-display);font-weight:600;font-size:52px;line-height:1.02;letter-spacing:-0.02em;
-  margin-top:18px;
+.eyebrow {
+  font-size: 12px; font-weight: 700; letter-spacing: 1.6px; text-transform: uppercase;
+  color: #D6E6FF; margin-bottom: 16px;
 }
-.sub{margin-top:20px;font-size:18px;line-height:1.5;color:var(--ink-secondary);max-width:300px;}
-
-.trust-line{
-  margin-top:22px;padding:14px 16px;border-radius:18px;
-  border:1px solid var(--border-hairline);
-  background:rgba(30,37,71,.4);
-  font-size:13px;line-height:1.5;color:var(--ink-secondary);
-  display:flex;gap:10px;align-items:flex-start;
+.headline {
+  font-family: "Segoe UI Semibold", "Helvetica Neue", system-ui, sans-serif;
+  font-size: 34px; font-weight: 700; color: #fff;
+  line-height: 1.2; margin-bottom: 20px;
 }
-.trust-line .ico{
-  width:16px;height:16px;border-radius:50%;border:1.5px solid var(--player-teal);
-  flex-shrink:0;margin-top:2px;position:relative;
+.subhead {
+  font-size: 15.5px; line-height: 1.6; color: #D6E6FF;
+  max-width: 300px; margin-bottom: 46px;
 }
-.trust-line .ico::after{content:'';position:absolute;left:6px;top:2px;width:3px;height:6px;border-right:1.5px solid var(--player-teal);border-bottom:1.5px solid var(--player-teal);transform:rotate(45deg);}
-.trust-line b{color:var(--ink-primary);}
-
-.cta-wrap{display:flex;flex-direction:column;gap:12px;align-items:flex-start;}
-.btn-ignition{
-  min-height:56px;padding:0 30px;border-radius:var(--r-full);
-  background:linear-gradient(135deg, var(--accent-ignition), var(--accent-violet));
-  display:inline-flex;align-items:center;justify-content:center;
-  box-shadow:0 0 24px rgba(255,86,119,.4);position:relative;
+.btn-primary {
+  background: #fff;
+  color: #0B6FFF;
+  border: none;
+  border-radius: 999px;
+  padding: 19px 40px;
+  font-size: 16.5px; font-weight: 700;
 }
-.btn-ignition .scrim{position:absolute;inset:6px 14px;border-radius:20px;background:rgba(10,13,28,.5);filter:blur(1px);}
-.btn-ignition span{position:relative;z-index:2;font-weight:700;font-size:16px;color:var(--ink-primary);}
 </style>
 </head>
 <body>
-<div class="column">
-<div class="phone">
-  <div class="screen">
-    <div class="notch"></div>
-    <div class="statusbar"><span>9:41</span><span>●●●●  LTE</span></div>
-    <div class="wash"></div>
 
-    <div class="content">
-      <div>
+<div class="rationale">
+  <h1>Direction: Wayfinder — Join Invitation</h1>
+  <p>Seen pre-auth, this is the "lure" and shares Voyage Intro's full-bleed blue hero and reversed white CTA so the two cinematic moments feel like the same family. The overlapping three-avatar stack in the three player colors (coral, teal, amber) is the one new motif — a quick, wordless "people are already here" signal before any names are known.</p>
+</div>
+
+<div class="stage">
+  <div class="frame-block">
+    <div class="frame-label">Join Invitation</div>
+    <div class="phone"><div class="screen">
+      <div class="road-motif"></div>
+      <div class="content">
         <div class="avatar-stack">
-          <div class="avatar silhouette" style="--ring:#FF6B6B;"></div>
-          <div class="avatar silhouette" style="--ring:#2FE6C0;"></div>
-          <div class="avatar you"><span>YOU</span></div>
+          <div class="avatar coral">C</div>
+          <div class="avatar teal">M</div>
+          <div class="avatar amber">S</div>
         </div>
         <div class="eyebrow">Chintan invited you</div>
         <div class="headline">A road trip worth remembering.</div>
-        <div class="sub">Ride along live to Lake Tahoe — then walk away with a memory reel of the whole thing: inside jokes, wrong turns, and all.</div>
-        <div class="trust-line">
-          <div class="ico"></div>
-          <div>Your location stays in this Voyage. <b>We never sell it.</b> Visible only to the people riding with you, and only while it's active.</div>
-        </div>
+        <div class="subhead">Ride along live to Lake Tahoe — then walk away with a memory reel of the whole thing: inside jokes, wrong turns, and all.</div>
+        <div class="btn-primary">Join the Voyage</div>
       </div>
-      <div class="cta-wrap">
-        <div class="btn-ignition"><div class="scrim"></div><span>Join the Voyage</span></div>
-      </div>
-    </div>
+    </div></div>
   </div>
 </div>
-<div class="caption">Pre-auth "luring" screen — same hero register as Start Voyage, player-color avatar stack hints at the group, trust line lands before any sign-in is asked for.</div>
-</div>
+
 </body>
 </html>

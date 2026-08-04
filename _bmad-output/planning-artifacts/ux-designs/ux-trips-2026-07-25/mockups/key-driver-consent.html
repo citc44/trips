@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Voylo — Driver Attention Consent (Wayfinder)</title>
+<style>
+/* Screen: Driver Attention Consent — Ships: v1 */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #EDEFF3;
+  color: #101828;
+  font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  padding: 32px;
+}
+.rationale {
+  max-width: 900px;
+  margin: 0 auto 32px;
+  background: #fff;
+  border: 1px solid #DCE1EA;
+  border-radius: 20px;
+  padding: 20px 24px;
+  box-shadow: 0 2px 0 #DCE1EA;
+}
+.rationale h1 { font-size: 21px; font-weight: 700; margin-bottom: 8px; color: #0B6FFF; }
+.rationale p { font-size: 15px; line-height: 1.5; color: #344054; }
+.stage { display: flex; gap: 40px; justify-content: center; flex-wrap: wrap; align-items: flex-start; }
+.frame-block { text-align: center; }
+.frame-label { color: #101828; font-weight: 700; font-size: 13px; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 14px; }
+.phone {
+  width: 390px; height: 844px;
+  border-radius: 44px;
+  border: 9px solid #101828;
+  background: #101828;
+  position: relative;
+  overflow: hidden;
+}
+.screen { position: absolute; inset: 0; border-radius: 36px; overflow: hidden; background: #101828; }
+
+.content {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 0 34px;
+  text-align: center;
+}
+.icon-badge {
+  width: 84px; height: 84px;
+  border-radius: 24px;
+  background: #FFB020;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 38px;
+  margin-bottom: 32px;
+}
+.headline {
+  font-family: "Segoe UI Semibold", "Helvetica Neue", system-ui, sans-serif;
+  font-size: 28px; font-weight: 700; color: #fff;
+  line-height: 1.3; margin-bottom: 16px;
+}
+.subhead {
+  font-size: 15px; line-height: 1.55; color: #A6B4CC;
+  max-width: 300px; margin-bottom: 44px;
+}
+.btn-primary {
+  background: #0B6FFF;
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 17px 56px;
+  font-size: 16px; font-weight: 700;
+  text-align: center;
+}
+</style>
+</head>
+<body>
+
+<div class="rationale">
+  <h1>Direction: Wayfinder — Driver Attention Consent</h1>
+  <p>Shown immediately after the Trust Moment, so it repeats that screen's exact ink-navy, single-statement treatment for continuity — only the accent color changes, from teal reassurance to amber caution, and the icon shifts from shield to steering wheel. Same restrained register, same single "Got it" acknowledgment, no alarm-red urgency since this is a heads-up, not an error state.</p>
+</div>
+
+<div class="stage">
+  <div class="frame-block">
+    <div class="frame-label">Driver Attention Consent</div>
+    <div class="phone"><div class="screen">
+      <div class="content">
+        <div class="icon-badge">&#128664;</div>
+        <div class="headline">If you're behind the wheel, stay focused on the road — Voylo can't do that for you.</div>
+        <div class="subhead">Voylo isn't responsible for distracted driving.</div>
+        <div class="btn-primary">Got it</div>
+      </div>
+    </div></div>
+  </div>
+</div>
+
+</body>
+</html>

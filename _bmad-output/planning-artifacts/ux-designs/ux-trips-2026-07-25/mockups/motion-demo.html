@@ -1,0 +1,326 @@
+<title>Voylo — Navigation Motion Demo</title>
+<style>
+  :root {
+    --ink: #16181d; --ink-soft: #565c66; --line: #dfe2e8;
+    --surface: #f6f7f9; --surface-raised: #ffffff; --accent: #0B6FFF;
+    --radius: 14px; --font-ui: -apple-system, "Segoe UI", "Inter", system-ui, sans-serif;
+  }
+  :root[data-theme="dark"] {
+    --ink: #eef0f4; --ink-soft: #9aa1ad; --line: #2b2f38;
+    --surface: #14161b; --surface-raised: #1c1f26; --accent: #7d9fff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ink: #eef0f4; --ink-soft: #9aa1ad; --line: #2b2f38;
+      --surface: #14161b; --surface-raised: #1c1f26; --accent: #7d9fff;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--surface); color: var(--ink); font-family: var(--font-ui); -webkit-font-smoothing: antialiased; }
+  .shell { max-width: 1040px; margin: 0 auto; padding: 40px 24px 80px; }
+  .kicker { font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+  h1 { font-size: 26px; font-weight: 700; margin: 0 0 10px; letter-spacing: -0.01em; }
+  .page-sub { color: var(--ink-soft); font-size: 15px; line-height: 1.55; max-width: 68ch; margin: 0 0 28px; }
+
+  .layout { display: flex; gap: 40px; flex-wrap: wrap; align-items: flex-start; justify-content: center; }
+  .demo-col { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+  .legend-col { max-width: 380px; background: var(--surface-raised); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px 24px; }
+  .legend-col h2 { font-size: 14px; margin: 0 0 12px; }
+  .legend-item { display: flex; gap: 10px; margin-bottom: 16px; }
+  .legend-item:last-child { margin-bottom: 0; }
+  .legend-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); margin-top: 6px; flex-shrink: 0; }
+  .legend-item div p { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--ink-soft); }
+  .legend-item div strong { display: block; font-size: 13px; color: var(--ink); margin-bottom: 2px; }
+  code { font-family: "SF Mono", Consolas, monospace; background: var(--surface); border-radius: 4px; padding: 1px 4px; font-size: 11.5px; }
+
+  .phone-outer {
+    width: 340px; height: 734px;
+    border-radius: 40px; border: 8px solid #101828; background: #101828;
+    position: relative; overflow: hidden;
+    box-shadow: 0 20px 50px -20px rgba(0,0,0,0.35);
+  }
+  .screen-stack { position: absolute; inset: 0; border-radius: 32px; overflow: hidden; background: #fff; }
+  .screen {
+    position: absolute; inset: 0;
+    display: none;
+  }
+  .screen.visible { display: block; }
+
+  /* push transition */
+  .screen.push-enter { animation: pushEnter 0.36s cubic-bezier(.22,.85,.35,1) both; }
+  .screen.push-exit { animation: pushExit 0.36s cubic-bezier(.5,0,.75,.15) both; }
+  .screen.pop-enter { animation: popEnter 0.36s cubic-bezier(.22,.85,.35,1) both; }
+  .screen.pop-exit { animation: popExit 0.36s cubic-bezier(.5,0,.75,.15) both; }
+  @keyframes pushEnter { from { transform: translateX(28px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  @keyframes pushExit { from { transform: translateX(0); opacity: 1; } to { transform: translateX(-20px); opacity: 0; } }
+  @keyframes popEnter { from { transform: translateX(-28px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  @keyframes popExit { from { transform: translateX(0); opacity: 1; } to { transform: translateX(20px); opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) {
+    .screen.push-enter, .screen.push-exit, .screen.pop-enter, .screen.pop-exit { animation: none !important; }
+  }
+
+  /* cut-to-gameplay flash */
+  .flash {
+    position: absolute; inset: 0; background: #0B6FFF; z-index: 50;
+    display: none; align-items: center; justify-content: center;
+  }
+  .flash.active { display: flex; animation: flashPulse 0.5s ease-out both; }
+  @keyframes flashPulse {
+    0% { opacity: 0; transform: scale(0.85); }
+    35% { opacity: 1; transform: scale(1.04); }
+    100% { opacity: 0; transform: scale(1.2); }
+  }
+  .flash-mark { color: #fff; font-size: 15px; font-weight: 800; letter-spacing: 3px; text-transform: uppercase; opacity: 0.9; }
+  .map-enter { animation: mapEnter 0.42s cubic-bezier(.16,1,.3,1) both; animation-delay: 0.22s; opacity: 0; }
+  @keyframes mapEnter { from { transform: scale(1.06); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { .flash.active, .map-enter { animation: none !important; opacity: 1 !important; } }
+
+  /* --- shared screen chrome --- */
+  .content { position: absolute; inset: 0; display: flex; flex-direction: column; }
+  .back-arrow {
+    width: 34px; height: 34px; border-radius: 10px; background: #F4F6FA;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; font-weight: 700; color: #101828; cursor: pointer;
+    transition: transform 0.12s ease;
+  }
+  .back-arrow:active { transform: scale(0.9); }
+
+  .btn-primary {
+    background: #0B6FFF; color: #fff; border: none; border-radius: 999px;
+    padding: 16px 0; font-size: 15px; font-weight: 700; text-align: center; width: 100%;
+    box-shadow: 0 6px 0 #0653C7; cursor: pointer; transition: transform 0.1s ease;
+  }
+  .btn-primary:active { transform: translateY(3px); box-shadow: 0 3px 0 #0653C7; }
+  .btn-white { background: #fff; color: #0B6FFF; border: none; border-radius: 999px; padding: 16px 34px; font-size: 15px; font-weight: 700; cursor: pointer; transition: transform 0.1s ease; }
+  .btn-white:active { transform: scale(0.96); }
+
+  /* Home */
+  #screen-home .content { padding: 56px 28px 60px; background: #F4F6FA; }
+  .wordmark { font-weight: 700; font-size: 17px; }
+  .lower { flex: 1; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 50px; }
+  .cta-wrap { width: 100%; text-align: center; }
+  .cta-caption { margin-top: 14px; font-size: 12px; color: #98A2B3; }
+
+  /* Voyage Intro */
+  #screen-intro .content { background: #0B6FFF; align-items: center; justify-content: center; text-align: center; padding: 0 26px; }
+  #screen-intro .back-arrow { position: absolute; top: 26px; left: 22px; background: rgba(255,255,255,0.16); color: #fff; }
+  .intro-headline { color: #fff; font-size: 32px; font-weight: 700; line-height: 1.15; margin-bottom: 16px; }
+  .intro-sub { color: #D6E6FF; font-size: 14px; line-height: 1.55; max-width: 260px; margin: 0 auto 34px; }
+
+  /* Destination Picker */
+  #screen-picker .content { padding: 90px 26px 100px; position: relative; }
+  #screen-picker .back-arrow { position: absolute; top: 26px; left: 22px; z-index: 3; }
+  .picker-headline { font-size: 23px; font-weight: 700; margin-bottom: 24px; }
+  .field-label { font-size: 11px; font-weight: 700; letter-spacing: 0.7px; text-transform: uppercase; color: #667085; margin-bottom: 6px; }
+  .input-filled { border: 2px solid #0B6FFF; border-radius: 12px; padding: 14px; font-size: 15px; }
+  .spacer { flex: 1; }
+  .horizon { position: absolute; left: 0; right: 0; bottom: 0; height: 80px; background: linear-gradient(180deg,#EDF3FF,#D6E6FF); border-top: 1px solid #DCE9FF; overflow: hidden; }
+  .dash-track { position: absolute; left: 0; bottom: 18px; height: 5px; width: 200%; display: flex; animation: drift 3.2s linear infinite; }
+  .dash { width: 22px; height: 5px; background: #FFB020; margin-right: 18px; border-radius: 3px; flex-shrink: 0; }
+  @keyframes drift { from { transform: translateX(0); } to { transform: translateX(-130px); } }
+  @media (prefers-reduced-motion: reduce) { .dash-track { animation: none; } }
+
+  /* Live Map */
+  #screen-map .content { padding: 0; }
+  .map-banner { background: #0B6FFF; height: 90px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; }
+  .hamburger { width: 38px; height: 38px; background: #fff; border-radius: 11px; display: flex; align-items: center; justify-content: center; color: #0B6FFF; font-size: 16px; font-weight: 700; cursor: pointer; transition: transform 0.12s ease; }
+  .hamburger:active { transform: scale(0.9); }
+  .map-dest { color: #fff; font-size: 19px; font-weight: 700; }
+  .map-dest-eyebrow { color: #C7DEFF; font-size: 9.5px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
+  .map-body { flex: 1; background: linear-gradient(180deg,#EAF2E4,#DCEBD3); position: relative; }
+  .map-avatar { position: absolute; width: 38px; height: 38px; border-radius: 50%; border: 3px solid #fff; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: 14px; box-shadow: 0 2px 4px rgba(16,24,40,0.2); }
+
+  /* Drawer */
+  .drawer-layer { position: absolute; inset: 0; z-index: 20; pointer-events: none; }
+  .scrim { position: absolute; inset: 0; background: #1D2A44; opacity: 0; transition: opacity 0.26s ease; }
+  .drawer-panel {
+    position: absolute; top: 0; bottom: 0; right: 0; width: 230px; background: #fff;
+    padding: 26px 16px; transform: translateX(100%); transition: transform 0.28s cubic-bezier(.22,.85,.35,1);
+  }
+  .drawer-layer.open { pointer-events: auto; }
+  .drawer-layer.open .scrim { opacity: 1; }
+  .drawer-layer.open .drawer-panel { transform: translateX(0); }
+  .drawer-close { width: 32px; height: 32px; border-radius: 9px; background: #F4F6FA; display: flex; align-items: center; justify-content: center; font-weight: 700; margin-bottom: 20px; cursor: pointer; }
+  .drawer-title { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+  .drawer-sub { font-size: 11px; color: #667085; margin-bottom: 16px; }
+  .drawer-row { background: #F4F6FA; border-radius: 11px; padding: 12px; margin-bottom: 9px; font-size: 12.5px; font-weight: 600; }
+  .drawer-row.primary { background: #E7F0FF; color: #0B6FFF; }
+  .drawer-row.danger { background: #FFEBEC; color: #FF5A5F; }
+
+  .restart-btn { position: absolute; top: 16px; right: 16px; z-index: 30; background: rgba(255,255,255,0.9); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; font-size: 11px; font-weight: 700; cursor: pointer; }
+</style>
+
+<div class="shell">
+  <p class="kicker">Voylo · Wayfinder · Motion demo</p>
+  <h1>Navigation, actually moving</h1>
+  <p class="page-sub">A live, interactive prototype — tap through it. Restrained slide-and-fade between functional screens (matches Wayfinder's clean register), one deliberately bigger "cut to gameplay" moment at the one screen that's supposed to feel like it, and a slide+scrim drawer. These exact timings/easings are what Story 4.1 will lock into <code>EXPERIENCE.md</code>.</p>
+
+  <div class="layout">
+    <div class="demo-col">
+      <div class="phone-outer" id="phone">
+        <button class="restart-btn" id="btn-restart">Restart ↺</button>
+        <div class="screen-stack">
+
+          <div class="screen visible" id="screen-home">
+            <div class="content">
+              <div class="wordmark">Voylo</div>
+              <div class="lower">
+                <div class="cta-wrap">
+                  <div class="btn-primary" id="btn-start-voyage">Start a Voyage</div>
+                  <div class="cta-caption">Gather your crew and hit the road.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="screen" id="screen-intro">
+            <div class="content">
+              <div class="back-arrow" id="btn-intro-back">&#8249;</div>
+              <div class="intro-headline">Every journey tells a story.</div>
+              <div class="intro-sub">Voylo rides along live and turns the trip into a memory reel — inside jokes, wrong turns, and all.</div>
+              <div class="btn-white" id="btn-choose-dest">Choose Your Destination</div>
+            </div>
+          </div>
+
+          <div class="screen" id="screen-picker">
+            <div class="horizon"><div class="dash-track">
+              <div class="dash"></div><div class="dash"></div><div class="dash"></div><div class="dash"></div><div class="dash"></div><div class="dash"></div>
+            </div></div>
+            <div class="content">
+              <div class="back-arrow" id="btn-picker-back">&#8249;</div>
+              <div class="picker-headline">Where are you headed?</div>
+              <div class="field-label">Destination</div>
+              <div class="input-filled">Lake Tahoe</div>
+              <div class="spacer"></div>
+              <div class="btn-primary" id="btn-start-the-voyage">Start the Voyage</div>
+            </div>
+          </div>
+
+          <div class="screen" id="screen-map">
+            <div class="content">
+              <div class="map-banner">
+                <div class="hamburger" id="btn-hamburger">&#9776;</div>
+                <div style="text-align:center;">
+                  <div class="map-dest-eyebrow">Voyage destination</div>
+                  <div class="map-dest">Lake Tahoe</div>
+                </div>
+                <div style="width:38px;"></div>
+              </div>
+              <div class="map-body">
+                <div class="map-avatar" style="background:#FF5A5F; top:120px; left:110px;">C</div>
+                <div class="map-avatar" style="background:#00C2A8; top:220px; left:50px;">M</div>
+                <div class="map-avatar" style="background:#FFB020; top:70px; left:200px;">S</div>
+              </div>
+            </div>
+            <div class="drawer-layer" id="drawer-layer">
+              <div class="scrim" id="drawer-scrim"></div>
+              <div class="drawer-panel">
+                <div class="drawer-close" id="btn-drawer-close">&#10005;</div>
+                <div class="drawer-title">Voyage actions</div>
+                <div class="drawer-sub">Organizer tools</div>
+                <div class="drawer-row primary">Grant Organizer Status</div>
+                <div class="drawer-row">Remove Voyager</div>
+                <div class="drawer-row danger">End Voyage</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="flash" id="flash"><div class="flash-mark">Lake Tahoe</div></div>
+
+        </div>
+      </div>
+    </div>
+
+    <div class="legend-col">
+      <h2>What's happening</h2>
+      <div class="legend-item">
+        <div class="legend-dot"></div>
+        <div><strong>Home → Voyage Intro → Destination Picker</strong><p>Standard push: incoming screen slides in 28px + fades in, outgoing slides out 20px + fades out. <code>360ms</code>, <code>cubic-bezier(.22,.85,.35,1)</code>. Back reverses the direction.</p></div>
+      </div>
+      <div class="legend-item">
+        <div class="legend-dot"></div>
+        <div><strong>Destination Picker → Live Map</strong><p>The one bigger moment: a solid-blue flash pulses and scales up (<code>500ms</code>) while the destination name appears, then Live Map reveals underneath with a quick scale-down-to-rest pop (<code>420ms</code>, delayed to land after the flash). This is the "cut to gameplay" beat EXPERIENCE.md already called for but never specified.</p></div>
+      </div>
+      <div class="legend-item">
+        <div class="legend-dot"></div>
+        <div><strong>Hamburger → Action Drawer</strong><p>Drawer slides in from the right (<code>280ms</code>) while a scrim fades in behind it. Tapping the scrim or the close button reverses both.</p></div>
+      </div>
+      <div class="legend-item">
+        <div class="legend-dot"></div>
+        <div><strong>Buttons</strong><p>Primary CTA presses down 3px (mimics the ignition button's shadow going flat); small icon buttons (back arrow, hamburger, drawer close) scale to 90% on press. Tactile, not decorative.</p></div>
+      </div>
+      <div class="legend-item">
+        <div class="legend-dot"></div>
+        <div><strong>Accessibility</strong><p>Every animation above is disabled under <code>prefers-reduced-motion: reduce</code> — screens still change, just without the motion.</p></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const screens = ["home", "intro", "picker", "map"];
+  let current = "home";
+
+  function show(id) {
+    screens.forEach(s => {
+      const el = document.getElementById("screen-" + s);
+      el.classList.toggle("visible", s === id);
+      el.classList.remove("push-enter", "push-exit", "pop-enter", "pop-exit");
+    });
+  }
+
+  function push(toId) {
+    const fromEl = document.getElementById("screen-" + current);
+    const toEl = document.getElementById("screen-" + toId);
+    fromEl.classList.add("push-exit");
+    toEl.classList.add("visible", "push-enter");
+    setTimeout(() => { fromEl.classList.remove("visible", "push-exit"); }, 360);
+    current = toId;
+  }
+
+  function pop(toId) {
+    const fromEl = document.getElementById("screen-" + current);
+    const toEl = document.getElementById("screen-" + toId);
+    fromEl.classList.add("pop-exit");
+    toEl.classList.add("visible", "pop-enter");
+    setTimeout(() => { fromEl.classList.remove("visible", "pop-exit"); }, 360);
+    current = toId;
+  }
+
+  function cutToGameplay() {
+    const fromEl = document.getElementById("screen-picker");
+    const toEl = document.getElementById("screen-map");
+    const flash = document.getElementById("flash");
+    flash.classList.add("active");
+    toEl.querySelector(".content").classList.add("map-enter");
+    setTimeout(() => {
+      fromEl.classList.remove("visible");
+      toEl.classList.add("visible");
+    }, 180);
+    setTimeout(() => { flash.classList.remove("active"); }, 520);
+    setTimeout(() => { toEl.querySelector(".content").classList.remove("map-enter"); }, 700);
+    current = "map";
+  }
+
+  document.getElementById("btn-start-voyage").addEventListener("click", () => push("intro"));
+  document.getElementById("btn-choose-dest").addEventListener("click", () => push("picker"));
+  document.getElementById("btn-intro-back").addEventListener("click", () => pop("home"));
+  document.getElementById("btn-picker-back").addEventListener("click", () => pop("intro"));
+  document.getElementById("btn-start-the-voyage").addEventListener("click", cutToGameplay);
+
+  document.getElementById("btn-hamburger").addEventListener("click", () => {
+    document.getElementById("drawer-layer").classList.add("open");
+  });
+  document.getElementById("btn-drawer-close").addEventListener("click", () => {
+    document.getElementById("drawer-layer").classList.remove("open");
+  });
+  document.getElementById("drawer-scrim").addEventListener("click", () => {
+    document.getElementById("drawer-layer").classList.remove("open");
+  });
+
+  document.getElementById("btn-restart").addEventListener("click", () => {
+    document.getElementById("drawer-layer").classList.remove("open");
+    show("home");
+    current = "home";
+  });
+</script>

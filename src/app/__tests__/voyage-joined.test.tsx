@@ -21,6 +21,11 @@ jest.mock('@/shared/hooks/use-active-voyage', () => ({
   useActiveVoyage: () => ({ activeVoyage: null, isLoading: false, hasError: false, refetch: mockRefetchActiveVoyage }),
 }));
 
+const mockTriggerEntryTransition = jest.fn();
+jest.mock('@/shared/hooks/use-pending-entry-transition', () => ({
+  usePendingEntryTransition: () => ({ hasPendingEntryTransition: false, triggerEntryTransition: mockTriggerEntryTransition, consumeEntryTransition: jest.fn() }),
+}));
+
 const mockUsePendingJoin = usePendingJoin as jest.MockedFunction<typeof usePendingJoin>;
 const mockJoinVoyage = voyageRepository.joinVoyage as jest.MockedFunction<typeof voyageRepository.joinVoyage>;
 const mockClearPendingJoinCode = jest.fn();
@@ -172,6 +177,9 @@ test('tapping Continue clears the pending join code', async () => {
   });
 
   expect(mockClearPendingJoinCode).toHaveBeenCalledTimes(1);
+  // Story 4.3: triggers active-voyage.tsx's "cut to gameplay" transition on
+  // its next mount.
+  expect(mockTriggerEntryTransition).toHaveBeenCalledTimes(1);
 });
 
 test('does not call joinVoyage twice across re-renders', async () => {

@@ -19,12 +19,16 @@ export default function VoyageRemovedScreen() {
     <View style={screenStyles.container}>
       <SafeAreaView style={screenStyles.safeArea}>
         <Text style={screenStyles.headline}>You&apos;ve left this Voyage.</Text>
+        {/* Story 4.4: "secondary" now means a bordered pill (see
+            ignition-button.tsx) -- this screen isn't in that story's
+            re-skin scope and stays Night-Drive-styled, so "text" preserves
+            this control's current plain-text-link appearance instead. */}
         <IgnitionButton
           testID="voyage-removed-continue-button"
           label="Continue"
           disabled={false}
           onPress={() => acknowledge()}
-          variant="secondary"
+          variant="text"
         />
       </SafeAreaView>
     </View>

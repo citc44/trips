@@ -129,13 +129,13 @@ FR-6: Epic 2 - End Voyage
 FR-7: Epic 2 - Grant Organizer Status
 FR-8: Epic 2 - Remove Voyager
 FR-9: Epic 3 - Real-time Voyager map
-FR-10: Epic 4 (v1.1) - Manual Fun Fact logging
-FR-11: Epic 4 (v1.1) - Automatic event detection
-FR-12: Epic 4 (v1.1) - In-app photo logging
-FR-13: Epic 4 (v1.1) - One-time contextual nudges
-FR-14: Epic 5 (v1.1) - Generate Memory Lane
-FR-15: Epic 5 (v1.1) - View Memory Lane together
-FR-16: Epic 5 (v1.1) - Share Memory Lane externally
+FR-10: Epic 5 (v1.1) - Manual Fun Fact logging
+FR-11: Epic 5 (v1.1) - Automatic event detection
+FR-12: Epic 5 (v1.1) - In-app photo logging
+FR-13: Epic 5 (v1.1) - One-time contextual nudges
+FR-14: Epic 6 (v1.1) - Generate Memory Lane
+FR-15: Epic 6 (v1.1) - View Memory Lane together
+FR-16: Epic 6 (v1.1) - Share Memory Lane externally
 
 ## Epic List
 
@@ -151,13 +151,17 @@ An Organizer can start a Voyage, invite others with a link, have them join insta
 Every Voyager sees the whole group moving together in real time on a stylized, game-like map for the duration of the drive — reliably, safely for drivers, and without draining the battery.
 **FRs covered:** FR-9
 
-### Epic 4: Fun Fact Capture (v1.1)
+### Epic 4: Visual Design System v2 (Cross-Cutting Redesign)
+Replaces the shipped "Night Drive" dark/glass system with a solid-color, high-saturation game-map aesthetic and a breadcrumb-icon action drawer, across all built screens. Re-skin only — no FR/behavior change. Epics touched: 1, 2, 3.
+**FRs covered:** none (visual/navigation redesign only)
+
+### Epic 5: Fun Fact Capture (v1.1)
 Voyagers can tap-log spottings, get automatic detection of stops and border crossings, attach photos, and get gently nudged toward these features the first time each becomes relevant.
 **FRs covered:** FR-10, FR-11, FR-12, FR-13
 
 **Idea captured for story detailing (not yet a story):** a new automatic Fun Fact type — "connection drops" — counting how many times a Voyager lost and regained connectivity during the Voyage (e.g. "Went off-grid 4 times"). Cheap to add: Epic 3's Story 3.5 already detects every drop/reconnect to drive the "reconnecting" HUD note; this would extend FR-11 (Automatic Event Detection) to also log that event as a bankable Fun Fact, the same way border crossings are silently banked.
 
-### Epic 5: Memory Lane (v1.1)
+### Epic 6: Memory Lane (v1.1)
 When a Voyage ends, the group gets a generated highlight-reel recap they can watch together, revisit, and share externally with consent.
 **FRs covered:** FR-14, FR-15, FR-16
 
@@ -432,3 +436,83 @@ So that a temporary signal drop doesn't corrupt the trip or make me look like I 
 **And** any queued Voyage-lifecycle write (not location pings) flushes per-item on reconnect; one with a stale precondition (e.g. my membership was revoked while offline) is dropped with a clear conflict message, never silently retried forever
 
 *(Fulfills NFR2; UX-DR33; AD-7.)*
+
+## Epic 4: Visual Design System v2 (Cross-Cutting Redesign)
+
+Replaces the shipped "Night Drive" dark/glass system with a solid-color, high-saturation game-map aesthetic and a breadcrumb-icon action drawer, across all built screens. Re-skin only — no FR/behavior change. Added via Sprint Change Proposal 2026-08-02 (see `sprint-change-proposal-2026-08-02.md`), triggered by user feedback that the shipped dark/glass UI and organizer bottom-sheet navigation read as unclear and hard to use.
+
+### Story 4.1: UX Design System v2
+
+As a UX Designer,
+I want to redefine Voylo's color system, elevation model, and key components against a solid-color, high-saturation "game map" direction,
+So that the app drops the semi-transparent/dark treatment users found unclear and instead reads as a colorful, icon-driven, Waze-like experience.
+
+**Acceptance Criteria:**
+
+**Given** the UX Design Brief in `sprint-change-proposal-2026-08-02.md` §4.3
+**When** this story is executed via a dedicated `bmad-ux` session
+**Then** `DESIGN.md` is updated with a new solid, opaque, high-saturation palette (no transparency/blur anywhere) and WCAG AA contrast recomputed from the new values
+**And** the glassmorphism mechanism (`surface-glass`, blur, `scrimOpacityMin`) is removed from `hud-card`, `nudge-toast`, and `organizer-sheet`'s replacement
+**And** a new `action-drawer` component is specified (breadcrumb-triggered, on-demand, holds End Voyage / Grant Organizer Status / Remove Voyager)
+**And** the Live Map layout is respecced as a solid top destination banner + full map below, replacing floating top/bottom `hud-card` docking
+**And** `map-marker`, `status-pill`, `button-ignition`, `button-secondary`, `button-destructive`, `join-code-card` are re-specced against the new palette
+**And** typography, spacing, and rounded-corner scales are unchanged; all `EXPERIENCE.md` behavioral/IA content is unchanged except the line-53 IA amendment already applied
+**And** the new palette is validated against PRD §5.1 and FR-9's "game-like, not utility" guardrail before this story is marked done
+**And** `EXPERIENCE.md` gains a Motion & Transitions section specifying concrete screen-transition types/timing/easing (including the Destination Picker → Live Map "cut to gameplay" moment) and the action-drawer's open/close animation (slide + scrim fade), with parameters precise enough to implement without guessing
+**And** every mockup produced for Stories 4.2-4.4 is treated as the pixel-exact normative reference — not an approximation — for the screen it depicts: exact colors, spacing, radii, type sizes, and specified motion. A prior redesign pass shipped visibly different from its mockups; that must not repeat.
+**This story is design-only — no app code changes.**
+
+### Story 4.2: Action Drawer & Breadcrumb Navigation
+
+As an Organizer,
+I want to reach End Voyage, Grant Organizer Status, and Remove Voyager from a breadcrumb icon that opens a drawer,
+So that organizer actions are consolidated behind clear, discoverable chrome instead of a floating bottom sheet.
+
+**Acceptance Criteria:**
+
+**Given** Story 4.1's `action-drawer` spec
+**When** I tap the breadcrumb icon docked in Live Map's top chrome
+**Then** the action drawer opens over the map, showing End Voyage, Grant Organizer Status, and Remove Voyager (Organizer-only)
+**And** selecting a row behaves the same as it did in `organizer-sheet` (swaps to a confirm step, never stacks a second dialog)
+**And** the drawer closes after an action completes or on explicit dismiss — it is not a persistent nav surface
+**And** `organizer-sheet` is removed from the codebase, fully replaced by `action-drawer`
+**And** the drawer's open and close animation matches Story 4.1's Motion & Transitions spec exactly (slide + scrim fade, same timing/easing) — not an instant cut, not a substituted default transition
+**And** the built screen matches its linked mockup exactly (colors, spacing, radii, component treatment) — verified side-by-side against the mockup file during code review, not approved on "close enough"
+
+*(Fulfills EXPERIENCE.md line-53 IA amendment; replaces UX-DR14.)*
+
+### Story 4.3: Live Map Redesign
+
+As a Voyager,
+I want the Live Map to open with a clear destination banner and a clean, colorful map view of everyone in the group,
+So that the core screen reads as an inviting game-like world instead of a dark, hard-to-parse HUD.
+
+**Acceptance Criteria:**
+
+**Given** Story 4.1's respecced Live Map layout
+**When** I open Live Map
+**Then** a solid top banner clearly displays the Voyage's destination
+**And** the full map renders below the banner, with each Voyager shown via the re-specced `map-marker` and `status-pill`
+**And** no glass/blur/transparency is used anywhere on this screen
+**And** all existing Live Map behavior (Realtime updates, recenter control, connectivity-loss handling, role switch) is preserved unchanged
+**And** entering Live Map from Destination Picker (Organizer) or from Join+OTP completion (Voyager) uses Story 4.1's specified "cut to gameplay" transition, not a default screen push
+**And** the built screen matches its linked mockup exactly (colors, spacing, radii, component treatment) — verified side-by-side against the mockup file during code review, not approved on "close enough"
+
+*(Fulfills Story 4.1's Live Map respec; supersedes visual portions of Stories 3.2, 3.4, 3.5 — no behavioral change to those stories.)*
+
+### Story 4.4: Reskin Epic 1 & 2 Screens
+
+As a Voyager,
+I want every screen — not just Live Map — to use the new colorful design system,
+So that the app feels consistent app-wide instead of having one redesigned screen surrounded by the old dark/glass look.
+
+**Acceptance Criteria:**
+
+**Given** Story 4.1's new design system
+**When** I use OTP Sign-In/Verify, Trust Moment, Driver Attention Consent, Home, Voyage Intro, Destination Picker, Join Invitation, or Voyage Ended
+**Then** each screen renders using the new palette and components, with no remaining Night Drive dark/glass styling
+**And** no flow, copy, or logic changes are introduced — this is a visual re-skin only
+**And** screen-to-screen navigation within this set uses Story 4.1's specified transition types/timing, not default platform transitions or instant cuts
+**And** each built screen matches its linked mockup exactly (colors, spacing, radii, component treatment) — verified side-by-side against the mockup file during code review, not approved on "close enough"
+
+*(Fulfills app-wide scope of Story 4.1's design output across Epics 1-2's screens.)*

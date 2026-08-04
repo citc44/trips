@@ -1,11 +1,13 @@
 import { beforeEach, expect, jest, test } from '@jest/globals';
 import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
+import { AccessibilityInfo } from 'react-native';
 import mockSafeAreaContext from 'react-native-safe-area-context/jest/mock';
 
 import { voyageRepository } from '@/repositories/voyage-repository';
 import { useActiveVoyage } from '@/shared/hooks/use-active-voyage';
 import { useAuth } from '@/shared/hooks/use-auth';
 import { useLiveLocations } from '@/shared/hooks/use-live-locations';
+import { usePendingEntryTransition } from '@/shared/hooks/use-pending-entry-transition';
 import { formatDistanceMiles, haversineMiles } from '@/shared/lib/geo';
 import { outbox } from '@/shared/services/outbox/outbox';
 
@@ -36,7 +38,7 @@ jest.mock('@rnmapbox/maps', () => {
   const { View } = require('react-native');
   return {
     __esModule: true,
-    default: { StyleURL: { Dark: 'mapbox://styles/mapbox/dark-v10' } },
+    default: { StyleURL: { Street: 'mapbox://styles/mapbox/streets-v12' } },
     MapView: ({ children, testID }: any) => ReactActual.createElement(View, { testID }, children),
     Camera: ReactActual.forwardRef((_props: any, ref: any) => {
       ReactActual.useImperativeHandle(ref, () => ({ moveTo: mockCameraMoveTo, flyTo: jest.fn(), zoomTo: jest.fn(), fitBounds: jest.fn() }));
@@ -74,6 +76,16 @@ jest.mock('@/shared/hooks/use-location-tracking', () => ({
   useLocationTracking: jest.fn(),
 }));
 
+const mockConsumeEntryTransition = jest.fn();
+jest.mock('@/shared/hooks/use-pending-entry-transition', () => ({
+  usePendingEntryTransition: jest.fn(),
+}));
+
+const mockMarkVoyageStarted = jest.fn();
+jest.mock('@/shared/hooks/use-just-started-voyage', () => ({
+  useJustStartedVoyage: () => ({ hasJustStartedVoyage: false, markVoyageStarted: mockMarkVoyageStarted, clearJustStartedVoyage: jest.fn() }),
+}));
+
 jest.mock('@/shared/services/outbox/outbox', () => ({
   outbox: { enqueue: jest.fn(), flush: jest.fn() },
 }));
@@ -86,6 +98,7 @@ const mockSetTravelRole = voyageRepository.setTravelRole as jest.MockedFunction<
 const mockUseActiveVoyage = useActiveVoyage as jest.MockedFunction<typeof useActiveVoyage>;
 const mockUseAuth = useAuth as jest.MockedFunction<typeof useAuth>;
 const mockUseLiveLocations = useLiveLocations as jest.MockedFunction<typeof useLiveLocations>;
+const mockUsePendingEntryTransition = usePendingEntryTransition as jest.MockedFunction<typeof usePendingEntryTransition>;
 const mockOutboxEnqueue = outbox.enqueue as jest.MockedFunction<typeof outbox.enqueue>;
 const mockOutboxFlush = outbox.flush as jest.MockedFunction<typeof outbox.flush>;
 const mockRefetch = jest.fn<() => Promise<void>>();
@@ -185,6 +198,13 @@ beforeEach(() => {
     signOut: jest.fn<(...args: any[]) => Promise<any>>(),
   });
   mockUseLiveLocations.mockReturnValue({ locations: locationsFixture, trails: {}, isLoading: false, hasError: false, isConnected: true });
+  // Default: not a fresh "cut to gameplay" arrival -- individual tests below
+  // override this to exercise the transition itself.
+  mockUsePendingEntryTransition.mockReturnValue({
+    hasPendingEntryTransition: false,
+    triggerEntryTransition: jest.fn(),
+    consumeEntryTransition: mockConsumeEntryTransition,
+  });
 });
 
 test('shows the map, destination, and status pill', async () => {
@@ -195,6 +215,144 @@ test('shows the map, destination, and status pill', async () => {
   expect(getByTestId('live-map')).toBeTruthy();
   expect(getByText('Lake Tahoe')).toBeTruthy();
   expect(getByTestId('status-pill')).toBeTruthy();
+});
+
+test('the top banner (Story 4.3, map-banner) shows the destination eyebrow and a Voyager-count badge instead of the old descriptive subtext', async () => {
+  mockActiveVoyage('organizer');
+
+  const { getByText, getByTestId, queryByText } = await render(<ActiveVoyageScreen />);
+
+  expect(getByText('Voyage destination')).toBeTruthy();
+  await waitFor(() => expect(getByTestId('voyager-count-badge')).toBeTruthy());
+  // Both fixture members have a live location (locationsFixture), so both
+  // count as markers -- the badge shows that count, not the roster length.
+  expect(within(getByTestId('voyager-count-badge')).getByText('2☺')).toBeTruthy();
+  expect(getByTestId('voyager-count-badge').props.accessibilityLabel).toBe('2 Voyagers riding with you');
+  expect(queryByText(/riding with you/)).toBeNull();
+});
+
+test('the voyager-count badge counts markers.length (live locations), not members.length (roster size) -- code review finding: the two were never distinguished in test coverage', async () => {
+  mockActiveVoyage('organizer');
+  // Two members on the roster, but only one has a live location -- the
+  // badge should read "1", not "2", since it's meant to represent who's
+  // actually riding along right now, not everyone who's ever joined.
+  mockUseLiveLocations.mockReturnValue({
+    locations: { 'user-1': locationsFixture['user-1'] },
+    trails: {},
+    isLoading: false,
+    hasError: false,
+    isConnected: true,
+  });
+
+  const { getByTestId } = await render(<ActiveVoyageScreen />);
+
+  await waitFor(() => expect(getByTestId('voyager-count-badge')).toBeTruthy());
+  expect(within(getByTestId('voyager-count-badge')).getByText('1☺')).toBeTruthy();
+  expect(getByTestId('voyager-count-badge').props.accessibilityLabel).toBe('1 Voyager riding with you');
+});
+
+test('the bottom HUD (Story 4.3, hud-bar) shows an Elapsed stat instead of the old always-visible per-Voyager roster', async () => {
+  mockActiveVoyage('organizer');
+
+  const { getByTestId } = await render(<ActiveVoyageScreen />);
+
+  const hudBottom = within(getByTestId('hud-bottom'));
+  expect(hudBottom.getByText('Elapsed')).toBeTruthy();
+  // The roster names/roles that used to render unconditionally in
+  // hud-bottom are gone (Story 4.3's Scope decision) -- Meera's own marker
+  // tag still renders her name elsewhere on the map, but not inside
+  // hud-bottom itself anymore.
+  expect(hudBottom.queryByText('Meera')).toBeNull();
+});
+
+test('the "cut to gameplay" transition (Story 4.3) shows the flash overlay with the destination name when arriving via a pending entry transition', async () => {
+  mockActiveVoyage('organizer');
+  mockUsePendingEntryTransition.mockReturnValue({
+    hasPendingEntryTransition: true,
+    triggerEntryTransition: jest.fn(),
+    consumeEntryTransition: mockConsumeEntryTransition,
+  });
+
+  const { getByTestId } = await render(<ActiveVoyageScreen />);
+
+  await waitFor(() => expect(getByTestId('cut-to-gameplay-flash')).toBeTruthy());
+  expect(within(getByTestId('cut-to-gameplay-flash')).getByText('Lake Tahoe')).toBeTruthy();
+});
+
+test('the "cut to gameplay" transition consumes the pending flag once, so a later remount does not replay it', async () => {
+  mockActiveVoyage('organizer');
+  mockUsePendingEntryTransition.mockReturnValue({
+    hasPendingEntryTransition: true,
+    triggerEntryTransition: jest.fn(),
+    consumeEntryTransition: mockConsumeEntryTransition,
+  });
+
+  await render(<ActiveVoyageScreen />);
+
+  await waitFor(() => expect(mockConsumeEntryTransition).toHaveBeenCalledTimes(1));
+});
+
+test('the "cut to gameplay" transition does not fire on a cold relaunch mid-Voyage (no pending entry transition)', async () => {
+  mockActiveVoyage('organizer');
+  // Default beforeEach already sets hasPendingEntryTransition: false --
+  // explicit here for clarity, matching EXPERIENCE.md's State Patterns
+  // "Cold open, authenticated, active Voyage: skips Home entirely -- lands
+  // straight on Live Map," with no flash.
+
+  const { queryByTestId } = await render(<ActiveVoyageScreen />);
+
+  await waitFor(() => expect(queryByTestId('live-map')).toBeTruthy());
+  expect(queryByTestId('cut-to-gameplay-flash')).toBeNull();
+});
+
+test('under Reduce Motion, the "cut to gameplay" transition is skipped entirely -- Live Map simply appears', async () => {
+  mockActiveVoyage('organizer');
+  mockUsePendingEntryTransition.mockReturnValue({
+    hasPendingEntryTransition: true,
+    triggerEntryTransition: jest.fn(),
+    consumeEntryTransition: mockConsumeEntryTransition,
+  });
+  jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(true);
+
+  const { queryByTestId, getByTestId } = await render(<ActiveVoyageScreen />);
+
+  await waitFor(() => expect(getByTestId('live-map')).toBeTruthy());
+  // reduceMotion resolves asynchronously (AccessibilityInfo.
+  // isReduceMotionEnabled()) -- waitFor absorbs that, same pattern this
+  // file already uses for other reduceMotion-driven assertions.
+  await waitFor(() => expect(queryByTestId('cut-to-gameplay-flash')).toBeNull());
+});
+
+test('under Reduce Motion, the "cut to gameplay" transition never renders even for a single frame before AccessibilityInfo resolves (code review finding: reduceMotion defaults to false until then)', async () => {
+  mockActiveVoyage('organizer');
+  mockUsePendingEntryTransition.mockReturnValue({
+    hasPendingEntryTransition: true,
+    triggerEntryTransition: jest.fn(),
+    consumeEntryTransition: mockConsumeEntryTransition,
+  });
+  // A manually-controlled promise, not mockResolvedValue -- lets this test
+  // inspect the render that happens *before* AccessibilityInfo's real
+  // (Reduce-Motion-on) answer has landed, which is exactly the window the
+  // old (buggy) implementation got wrong.
+  let resolveReduceMotion: (enabled: boolean) => void = () => {};
+  jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockReturnValue(
+    new Promise((resolve) => {
+      resolveReduceMotion = resolve;
+    }),
+  );
+
+  const { queryByTestId } = await render(<ActiveVoyageScreen />);
+
+  // Still unresolved at this point -- must not have rendered the flash
+  // (or the animated, initially-opacity-0 content wrapper) speculatively.
+  expect(queryByTestId('cut-to-gameplay-flash')).toBeNull();
+
+  await act(async () => {
+    resolveReduceMotion(true);
+  });
+
+  // Resolved as Reduce-Motion-on -- still never shown.
+  expect(queryByTestId('cut-to-gameplay-flash')).toBeNull();
 });
 
 test('does not show the role prompt once the signed-in user already has a resolved travel role', async () => {
@@ -422,38 +580,6 @@ test('tapping a marker opens the peek card with that Voyager, and closing it dis
   expect(queryByTestId('marker-peek-card')).toBeNull();
 });
 
-test('hud-bottom roster row shows Driving for a Driving-role Voyager instead of the old hardcoded Riding', async () => {
-  mockActiveVoyage('organizer');
-  mockGetVoyageMembers.mockResolvedValue({
-    data: [membersFixture[0], { ...membersFixture[1], travelRole: 'driving' }],
-    error: null,
-  });
-
-  const { getByTestId } = await render(<ActiveVoyageScreen />);
-  await waitFor(() => expect(within(getByTestId('hud-bottom')).getByText('Meera')).toBeTruthy());
-
-  expect(within(getByTestId('hud-bottom')).getByText('Driving')).toBeTruthy();
-});
-
-test('hud-bottom roster row shows each Voyager\'s live distance from the destination once it has picked coordinates', async () => {
-  mockActiveVoyageWithDestinationCoords('organizer');
-
-  const { getByTestId } = await render(<ActiveVoyageScreen />);
-  await waitFor(() => expect(within(getByTestId('hud-bottom')).getByText('Meera')).toBeTruthy());
-
-  const expectedLabel = formatDistanceMiles(haversineMiles(locationsFixture['user-2'], DESTINATION_COORDS));
-  expect(getByTestId('hud-bottom-distance-user-2').props.children).toBe(expectedLabel);
-});
-
-test('hud-bottom roster row omits the distance readout when the destination has no picked coordinates', async () => {
-  mockActiveVoyage('organizer');
-
-  const { getByTestId, queryByTestId } = await render(<ActiveVoyageScreen />);
-  await waitFor(() => expect(within(getByTestId('hud-bottom')).getByText('Meera')).toBeTruthy());
-
-  expect(queryByTestId('hud-bottom-distance-user-2')).toBeNull();
-});
-
 test('marker peek card shows the selected Voyager\'s distance from the destination', async () => {
   mockActiveVoyageWithDestinationCoords('organizer');
 
@@ -601,7 +727,81 @@ test('closing the organizer menu returns to the map', async () => {
     fireEvent.press(getByTestId('organizer-menu-close-button'));
   });
 
+  // The map is mounted throughout -- opening/closing the drawer never
+  // unmounts it (Story 4.2).
   expect(getByTestId('live-map')).toBeTruthy();
+  // The drawer stays mounted through its own close animation (280ms) before
+  // its content actually unmounts -- waitFor absorbs that real delay rather
+  // than asserting instantly.
+  await waitFor(() => expect(queryByTestId('end-voyage-button')).toBeNull());
+});
+
+test('the map stays mounted while the action drawer is open (Story 4.2 -- opens over the map, not a full-screen takeover)', async () => {
+  mockActiveVoyage('organizer');
+
+  const { getByTestId } = await render(<ActiveVoyageScreen />);
+  await openOrganizerMenu(getByTestId);
+
+  // Deliberately still mounted, just correctly hidden from assistive tech
+  // while the drawer is up (see the mainContent accessibility props above)
+  // -- `includeHiddenElements` looks past that to confirm presence in the
+  // tree, which is what "stays mounted" actually means here.
+  expect(getByTestId('live-map', { includeHiddenElements: true })).toBeTruthy();
+  expect(getByTestId('hud-top', { includeHiddenElements: true })).toBeTruthy();
+  expect(getByTestId('hud-bottom', { includeHiddenElements: true })).toBeTruthy();
+  expect(getByTestId('end-voyage-button')).toBeTruthy();
+});
+
+test('tapping the drawer scrim closes it, same as the explicit close button', async () => {
+  mockActiveVoyage('organizer');
+
+  const { getByTestId, queryByTestId } = await render(<ActiveVoyageScreen />);
+  await openOrganizerMenu(getByTestId);
+  expect(getByTestId('end-voyage-button')).toBeTruthy();
+
+  await act(async () => {
+    fireEvent.press(getByTestId('action-drawer-scrim'));
+  });
+
+  await waitFor(() => expect(queryByTestId('end-voyage-button')).toBeNull());
+});
+
+test('reopening the drawer after closing it from a confirm step lands back on the menu step, not the confirm step', async () => {
+  mockActiveVoyage('organizer');
+
+  const { getByTestId, queryByTestId } = await render(<ActiveVoyageScreen />);
+  await openOrganizerMenu(getByTestId);
+  await act(async () => {
+    fireEvent.press(getByTestId('end-voyage-button'));
+  });
+  expect(getByTestId('confirm-end-voyage-button')).toBeTruthy();
+
+  await act(async () => {
+    fireEvent.press(getByTestId('organizer-menu-close-button'));
+  });
+  await waitFor(() => expect(queryByTestId('confirm-end-voyage-button')).toBeNull());
+
+  await openOrganizerMenu(getByTestId);
+
+  expect(getByTestId('end-voyage-button')).toBeTruthy();
+  expect(queryByTestId('confirm-end-voyage-button')).toBeNull();
+});
+
+test('under Reduce Motion, the drawer unmounts its content immediately on close (no animation delay)', async () => {
+  mockActiveVoyage('organizer');
+  jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValueOnce(true);
+
+  const { getByTestId, queryByTestId } = await render(<ActiveVoyageScreen />);
+  await waitFor(() => expect(getByTestId('live-map')).toBeTruthy());
+  await openOrganizerMenu(getByTestId);
+  expect(getByTestId('end-voyage-button')).toBeTruthy();
+
+  await act(async () => {
+    fireEvent.press(getByTestId('organizer-menu-close-button'));
+  });
+
+  // No waitFor -- under Reduce Motion this must already be gone by the time
+  // this synchronous assertion runs, not merely "eventually" gone.
   expect(queryByTestId('end-voyage-button')).toBeNull();
 });
 
@@ -628,6 +828,11 @@ test('Invite More Voyagers is available to any member (not just the Organizer), 
     pathname: '/join-code',
     params: { destination: 'Lake Tahoe', joinCode: 'ABCD2345' },
   });
+  // Code review finding: this call site was missed when Task 7 first wired
+  // the flag through -- without marking it here too, join-code.tsx's own
+  // Stack.Protected guard (_layout.tsx) stays false and silently refuses to
+  // admit the screen, breaking this mid-Voyage re-invite feature.
+  expect(mockMarkVoyageStarted).toHaveBeenCalledTimes(1);
 });
 
 test('tapping End Voyage swaps to the confirm view with the ceremonial copy', async () => {
@@ -914,12 +1119,29 @@ test('a flush pass with multiple items combines their messages into one toast in
 test('fetches and shows the Voyager list with display names in the organizer menu', async () => {
   mockActiveVoyage('organizer');
 
-  const { getByTestId, getByText } = await render(<ActiveVoyageScreen />);
+  const { getByTestId } = await render(<ActiveVoyageScreen />);
   await openOrganizerMenu(getByTestId);
 
   expect(mockGetVoyageMembers).toHaveBeenCalledWith('voyage-1');
-  await waitFor(() => expect(getByText('Chintan')).toBeTruthy());
-  expect(getByText('Meera')).toBeTruthy();
+  // Scoped to the drawer's own member list (Story 4.2: the map stays
+  // mounted behind the drawer, so an unscoped getByText risks matching a
+  // marker's own name tag too).
+  await waitFor(() => expect(within(getByTestId('drawer-member-list')).getByText('Chintan')).toBeTruthy());
+  expect(within(getByTestId('drawer-member-list')).getByText('Meera')).toBeTruthy();
+});
+
+test('the drawer member list shows each non-Organizer member\'s Driving/Riding status (Story 4.3 code review: this was silently dropped when the always-visible hud-bottom roster was removed)', async () => {
+  mockActiveVoyage('organizer');
+  mockGetVoyageMembers.mockResolvedValue({
+    data: [membersFixture[0], { ...membersFixture[1], travelRole: 'driving' }],
+    error: null,
+  });
+
+  const { getByTestId } = await render(<ActiveVoyageScreen />);
+  await openOrganizerMenu(getByTestId);
+
+  await waitFor(() => expect(getByTestId('drawer-member-role-user-2').props.children).toBe('Driving'));
+  expect(getByTestId('drawer-member-role-user-1').props.children).toBe('Organizer');
 });
 
 test('shows a Grant Organizer action for each non-organizer row when viewed by an Organizer', async () => {
@@ -1049,7 +1271,7 @@ test('shows a retry action (not a dead end) when the initial Voyager-list fetch 
   mockActiveVoyage('organizer');
   mockGetVoyageMembers.mockResolvedValueOnce({ data: null, error: { code: 'MEM01', message: 'You are not a participant of this Voyage.' } });
 
-  const { getByTestId, getByText } = await render(<ActiveVoyageScreen />);
+  const { getByTestId } = await render(<ActiveVoyageScreen />);
   await openOrganizerMenu(getByTestId);
 
   await waitFor(() => expect(getByTestId('voyager-list-error')).toBeTruthy());
@@ -1061,7 +1283,9 @@ test('shows a retry action (not a dead end) when the initial Voyager-list fetch 
   });
 
   expect(mockGetVoyageMembers).toHaveBeenCalledTimes(2);
-  await waitFor(() => expect(getByText('Chintan')).toBeTruthy());
+  // Scoped to the drawer's own member list -- see the equivalent note in
+  // "fetches and shows the Voyager list..." above.
+  await waitFor(() => expect(within(getByTestId('drawer-member-list')).getByText('Chintan')).toBeTruthy());
 });
 
 test('granting Organizer status on one row does not re-enable a different row still in flight', async () => {
@@ -1205,7 +1429,10 @@ test('confirming Remove calls removeVoyager, re-fetches the member list, and sho
   await waitFor(() => expect(mockGetVoyageMembers).toHaveBeenCalledTimes(2));
   expect(queryByTestId('confirm-remove-voyager-button')).toBeNull();
   expect(mockPush).not.toHaveBeenCalled();
-  expect(queryByTestId('grant-organizer-toast')).toBeNull();
+  // A plain (non-flush, non-grant) Remove doesn't set toastMessage -- the
+  // single shared outbox-toast (Story 4.2 consolidated the drawer's own
+  // separate toast copy into this one) shouldn't be showing either.
+  expect(queryByTestId('outbox-toast')).toBeNull();
 });
 
 test('shows an inline error (not a dead end) when removing a Voyager fails', async () => {

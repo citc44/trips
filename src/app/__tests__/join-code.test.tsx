@@ -14,19 +14,28 @@ jest.mock('react-native/Libraries/Share/Share', () => ({
 }));
 
 const mockPush = jest.fn();
-const mockBack = jest.fn();
 const mockUseLocalSearchParams = jest.fn();
 jest.mock('expo-router', () => {
   const actual = jest.requireActual('expo-router') as object;
   return {
     ...actual,
-    router: { push: (...args: unknown[]) => mockPush(...args), back: () => mockBack() },
+    router: { push: (...args: unknown[]) => mockPush(...args) },
     useLocalSearchParams: () => mockUseLocalSearchParams(),
   };
 });
 
 jest.mock('expo-linking', () => ({
   createURL: (path: string) => `voylo://${path.replace(/^\//, '')}`,
+}));
+
+const mockClearJustStartedVoyage = jest.fn();
+jest.mock('@/shared/hooks/use-just-started-voyage', () => ({
+  useJustStartedVoyage: () => ({ hasJustStartedVoyage: true, markVoyageStarted: jest.fn(), clearJustStartedVoyage: mockClearJustStartedVoyage }),
+}));
+
+const mockTriggerEntryTransition = jest.fn();
+jest.mock('@/shared/hooks/use-pending-entry-transition', () => ({
+  usePendingEntryTransition: () => ({ hasPendingEntryTransition: false, triggerEntryTransition: mockTriggerEntryTransition, consumeEntryTransition: jest.fn() }),
 }));
 
 beforeEach(() => {
@@ -68,13 +77,28 @@ test('tapping share opens the OS share sheet with a message containing the link'
   expect(shareArg.message).toContain('Lake Tahoe');
 });
 
-test('tapping Continue dismisses the screen, revealing the already-guarded active-voyage screen underneath', async () => {
+test('tapping Continue clears the just-started-Voyage flag (Story 4.3) -- that flag change is what lets _layout.tsx\'s Stack.Protected guard evict this screen onto Live Map, not an explicit navigation call', async () => {
   const { getByTestId } = await render(<JoinCodeScreen />);
 
   await act(async () => {
     fireEvent.press(getByTestId('join-code-continue-button'));
   });
 
-  expect(mockBack).toHaveBeenCalledTimes(1);
+  expect(mockClearJustStartedVoyage).toHaveBeenCalledTimes(1);
   expect(mockPush).not.toHaveBeenCalled();
+  // Story 4.3: triggers active-voyage.tsx's "cut to gameplay" transition on
+  // its next mount.
+  expect(mockTriggerEntryTransition).toHaveBeenCalledTimes(1);
+});
+
+test('leaving the screen any other way (unmounting without tapping Continue) still clears the just-started-Voyage flag (code review finding: previously only Continue cleared it, leaving the guard stuck admitting this screen)', async () => {
+  const { unmount } = await render(<JoinCodeScreen />);
+
+  expect(mockClearJustStartedVoyage).not.toHaveBeenCalled();
+
+  await act(async () => {
+    unmount();
+  });
+
+  expect(mockClearJustStartedVoyage).toHaveBeenCalledTimes(1);
 });

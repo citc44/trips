@@ -1,7 +1,9 @@
 import { beforeEach, expect, jest, test } from '@jest/globals';
 import { act, fireEvent, render } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
 
 import DriverAttentionConsentScreen from '@/app/driver-attention-consent';
+import { WayfinderColors } from '@/constants/design-tokens';
 
 const mockMarkDriverConsentSeen = jest.fn<() => Promise<any>>();
 
@@ -20,6 +22,13 @@ test('renders the locked Driver Attention Consent copy', async () => {
 
   expect(getByText("If you're behind the wheel, stay focused on the road — Voylo can't do that for you.")).toBeTruthy();
   expect(getByText("Voylo isn't responsible for distracted driving.")).toBeTruthy();
+});
+
+test('shows the amber car icon badge (Story 4.4 -- distinct from Trust Moment\'s teal shield badge)', async () => {
+  const { getByTestId } = await render(<DriverAttentionConsentScreen />);
+
+  const flatStyle = StyleSheet.flatten(getByTestId('driver-consent-icon-badge').props.style);
+  expect(flatStyle.backgroundColor).toBe(WayfinderColors.accentAmber);
 });
 
 test('tapping "Got it" calls markDriverConsentSeen', async () => {
