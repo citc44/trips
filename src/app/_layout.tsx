@@ -6,9 +6,9 @@
 import '@/shared/lib/background-location-task';
 
 import { useFonts } from 'expo-font';
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
+import { DarkTheme, DefaultTheme, router, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useColorScheme } from 'react-native';
 
 import { initSentry, Sentry } from '@/lib/sentry';
@@ -21,6 +21,7 @@ import { PendingJoinProvider, usePendingJoin } from '@/shared/hooks/use-pending-
 import { ProfileProvider, useProfile } from '@/shared/hooks/use-profile';
 import { useReduceMotion } from '@/shared/hooks/use-reduce-motion';
 import { RemovalNoticeProvider, useRemovalNotice } from '@/shared/hooks/use-removal-notice';
+import { resolveJustStartedVoyageExit } from '@/shared/navigation/resolve-just-started-voyage-exit';
 import { resolveRoute } from '@/shared/navigation/resolve-route';
 import { getStandardPushTransition } from '@/shared/navigation/standard-push-transition';
 
@@ -68,6 +69,25 @@ function AppNavigator() {
   } = useLocationPermission();
   const { reduceMotion, resolved: reduceMotionResolved } = useReduceMotion();
   const [fontsLoaded, fontError] = useFonts(FONT_ASSETS);
+
+  // User-reported "major defect": tapping Continue on join-code.tsx landed
+  // back on destination-picker.tsx instead of the live map. See
+  // resolve-just-started-voyage-exit.ts for the full root-cause writeup and
+  // why this can't rely on Stack.Protected's own guard-flip auto-redirect
+  // the way the onboarding cascade does.
+  const wasJustStartedVoyageRef = useRef(hasJustStartedVoyage);
+  useEffect(() => {
+    const wasJustStarted = wasJustStartedVoyageRef.current;
+    wasJustStartedVoyageRef.current = hasJustStartedVoyage;
+
+    const exitRoute = resolveJustStartedVoyageExit({
+      wasJustStarted,
+      hasJustStartedVoyage,
+      hasActiveVoyage: !!activeVoyage,
+      needsLocationPermission: locationPermissionStatus === 'undetermined' && !hasCompletedPriming,
+    });
+    if (exitRoute) router.replace(exitRoute);
+  }, [hasJustStartedVoyage, activeVoyage, locationPermissionStatus, hasCompletedPriming]);
 
   // Profile/active-Voyage/removal-notice/location-permission data only start
   // loading once a session exists (see use-profile.tsx/use-active-voyage.tsx/
