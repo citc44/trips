@@ -155,35 +155,6 @@ function mockActiveVoyage(role: 'organizer' | 'voyager') {
   });
 }
 
-const DESTINATION_COORDS = { lat: 39.0968, lng: -120.0324 };
-
-// Distinct from mockActiveVoyage() above: this Voyage's destination has real
-// picked-place coordinates (destination search), which is what the distance
-// readout needs -- mockActiveVoyage()'s default fixture deliberately has
-// none, covering the "started before destination search existed / free-text
-// entry" degrade-gracefully case those other tests exercise.
-function mockActiveVoyageWithDestinationCoords(role: 'organizer' | 'voyager') {
-  mockUseActiveVoyage.mockReturnValue({
-    activeVoyage: {
-      voyage: {
-        id: 'voyage-1',
-        destination: 'Lake Tahoe, California, United States',
-        destinationLat: DESTINATION_COORDS.lat,
-        destinationLng: DESTINATION_COORDS.lng,
-        status: 'active',
-        createdBy: 'user-1',
-        createdAt: '2026-07-26T00:00:00Z',
-        endedAt: null,
-        joinCode: 'ABCD2345',
-      },
-      role,
-    },
-    isLoading: false,
-    hasError: false,
-    refetch: mockRefetch,
-  });
-}
-
 async function openOrganizerMenu(getByTestId: (id: string) => any) {
   await act(async () => {
     fireEvent.press(getByTestId('organizer-menu-button'));
@@ -576,7 +547,7 @@ test('does not render a marker for a Voyager with no live location yet', async (
   expect(queryByTestId('voyager-marker-user-2')).toBeNull();
 });
 
-test('tapping a marker opens the peek card with that Voyager, and closing it dismisses', async () => {
+test('tapping a marker opens the peek tooltip with that Voyager, and closing it dismisses', async () => {
   mockActiveVoyage('organizer');
 
   const { getByTestId, queryByTestId } = await render(<ActiveVoyageScreen />);
@@ -588,7 +559,7 @@ test('tapping a marker opens the peek card with that Voyager, and closing it dis
 
   expect(getByTestId('marker-peek-card')).toBeTruthy();
   expect(within(getByTestId('marker-peek-card')).getByText('Meera')).toBeTruthy();
-  // Player color shown on the peek card (code review finding: the original
+  // Player color shown on the tooltip (code review finding: the original
   // version omitted it despite the story's own stated v1 scope).
   expect(getByTestId('marker-peek-color-swatch')).toBeTruthy();
 
@@ -599,8 +570,42 @@ test('tapping a marker opens the peek card with that Voyager, and closing it dis
   expect(queryByTestId('marker-peek-card')).toBeNull();
 });
 
-test('marker peek card shows the selected Voyager\'s distance from the destination', async () => {
-  mockActiveVoyageWithDestinationCoords('organizer');
+test('tapping the already-open marker again closes its tooltip (toggle), same as the explicit close button', async () => {
+  mockActiveVoyage('organizer');
+
+  const { getByTestId, queryByTestId } = await render(<ActiveVoyageScreen />);
+  await waitFor(() => expect(getByTestId('voyager-marker-user-2')).toBeTruthy());
+
+  await act(async () => {
+    fireEvent.press(getByTestId('voyager-marker-user-2'));
+  });
+  expect(getByTestId('marker-peek-card')).toBeTruthy();
+
+  await act(async () => {
+    fireEvent.press(getByTestId('voyager-marker-user-2'));
+  });
+  expect(queryByTestId('marker-peek-card')).toBeNull();
+});
+
+test('tapping a different marker while one tooltip is open switches straight to the new one', async () => {
+  mockActiveVoyage('organizer');
+
+  const { getByTestId } = await render(<ActiveVoyageScreen />);
+  await waitFor(() => expect(getByTestId('voyager-marker-user-2')).toBeTruthy());
+
+  await act(async () => {
+    fireEvent.press(getByTestId('voyager-marker-user-2'));
+  });
+  expect(within(getByTestId('marker-peek-card')).getByText('Meera')).toBeTruthy();
+
+  await act(async () => {
+    fireEvent.press(getByTestId('voyager-marker-user-1'));
+  });
+  expect(within(getByTestId('marker-peek-card')).getByText('Chintan')).toBeTruthy();
+});
+
+test('marker peek tooltip shows the selected Voyager\'s distance from your own live position, not the destination (user-reported change)', async () => {
+  mockActiveVoyage('organizer');
 
   const { getByTestId } = await render(<ActiveVoyageScreen />);
   await waitFor(() => expect(getByTestId('voyager-marker-user-2')).toBeTruthy());
@@ -609,12 +614,25 @@ test('marker peek card shows the selected Voyager\'s distance from the destinati
     fireEvent.press(getByTestId('voyager-marker-user-2'));
   });
 
-  const expectedLabel = formatDistanceMiles(haversineMiles(locationsFixture['user-2'], DESTINATION_COORDS));
-  expect(getByTestId('marker-peek-distance').props.children).toBe(`${expectedLabel} from Lake Tahoe, California, United States`);
+  // session user is user-1 (Chintan) -- distance is from user-1's own
+  // location, not from any destination coordinate.
+  const expectedLabel = formatDistanceMiles(haversineMiles(locationsFixture['user-2'], locationsFixture['user-1']));
+  const distanceChildren = getByTestId('marker-peek-distance').props.children as unknown[];
+  expect(distanceChildren[0]).toBe(`${expectedLabel} `);
+  expect(within(getByTestId('marker-peek-card')).getByText('from you')).toBeTruthy();
 });
 
-test('marker peek card omits the distance readout when the destination has no picked coordinates', async () => {
+test('marker peek tooltip omits the distance readout when this device does not have its own live location yet', async () => {
   mockActiveVoyage('organizer');
+  // Only user-2 has a live location -- the signed-in user (user-1) doesn't,
+  // so there's no "from you" to compute against.
+  mockUseLiveLocations.mockReturnValue({
+    locations: { 'user-2': locationsFixture['user-2'] },
+    trails: {},
+    isLoading: false,
+    hasError: false,
+    isConnected: true,
+  });
 
   const { getByTestId, queryByTestId } = await render(<ActiveVoyageScreen />);
   await waitFor(() => expect(getByTestId('voyager-marker-user-2')).toBeTruthy());
@@ -626,7 +644,7 @@ test('marker peek card omits the distance readout when the destination has no pi
   expect(queryByTestId('marker-peek-distance')).toBeNull();
 });
 
-test('marker peek card shows Driving for a Driving-role Voyager instead of the old hardcoded Riding', async () => {
+test('marker peek tooltip shows Driving for a Driving-role Voyager instead of the old hardcoded Riding', async () => {
   mockActiveVoyage('organizer');
   mockGetVoyageMembers.mockResolvedValue({
     data: [membersFixture[0], { ...membersFixture[1], travelRole: 'driving' }],
@@ -641,6 +659,33 @@ test('marker peek card shows Driving for a Driving-role Voyager instead of the o
   });
 
   expect(within(getByTestId('marker-peek-card')).getByText('Driving')).toBeTruthy();
+});
+
+test('tapping your own marker shows only your name in the tooltip -- no role, no distance (user-reported change)', async () => {
+  mockActiveVoyage('organizer');
+
+  const { getByTestId, queryByTestId } = await render(<ActiveVoyageScreen />);
+  await waitFor(() => expect(getByTestId('voyager-marker-user-1')).toBeTruthy());
+
+  await act(async () => {
+    fireEvent.press(getByTestId('voyager-marker-user-1'));
+  });
+
+  expect(within(getByTestId('marker-peek-card')).getByText('Chintan')).toBeTruthy();
+  expect(within(getByTestId('marker-peek-card')).getByText('This is you.')).toBeTruthy();
+  expect(queryByTestId('marker-peek-distance')).toBeNull();
+  expect(within(getByTestId('marker-peek-card')).queryByText('Organizer')).toBeNull();
+});
+
+test('your own marker always shows a "this is you" ring, even before it is tapped', async () => {
+  mockActiveVoyage('organizer');
+
+  const { getByTestId } = await render(<ActiveVoyageScreen />);
+  await waitFor(() => expect(getByTestId('voyager-marker-user-1')).toBeTruthy());
+
+  // getByTestId throws if more than one match exists, so this alone also
+  // proves the ring isn't duplicated onto user-2's (non-self) marker.
+  expect(within(getByTestId('voyager-marker-user-1')).getByTestId('marker-you-ring')).toBeTruthy();
 });
 
 test('shows a subtle reconnecting note (not the error banner) when the live channel disconnects, and keeps rendering last-known markers', async () => {

@@ -108,12 +108,20 @@ function VoyagerMarker({
   member,
   location,
   reduceMotion,
+  isSelf,
+  isSelected,
+  distanceLabel,
   onPress,
+  onClose,
 }: {
   member: VoyageMember;
   location: LiveLocation;
   reduceMotion: boolean;
+  isSelf: boolean;
+  isSelected: boolean;
+  distanceLabel: string | null;
   onPress: () => void;
+  onClose: () => void;
 }) {
   // useState's lazy initializer (not useRef(...).current) -- same "create
   // once, stable across re-renders" semantic, but reading a plain state
@@ -139,40 +147,91 @@ function VoyagerMarker({
 
   return (
     <MarkerView coordinate={[location.lng, location.lat]} anchor={{ x: 0.5, y: 0.5 }}>
-      <Pressable
-        testID={`voyager-marker-${member.userId}`}
-        accessibilityRole="button"
-        accessibilityLabel={`${member.displayName ?? 'Voyager'}, riding${member.playerColor ? `, ${member.playerColor} marker` : ''}`}
-        onPress={onPress}
-        style={styles.markerHitRegion}
-      >
-        {reduceMotion ? (
-          // Accessibility floor: live state is never color-only. Under
-          // Reduce Motion, a filled-vs-hollow ring distinction replaces the
-          // pulse animation rather than just omitting the "live" signal.
-          <View style={[styles.markerReduceMotionRing, { borderColor: ringColor }]} />
-        ) : (
-          <Animated.View
-            style={[
-              styles.markerPulse,
-              {
-                borderColor: ringColor,
-                opacity: pulseValue.interpolate({ inputRange: [0, 1], outputRange: [0.6, 0] }),
-                transform: [{ scale: pulseValue.interpolate({ inputRange: [0, 1], outputRange: [1, 1.8] }) }],
-              },
-            ]}
-          />
-        )}
-        <View style={[styles.markerDot, { backgroundColor: ringColor }]}>
-          <Text style={styles.markerInitial}>{initial}</Text>
-        </View>
-        {location.heading != null ? (
-          <View
-            style={[styles.markerChevron, { borderBottomColor: MapMarker.chevronColor, transform: [{ rotate: `${location.heading}deg` }] }]}
-          />
+      {/* MarkerView only accepts a single child element -- this wraps the
+          tooltip and the marker itself together, since both need to be
+          inside it. */}
+      <View>
+        {/* User-reported redesign: was a full-width bottom sheet behind a
+            dimming scrim; now a small Waze-style callout anchored directly
+            above this marker, with the map still fully visible/interactive
+            behind it. Lives inside the same MarkerView as the marker itself
+            so it tracks the map's pan/zoom for free, no separate screen-
+            coordinate math needed. */}
+        {isSelected ? (
+          <View testID="marker-peek-card" style={styles.markerTooltipWrap} pointerEvents="box-none">
+            <View style={styles.markerTooltip}>
+              <View style={styles.markerTooltipHeader}>
+                <View style={styles.markerTooltipNameRow}>
+                  <View testID="marker-peek-color-swatch" style={[styles.markerTooltipSwatch, { backgroundColor: ringColor }]} />
+                  <Text style={styles.markerTooltipName}>{member.displayName ?? 'Voyager'}</Text>
+                </View>
+                <Text testID="marker-peek-close-button" accessibilityRole="button" onPress={onClose} style={styles.markerTooltipClose}>
+                  {'✕'}
+                </Text>
+              </View>
+              {isSelf ? (
+                // "How far are you from yourself" isn't a real question --
+                // role/distance are dropped entirely rather than showing a
+                // meaningless "0 mi from you" (Waze's own convention for
+                // your own car).
+                <Text style={styles.markerTooltipSelfNote}>This is you.</Text>
+              ) : (
+                <>
+                  <Text style={styles.markerTooltipRole}>
+                    {member.role === 'organizer' ? 'Organizer' : member.travelRole === 'driving' ? 'Driving' : 'Riding'}
+                  </Text>
+                  {distanceLabel ? (
+                    <Text testID="marker-peek-distance" style={styles.markerTooltipDistance}>
+                      {`${distanceLabel} `}
+                      <Text style={styles.markerTooltipDistanceEmphasis}>from you</Text>
+                    </Text>
+                  ) : null}
+                </>
+              )}
+            </View>
+            <View style={styles.markerTooltipTail} />
+          </View>
         ) : null}
-        <Text style={styles.markerLabel}>{member.userId === location.userId && member.displayName ? member.displayName : ''}</Text>
-      </Pressable>
+        <Pressable
+          testID={`voyager-marker-${member.userId}`}
+          accessibilityRole="button"
+          accessibilityLabel={`${member.displayName ?? 'Voyager'}, riding${member.playerColor ? `, ${member.playerColor} marker` : ''}`}
+          onPress={onPress}
+          style={styles.markerHitRegion}
+        >
+          {/* Always visible on your own marker, not just while its tooltip
+              is open -- same "this is you" convention Waze/Google Maps use,
+              so you can find yourself on the map at a glance. */}
+          {isSelf ? <View testID="marker-you-ring" style={styles.markerYouRing} /> : null}
+          {reduceMotion ? (
+            // Accessibility floor: live state is never color-only. Under
+            // Reduce Motion, a filled-vs-hollow ring distinction replaces
+            // the pulse animation rather than just omitting the "live"
+            // signal.
+            <View style={[styles.markerReduceMotionRing, { borderColor: ringColor }]} />
+          ) : (
+            <Animated.View
+              style={[
+                styles.markerPulse,
+                {
+                  borderColor: ringColor,
+                  opacity: pulseValue.interpolate({ inputRange: [0, 1], outputRange: [0.6, 0] }),
+                  transform: [{ scale: pulseValue.interpolate({ inputRange: [0, 1], outputRange: [1, 1.8] }) }],
+                },
+              ]}
+            />
+          )}
+          <View style={[styles.markerDot, { backgroundColor: ringColor }]}>
+            <Text style={styles.markerInitial}>{initial}</Text>
+          </View>
+          {location.heading != null ? (
+            <View
+              style={[styles.markerChevron, { borderBottomColor: MapMarker.chevronColor, transform: [{ rotate: `${location.heading}deg` }] }]}
+            />
+          ) : null}
+          <Text style={styles.markerLabel}>{member.userId === location.userId && member.displayName ? member.displayName : ''}</Text>
+        </Pressable>
+      </View>
     </MarkerView>
   );
 }
@@ -554,20 +613,20 @@ export default function ActiveVoyageScreen() {
 
   const isOrganizer = activeVoyage.role === 'organizer';
 
-  // Null whenever this Voyage's destination has no picked coordinates (a
-  // free-text destination from before search existed, or one this Voyage
-  // was started with by manual entry) -- callers treat null as "omit the
+  // User-reported change: the peek tooltip's distance reading is now "how
+  // far is this Voyager from me right now" (Waze's own popup convention),
+  // not "how far from the shared destination" -- the question you actually
+  // have mid-drive. Null whenever this device doesn't have its own live
+  // location yet (a brief window right after mount, or if location
+  // permission/tracking never resolved) -- callers treat null as "omit the
   // distance readout entirely," not an error or a zero distance.
-  const destinationCoords =
-    activeVoyage.voyage.destinationLat != null && activeVoyage.voyage.destinationLng != null
-      ? { lat: activeVoyage.voyage.destinationLat, lng: activeVoyage.voyage.destinationLng }
-      : null;
+  const myLocation = session?.user.id ? locations[session.user.id] : undefined;
 
-  function getDistanceLabel(userId: string): string | null {
-    if (!destinationCoords) return null;
+  function getDistanceFromMeLabel(userId: string): string | null {
+    if (!myLocation) return null;
     const location = locations[userId];
     if (!location) return null;
-    return formatDistanceMiles(haversineMiles({ lat: location.lat, lng: location.lng }, destinationCoords));
+    return formatDistanceMiles(haversineMiles({ lat: location.lat, lng: location.lng }, myLocation));
   }
 
   async function handleEndVoyage() {
@@ -784,8 +843,6 @@ export default function ActiveVoyageScreen() {
       ? 'end-voyage-confirm'
       : 'menu';
 
-  const selectedMember = selectedUserId ? members.find((m) => m.userId === selectedUserId) : null;
-
   // `myMember` stays `undefined` until `members` has loaded at least once
   // (it starts as `[]`), so `showRolePrompt` is correctly `false` before the
   // roster fetch resolves -- no separate "members loaded" flag needed.
@@ -939,7 +996,14 @@ export default function ActiveVoyageScreen() {
               member={member}
               location={location}
               reduceMotion={reduceMotion}
-              onPress={() => setSelectedUserId(member.userId)}
+              isSelf={isSelf(member.userId)}
+              isSelected={selectedUserId === member.userId}
+              distanceLabel={getDistanceFromMeLabel(member.userId)}
+              // Tapping the already-open marker again closes it (toggle),
+              // matching the explicit close X's own behavior -- same
+              // "tap it again to dismiss" affordance Waze's own popups use.
+              onPress={() => setSelectedUserId((current) => (current === member.userId ? null : member.userId))}
+              onClose={() => setSelectedUserId(null)}
             />
           ))}
         </MapView>
@@ -1001,41 +1065,6 @@ export default function ActiveVoyageScreen() {
           <Text style={styles.recenterButtonIcon}>{'◎'}</Text>
         </Pressable>
       </View>
-
-      {selectedMember ? (
-        <View testID="marker-peek-card" style={styles.peekScrim}>
-          <View style={styles.peekCard}>
-            <View style={styles.peekHeaderRow}>
-              <View style={styles.peekNameRow}>
-                <View
-                  testID="marker-peek-color-swatch"
-                  style={[
-                    styles.peekColorSwatch,
-                    { backgroundColor: selectedMember.playerColor ? PlayerColors[selectedMember.playerColor] : WayfinderColors.inkSecondary },
-                  ]}
-                />
-                <Text style={styles.peekName}>{selectedMember.displayName ?? 'Voyager'}</Text>
-              </View>
-              <Text
-                testID="marker-peek-close-button"
-                accessibilityRole="button"
-                onPress={() => setSelectedUserId(null)}
-                style={styles.peekClose}
-              >
-                {'✕'}
-              </Text>
-            </View>
-            <Text style={styles.peekStatus}>
-              {selectedMember.role === 'organizer' ? 'Organizer' : selectedMember.travelRole === 'driving' ? 'Driving' : 'Riding'}
-            </Text>
-            {getDistanceLabel(selectedMember.userId) ? (
-              <Text testID="marker-peek-distance" style={styles.peekStatus}>
-                {`${getDistanceLabel(selectedMember.userId)} from ${activeVoyage.voyage.destination}`}
-              </Text>
-            ) : null}
-          </View>
-        </View>
-      ) : null}
 
       {showRolePrompt ? (
         <View testID="role-prompt" style={styles.peekScrim}>
@@ -1642,6 +1671,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // Always visible on your own marker (not gated on isSelected) -- same
+  // "this is you" convention Waze/Google Maps use. 8px wider than the dot
+  // itself (MapMarker.size), matching the mockup's own 4px-per-side inset,
+  // centered within markerHitRegion.
+  markerYouRing: {
+    position: 'absolute',
+    top: (MapMarker.hitRegion - (MapMarker.size + 8)) / 2,
+    left: (MapMarker.hitRegion - (MapMarker.size + 8)) / 2,
+    width: MapMarker.size + 8,
+    height: MapMarker.size + 8,
+    borderRadius: (MapMarker.size + 8) / 2,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: WayfinderColors.accentPrimary,
+  },
   markerPulse: {
     position: 'absolute',
     width: MapMarker.size,
@@ -1715,6 +1759,99 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 8,
     overflow: 'hidden',
+  },
+  // Waze-style callout anchored above the marker (mockups/key-marker-peek-
+  // card.html) -- replaces the old full-width bottom-sheet peek card.
+  // Positioned within the same MarkerView as the marker itself, so it pans/
+  // zooms with the map for free; no separate screen-coordinate tracking.
+  markerTooltipWrap: {
+    position: 'absolute',
+    bottom: MapMarker.hitRegion / 2 + 14,
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  markerTooltip: {
+    backgroundColor: WayfinderColors.surfacePrimary,
+    borderWidth: 1,
+    borderColor: WayfinderColors.borderHairline,
+    borderRadius: 14,
+    paddingVertical: Spacing['3'],
+    paddingHorizontal: Spacing['4'],
+    minWidth: 168,
+    shadowColor: WayfinderColors.inkPrimary,
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+  },
+  markerTooltipHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing['4'],
+  },
+  markerTooltipNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing['2'],
+  },
+  markerTooltipSwatch: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  markerTooltipName: {
+    color: WayfinderColors.inkPrimary,
+    fontFamily: 'GeneralSans-Bold',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  markerTooltipClose: {
+    color: WayfinderColors.inkDisabled,
+    fontSize: 13,
+    padding: 2,
+  },
+  markerTooltipRole: {
+    marginTop: 3,
+    color: WayfinderColors.inkSecondary,
+    fontFamily: Typography.body.fontFamily,
+    fontSize: 11.5,
+  },
+  markerTooltipDistance: {
+    marginTop: Spacing['1'] + 2,
+    paddingTop: Spacing['1'] + 2,
+    // Literal one-off, not WayfinderColors.surfaceSecondary -- a fainter
+    // hairline than the tooltip's own outer border, same relationship the
+    // mockup's own two hairline shades have to each other.
+    borderTopWidth: 1,
+    borderTopColor: '#F0F2F6',
+    color: WayfinderColors.inkPrimary,
+    fontFamily: 'GeneralSans-Semibold',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  markerTooltipDistanceEmphasis: {
+    color: WayfinderColors.accentPrimary,
+  },
+  markerTooltipSelfNote: {
+    marginTop: 3,
+    color: WayfinderColors.inkDisabled,
+    fontFamily: Typography.body.fontFamily,
+    fontSize: 11,
+  },
+  // Speech-bubble tail pointing down at the marker -- a 45deg-rotated
+  // square, top-left corner hidden, matching the mockup's own literal
+  // "right+bottom border only" technique for a clean single-side shadow.
+  markerTooltipTail: {
+    width: 12,
+    height: 12,
+    marginTop: -7,
+    backgroundColor: WayfinderColors.surfacePrimary,
+    borderRightWidth: 1,
+    borderBottomWidth: 1,
+    borderRightColor: WayfinderColors.borderHairline,
+    borderBottomColor: WayfinderColors.borderHairline,
+    transform: [{ rotate: '45deg' }],
   },
   // Solid navy scrim (reusing action-drawer's own scrim value), not a
   // translucent overlay -- Wayfinder has no transparency anywhere (Story

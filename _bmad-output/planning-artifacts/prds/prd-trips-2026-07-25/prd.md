@@ -197,6 +197,7 @@ Any Voyager can view all Voyagers' live locations on one shared map for the acti
 - The map reflects each Voyager's position with a near-real-time refresh. `[ASSUMPTION: exact refresh interval TBD — trades off battery cost vs. live-feel, needs engineering input]`
 - The map's visual treatment is stylized/game-like rather than a standard turn-by-turn navigation map. `[NOTE FOR PM: see Open Question 3]`
 - The map and the Voyagers on it are visible only to Voyagers on that specific Voyage.
+- Tapping a Voyager's marker opens a lightweight peek tooltip anchored to that marker (Waze-style callout, not a full-screen sheet) showing their name, role, and live distance from the *tapping* Voyager's own current position — not from the shared destination. Tapping your own marker shows only your name, with no role or distance shown, since distance-from-yourself isn't a meaningful reading.
 
 **Feature-specific NFRs:**
 - Battery impact of continuous location tracking must be actively budgeted and load-tested — flagged as a high-severity risk in market research (Life360's battery-drain complaints are the category's most-cited failure).

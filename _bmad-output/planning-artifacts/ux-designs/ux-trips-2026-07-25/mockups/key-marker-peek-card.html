@@ -1,0 +1,173 @@
+<title>Voylo — Direction: Wayfinder (Marker Peek Tooltip — Distance-from-Me)</title>
+<style>
+/*
+  palette: wayfinder (unchanged from key-live-map.html)
+  primary blue        #0B6FFF
+  accent teal         #00C2A8   (Driving-role tag)
+  coral               #FF5A5F
+  amber               #FFB020
+  ink                 #101828   (text)
+  ink secondary       #667085
+  neutral fog         #F4F6FA
+  hairline            #DCE1EA
+  player - Chintan (Organizer, self in this mock)  #FF5A5F  (coral)
+  player - Meera                                    #00C2A8  (teal)
+
+  Font substitutions (web-safe stand-ins for the brand type system):
+  display  -> "Segoe UI Semibold", "Helvetica Neue", system-ui, sans-serif  (stand-in for Clash Display)
+  body     -> "Segoe UI", "Helvetica Neue", Arial, sans-serif               (stand-in for General Sans)
+*/
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #EDEFF3;
+  color: #101828;
+  font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  padding: 32px;
+}
+.rationale {
+  max-width: 920px;
+  margin: 0 auto 32px;
+  background: #fff;
+  border: 1px solid #DCE1EA;
+  border-radius: 20px;
+  padding: 20px 24px;
+  box-shadow: 0 2px 0 #DCE1EA;
+}
+.rationale h1 { font-size: 21px; font-weight: 700; margin-bottom: 8px; color: #0B6FFF; }
+.rationale p { font-size: 15px; line-height: 1.5; color: #344054; margin-bottom: 10px; }
+.rationale p:last-child { margin-bottom: 0; }
+.rationale b { color: #101828; }
+.stage { display: flex; gap: 40px; justify-content: center; flex-wrap: wrap; align-items: flex-start; }
+.frame-block { text-align: center; }
+.frame-label { color: #101828; font-weight: 700; font-size: 13px; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 14px; }
+.frame-label.self { color: #0B6FFF; }
+.phone {
+  width: 390px; height: 844px;
+  border-radius: 44px;
+  border: 9px solid #101828;
+  background: #101828;
+  position: relative;
+  overflow: hidden;
+}
+.screen { position: absolute; inset: 0; border-radius: 36px; overflow: hidden; background: linear-gradient(180deg, #EAF2E4 0%, #DCEBD3 100%); }
+
+/* The map stays fully visible and interactive behind the tooltip -- no
+   scrim -- unlike the old bottom-sheet version. Waze's own popups work the
+   same way: a light callout floating over the map, not a modal blocking
+   the rest of it. Tapping anywhere else on the map (or the marker again)
+   dismisses it, same as the explicit close button. */
+.marker { position: absolute; z-index: 4; text-align: center; }
+.avatar {
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  border: 3px solid #fff;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 16px; font-weight: 700;
+  box-shadow: 0 2px 4px 0 #10182833;
+  position: relative;
+  z-index: 6;
+}
+.you-ring {
+  position: absolute; inset: -4px;
+  border-radius: 50%;
+  border: 2px dashed #0B6FFF;
+}
+
+/* ---- Tooltip: anchored directly above the marker, not a bottom sheet ---- */
+.tooltip-wrap {
+  position: absolute;
+  bottom: 58px; /* clears the 44px avatar + a small gap */
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.tooltip {
+  background: #fff;
+  border: 1px solid #DCE1EA;
+  border-radius: 14px;
+  padding: 12px 14px;
+  box-shadow: 0 4px 12px 0 #10182826;
+  min-width: 168px;
+  white-space: nowrap;
+}
+.tooltip-header { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.tooltip-name-row { display: flex; align-items: center; gap: 7px; }
+.tooltip-swatch { width: 10px; height: 10px; border-radius: 5px; flex-shrink: 0; }
+.tooltip-name { font-size: 15px; font-weight: 700; color: #101828; }
+.tooltip-close { color: #98A2B3; font-size: 13px; padding: 2px; line-height: 1; }
+.tooltip-role { margin-top: 3px; font-size: 11.5px; color: #667085; }
+.tooltip-distance {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid #F0F2F6;
+  font-size: 12px; font-weight: 600; color: #101828;
+}
+.tooltip-distance b { color: #0B6FFF; }
+.tooltip-self-note { margin-top: 3px; font-size: 11px; color: #98A2B3; }
+/* Speech-bubble tail, pointing down at the marker */
+.tooltip-tail {
+  width: 12px; height: 12px;
+  background: #fff;
+  border-right: 1px solid #DCE1EA;
+  border-bottom: 1px solid #DCE1EA;
+  transform: rotate(45deg);
+  margin-top: -7px;
+}
+</style>
+
+<div class="rationale">
+  <h1>Direction: Wayfinder — Marker Peek Tooltip (Distance-from-Me)</h1>
+  <p><b>Revised per feedback:</b> not a bottom sheet -- a small callout anchored directly above the tapped marker, Waze-style, with a speech-bubble tail pointing at it. The map stays fully visible and interactive behind it (no scrim); tapping elsewhere or the marker again dismisses it, same as the close &times;.</p>
+  <p><b>Content:</b> tapping another Voyager shows their name, role, and distance from <i>your</i> own live position ("2.3 mi from you") instead of the old "from Lake Tahoe" reading. Tapping your own marker shows only your name -- no role, no distance -- since "how far are you from yourself" isn't a real question; a small note explains why.</p>
+</div>
+
+<div class="stage">
+  <div class="frame-block">
+    <div class="frame-label">Tap Another Voyager — Meera</div>
+    <div class="phone"><div class="screen">
+      <div class="marker" style="top:340px; left:150px;">
+        <div class="tooltip-wrap">
+          <div class="tooltip">
+            <div class="tooltip-header">
+              <div class="tooltip-name-row">
+                <div class="tooltip-swatch" style="background:#00C2A8;"></div>
+                <div class="tooltip-name">Meera</div>
+              </div>
+              <div class="tooltip-close">&#10005;</div>
+            </div>
+            <div class="tooltip-role">Driving</div>
+            <div class="tooltip-distance">2.3 mi <b>from you</b></div>
+          </div>
+          <div class="tooltip-tail"></div>
+        </div>
+        <div class="avatar" style="background:#00C2A8;">M</div>
+      </div>
+    </div></div>
+  </div>
+
+  <div class="frame-block">
+    <div class="frame-label self">Tap Yourself — Chintan</div>
+    <div class="phone"><div class="screen">
+      <div class="marker" style="top:420px; left:190px;">
+        <div class="tooltip-wrap">
+          <div class="tooltip">
+            <div class="tooltip-header">
+              <div class="tooltip-name-row">
+                <div class="tooltip-swatch" style="background:#FF5A5F;"></div>
+                <div class="tooltip-name">Chintan</div>
+              </div>
+              <div class="tooltip-close">&#10005;</div>
+            </div>
+            <div class="tooltip-self-note">This is you.</div>
+          </div>
+          <div class="tooltip-tail"></div>
+        </div>
+        <div class="you-ring"></div>
+        <div class="avatar" style="background:#FF5A5F;">C</div>
+      </div>
+    </div></div>
+  </div>
+</div>
