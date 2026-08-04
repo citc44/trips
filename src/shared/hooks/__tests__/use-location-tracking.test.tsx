@@ -12,6 +12,7 @@ const mockWatchPositionAsync = jest.fn<(...args: any[]) => Promise<any>>();
 const mockSubscriptionRemove = jest.fn();
 jest.mock('expo-location', () => ({
   Accuracy: { Balanced: 3 },
+  LocationActivityType: { AutomotiveNavigation: 2 },
   startLocationUpdatesAsync: (...args: unknown[]) => mockStartLocationUpdatesAsync(...args),
   stopLocationUpdatesAsync: (...args: unknown[]) => mockStopLocationUpdatesAsync(...args),
   watchPositionAsync: (...args: unknown[]) => mockWatchPositionAsync(...args),
@@ -94,6 +95,15 @@ test('sets the background task context and starts background-capable tracking wi
   expect(mockStartLocationUpdatesAsync).toHaveBeenCalledWith(
     'voylo-background-location',
     expect.objectContaining({ accuracy: 3, timeInterval: 5000, distanceInterval: 20 }),
+  );
+});
+
+test('disables iOS auto-pause and sets an automotive activity type, so CoreLocation cannot silently stop delivering fixes mid-drive', async () => {
+  await render(<Harness voyageId="voyage-1" />);
+
+  expect(mockStartLocationUpdatesAsync).toHaveBeenCalledWith(
+    'voylo-background-location',
+    expect.objectContaining({ activityType: 2, pausesUpdatesAutomatically: false }),
   );
 });
 

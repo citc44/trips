@@ -108,6 +108,27 @@ export function useLocationTracking(voyageId: string | null): void {
       accuracy: Location.Accuracy.Balanced,
       timeInterval: WATCH_TIME_INTERVAL_MS,
       distanceInterval: WATCH_DISTANCE_INTERVAL_M,
+      // User-reported critical bug: a Voyager's own marker would move
+      // briefly after tracking started, then go permanently static for the
+      // rest of the drive -- no error, channel still showing connected,
+      // because nothing was actually wrong with Realtime; no new fixes were
+      // ever being *produced* to broadcast. Root-caused by reading expo-
+      // location's own native iOS source (EXLocationTaskConsumer.m), not
+      // guessed: `pausesUpdatesAutomatically` defaults to `true` natively
+      // when this option is omitted, DESPITE the JS type doc claiming
+      // `@default false` -- a real drift between expo-location's docs and
+      // its actual iOS implementation. With the option unset, CoreLocation
+      // is free to pause delivery whenever its own heuristic (tuned for
+      // `activityType: Other`, also left unset here, defaulting to that
+      // same generic/conservative heuristic) decides the device "isn't
+      // moving significantly" -- exactly what a stop light, a slow patch of
+      // traffic, or a misjudged moment of a real drive can trigger. Both
+      // set explicitly now: AutomotiveNavigation gives CoreLocation the
+      // correct heuristic for a car, and pausesUpdatesAutomatically: false
+      // removes its ability to pause delivery at all. iOS-only per expo-
+      // location's own types (`@platform ios`); harmless no-ops on Android.
+      activityType: Location.LocationActivityType.AutomotiveNavigation,
+      pausesUpdatesAutomatically: false,
       foregroundService: {
         notificationTitle: FOREGROUND_SERVICE_NOTIFICATION_TITLE,
         notificationBody: FOREGROUND_SERVICE_NOTIFICATION_BODY,
