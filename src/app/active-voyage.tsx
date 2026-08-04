@@ -214,12 +214,21 @@ function DrawerRow({
   onPress,
   disabled = false,
   variant = 'default',
+  icon,
 }: {
   testID: string;
   label: string;
   onPress: () => void;
   disabled?: boolean;
   variant?: 'default' | 'primary' | 'danger';
+  // User-reported bug, fixed: mockups/key-live-map.html's own .drawer-row
+  // markup pairs every row with a .row-icon glyph, but this component never
+  // had an icon slot at all -- dropped somewhere between the mockup and
+  // this component's first implementation, not a deliberate omission.
+  // Optional (not every row needs one -- the confirm-step buttons below
+  // never showed icons in the mockup either) rather than required, so
+  // existing callers that don't pass one are unaffected.
+  icon?: string;
 }) {
   return (
     <Pressable
@@ -235,6 +244,7 @@ function DrawerRow({
         disabled && styles.drawerRowDisabled,
       ]}
     >
+      {icon ? <Text style={styles.drawerRowIcon}>{icon}</Text> : null}
       <Text
         style={[
           styles.drawerRowLabel,
@@ -1071,6 +1081,7 @@ export default function ActiveVoyageScreen() {
               <DrawerRow
                 testID="invite-more-voyagers-button"
                 label="Invite More Voyagers"
+                icon="💬"
                 onPress={() => {
                   markVoyageStarted();
                   router.push({
@@ -1080,7 +1091,9 @@ export default function ActiveVoyageScreen() {
                 }}
               />
             ) : null}
-            {isOrganizer ? <DrawerRow testID="end-voyage-button" label="End Voyage" variant="danger" onPress={() => setShowConfirm(true)} /> : null}
+            {isOrganizer ? (
+              <DrawerRow testID="end-voyage-button" label="End Voyage" icon="🚫" variant="danger" onPress={() => setShowConfirm(true)} />
+            ) : null}
 
             <View testID="drawer-member-list" style={styles.drawerMemberList}>
               {members.map((member) => (
@@ -1363,11 +1376,18 @@ const styles = StyleSheet.create({
   // approximated to the Rounded/Spacing scale (code review finding -- see
   // ActionDrawer token's own comment in design-tokens.ts).
   drawerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing['2'],
     borderRadius: ActionDrawerTokens.rowRadius,
     backgroundColor: ActionDrawerTokens.rowBackground,
     paddingVertical: ActionDrawerTokens.rowPaddingVertical,
     paddingHorizontal: ActionDrawerTokens.rowPaddingHorizontal,
     marginBottom: ActionDrawerTokens.rowMarginBottom,
+  },
+  // Matches mockups/key-live-map.html's own literal .row-icon font-size.
+  drawerRowIcon: {
+    fontSize: 15,
   },
   drawerRowPrimary: {
     backgroundColor: ActionDrawerTokens.rowBackgroundPrimary,

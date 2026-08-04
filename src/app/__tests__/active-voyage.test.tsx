@@ -764,6 +764,20 @@ test('tapping the organizer menu button opens the relocated Organizer actions', 
   expect(getByTestId('organizer-menu-close-button')).toBeTruthy();
 });
 
+test('the Invite More Voyagers and End Voyage rows show an icon (user-reported bug: mockups/key-live-map.html pairs every drawer row with one, but DrawerRow never had an icon slot at all)', async () => {
+  mockActiveVoyage('organizer');
+
+  const { getByTestId, getByText } = await render(<ActiveVoyageScreen />);
+
+  await openOrganizerMenu(getByTestId);
+
+  expect(within(getByTestId('invite-more-voyagers-button')).getByText('💬')).toBeTruthy();
+  expect(within(getByTestId('end-voyage-button')).getByText('🚫')).toBeTruthy();
+  // Labels still render as their own text, unaffected by the icon.
+  expect(getByText('Invite More Voyagers')).toBeTruthy();
+  expect(getByText('End Voyage')).toBeTruthy();
+});
+
 test('closing the organizer menu returns to the map', async () => {
   mockActiveVoyage('organizer');
 

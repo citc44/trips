@@ -1,0 +1,243 @@
+<title>Voylo — Direction: Wayfinder (Action Drawer — Voyager Roster Redesign)</title>
+<style>
+/*
+  palette: wayfinder (unchanged from key-live-map.html)
+  primary blue        #0B6FFF
+  accent teal         #00C2A8   (Driving-role tag, recenter)
+  coral               #FF5A5F   (End Voyage / Remove / alerts)
+  amber               #FFB020
+  ink                 #101828   (text)
+  ink secondary       #667085
+  neutral fog         #F4F6FA   (drawer fill, row fill)
+  hairline            #DCE1EA
+  player - Chintan (Organizer)  #FF5A5F  (coral)
+  player - Meera                #00C2A8  (teal)
+  player - Sam                  #FFB020  (amber)
+
+  Font substitutions (web-safe stand-ins for the brand type system):
+  display  -> "Segoe UI Semibold", "Helvetica Neue", system-ui, sans-serif  (stand-in for Clash Display)
+  body     -> "Segoe UI", "Helvetica Neue", Arial, sans-serif               (stand-in for General Sans)
+*/
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #EDEFF3;
+  color: #101828;
+  font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  padding: 32px;
+}
+.rationale {
+  max-width: 920px;
+  margin: 0 auto 32px;
+  background: #fff;
+  border: 1px solid #DCE1EA;
+  border-radius: 20px;
+  padding: 20px 24px;
+  box-shadow: 0 2px 0 #DCE1EA;
+}
+.rationale h1 { font-size: 21px; font-weight: 700; margin-bottom: 8px; color: #0B6FFF; }
+.rationale p { font-size: 15px; line-height: 1.5; color: #344054; margin-bottom: 10px; }
+.rationale p:last-child { margin-bottom: 0; }
+.rationale b { color: #101828; }
+.stage { display: flex; gap: 40px; justify-content: center; flex-wrap: wrap; align-items: flex-start; }
+.frame-block { text-align: center; }
+.frame-label { color: #101828; font-weight: 700; font-size: 13px; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 14px; }
+.frame-label.after { color: #0B6FFF; }
+.phone {
+  width: 390px; height: 844px;
+  border-radius: 44px;
+  border: 9px solid #101828;
+  background: #101828;
+  position: relative;
+  overflow: hidden;
+}
+.screen { position: absolute; inset: 0; border-radius: 36px; overflow: hidden; background: #fff; }
+
+.scrim { position: absolute; inset: 0; background: #1D2A44; }
+.drawer {
+  position: absolute; top: 0; bottom: 0; right: 0;
+  width: 280px;
+  background: #fff;
+  padding: 30px 18px;
+  z-index: 10;
+  overflow-y: auto;
+}
+.drawer-close {
+  width: 36px; height: 36px; border-radius: 10px;
+  background: #F4F6FA;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; color: #101828;
+  margin-bottom: 22px;
+}
+.drawer-title { color: #101828; font-size: 19px; font-weight: 700; margin-bottom: 4px; }
+.drawer-sub { color: #667085; font-size: 12px; margin-bottom: 18px; }
+.drawer-row {
+  background: #F4F6FA;
+  border-radius: 12px;
+  padding: 13px 14px;
+  margin-bottom: 10px;
+  display: flex; align-items: center; gap: 10px;
+  font-weight: 600; font-size: 13.5px; color: #101828;
+}
+.drawer-row.danger { background: #FFEBEC; color: #FF5A5F; }
+.row-icon { font-size: 15px; }
+
+.section-label {
+  font-size: 10.5px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase;
+  color: #98A2B3; margin: 20px 0 10px;
+}
+
+/* ---- BEFORE: today's actual cramped implementation ---- */
+.before-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 9px 0;
+  border-bottom: 1px solid #F0F2F6;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.before-name { font-size: 13.5px; font-weight: 400; color: #101828; }
+.before-actions { display: flex; align-items: center; gap: 8px; }
+.before-role { font-size: 10.5px; font-weight: 600; color: #667085; text-transform: uppercase; }
+.before-grant {
+  background: #E7F0FF; color: #0B6FFF; font-size: 10.5px; font-weight: 700;
+  padding: 5px 9px; border-radius: 8px;
+}
+.before-remove { font-size: 12px; color: #FF5A5F; text-decoration: underline; }
+
+/* ---- AFTER: redesigned roster ---- */
+.roster-row { margin-bottom: 14px; }
+.roster-row:last-child { margin-bottom: 0; }
+.roster-main { display: flex; align-items: center; gap: 10px; }
+.roster-avatar {
+  width: 38px; height: 38px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 14px; font-weight: 700;
+  position: relative; flex-shrink: 0;
+  box-shadow: 0 2px 4px 0 #10182833;
+}
+.roster-crown { position: absolute; top: -11px; left: 50%; transform: translateX(-50%); font-size: 12px; }
+.roster-identity { flex: 1; min-width: 0; }
+.roster-name { font-size: 14.5px; font-weight: 700; color: #101828; line-height: 1.3; }
+.roster-tags { display: flex; align-items: center; gap: 6px; margin-top: 2px; }
+.roster-tag {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase;
+  padding: 2px 7px; border-radius: 6px;
+}
+.roster-tag.organizer { background: #101828; color: #fff; }
+.roster-tag.driving { background: #DFF7F1; color: #00947F; }
+.roster-tag.riding { background: #F0F2F6; color: #667085; }
+.roster-actions {
+  display: flex; gap: 8px; margin-top: 8px; margin-left: 48px;
+}
+.roster-btn {
+  font-size: 11.5px; font-weight: 700; padding: 6px 12px; border-radius: 999px;
+  border: 1.5px solid transparent;
+}
+.roster-btn.grant { background: #F4F6FA; color: #101828; border-color: #DCE1EA; }
+.roster-btn.remove { background: #FFEBEC; color: #FF5A5F; }
+
+.drawer-footer { margin-top: 24px; color: #98A2B3; font-size: 11px; font-style: italic; }
+</style>
+
+<div class="rationale">
+  <h1>Direction: Wayfinder — Action Drawer Voyager Roster (Redesign)</h1>
+  <p><b>Why:</b> the shipped roster row (left frame) never had a real mockup behind it — <code>key-live-map.html</code>'s own drawer-open frame only ever showed the three static menu rows (Grant/Remove/End Voyage as if they were simple actions, not a real per-person list), so the actual per-Voyager row was built without design guidance. The result: a plain-text name, an uppercase role label, a mismatched solid-fill "Grant Organizer" chip, and a bare underlined "Remove" link, all competing on one cramped line with no visual identity per person — exactly the "not professional" feedback.</p>
+  <p><b>What changed:</b> each Voyager gets the same colored initial-avatar treatment their own map marker already uses (direct visual continuity with the map, not a new motif), with a crown badge for the Organizer. Name and role move to their own stacked lines instead of fighting for horizontal space. Role reads as a small tag (dark "Organizer" tag matching the marker's own tag chip; a teal "Driving" / neutral "Riding" tag, reusing the status pill's own teal). Grant/Remove become a matched pair of bordered pill buttons on their own row beneath the name — same button family as the rest of the app (<code>button-secondary</code>'s bordered fog pill, <code>button-destructive</code>'s coral-tinted pill) — instead of one solid chip and one bare underlined link that don't read as the same control family at all.</p>
+</div>
+
+<div class="stage">
+  <div class="frame-block">
+    <div class="frame-label">Before — Shipped Today</div>
+    <div class="phone"><div class="screen">
+      <div class="scrim"></div>
+      <div class="drawer">
+        <div class="drawer-close">&#10005;</div>
+        <div class="drawer-title">Voyage actions</div>
+        <div class="drawer-sub">You&rsquo;re on your way to Lake Tahoe.</div>
+        <div class="drawer-row"><span class="row-icon">&#128172;</span> Invite More Voyagers</div>
+        <div class="drawer-row danger"><span class="row-icon">&#128683;</span> End Voyage</div>
+
+        <div class="before-row">
+          <div class="before-name">Chintan</div>
+          <div class="before-actions"><div class="before-role">Organizer</div></div>
+        </div>
+        <div class="before-row">
+          <div class="before-name">Meera</div>
+          <div class="before-actions">
+            <div class="before-role">Driving</div>
+            <div class="before-grant">Grant Organizer</div>
+            <div class="before-remove">Remove</div>
+          </div>
+        </div>
+        <div class="before-row">
+          <div class="before-name">Sam</div>
+          <div class="before-actions">
+            <div class="before-role">Riding</div>
+            <div class="before-grant">Grant Organizer</div>
+            <div class="before-remove">Remove</div>
+          </div>
+        </div>
+
+        <div class="drawer-footer">Every journey tells a story.</div>
+      </div>
+    </div></div>
+  </div>
+
+  <div class="frame-block">
+    <div class="frame-label after">After — Redesigned Roster</div>
+    <div class="phone"><div class="screen">
+      <div class="scrim"></div>
+      <div class="drawer">
+        <div class="drawer-close">&#10005;</div>
+        <div class="drawer-title">Voyage actions</div>
+        <div class="drawer-sub">You&rsquo;re on your way to Lake Tahoe.</div>
+        <div class="drawer-row"><span class="row-icon">&#128172;</span> Invite More Voyagers</div>
+        <div class="drawer-row danger"><span class="row-icon">&#128683;</span> End Voyage</div>
+
+        <div class="section-label">Voyagers</div>
+
+        <div class="roster-row">
+          <div class="roster-main">
+            <div class="roster-avatar" style="background:#FF5A5F;">
+              <div class="roster-crown">&#128081;</div>
+              C
+            </div>
+            <div class="roster-identity">
+              <div class="roster-name">Chintan</div>
+              <div class="roster-tags"><span class="roster-tag organizer">Organizer</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="roster-row">
+          <div class="roster-main">
+            <div class="roster-avatar" style="background:#00C2A8;">M</div>
+            <div class="roster-identity">
+              <div class="roster-name">Meera</div>
+              <div class="roster-tags"><span class="roster-tag driving">Driving</span></div>
+            </div>
+          </div>
+          <div class="roster-actions">
+            <div class="roster-btn grant">Grant Organizer</div>
+            <div class="roster-btn remove">Remove</div>
+          </div>
+        </div>
+
+        <div class="roster-row">
+          <div class="roster-main">
+            <div class="roster-avatar" style="background:#FFB020;">S</div>
+            <div class="roster-identity">
+              <div class="roster-name">Sam</div>
+              <div class="roster-tags"><span class="roster-tag riding">Riding</span></div>
+            </div>
+          </div>
+          <div class="roster-actions">
+            <div class="roster-btn grant">Grant Organizer</div>
+            <div class="roster-btn remove">Remove</div>
+          </div>
+        </div>
+
+        <div class="drawer-footer">Every journey tells a story.</div>
+      </div>
+    </div></div>
+  </div>
+</div>
