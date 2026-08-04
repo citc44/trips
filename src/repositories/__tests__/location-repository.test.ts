@@ -8,12 +8,14 @@ const mockSubscribe = jest.fn<(...args: any[]) => any>();
 const mockSend = jest.fn<(...args: any[]) => any>();
 const mockChannel = jest.fn<(...args: any[]) => any>();
 const mockRemoveChannel = jest.fn<(...args: any[]) => any>();
+const mockGetChannels = jest.fn<(...args: any[]) => any>();
 
 jest.mock('@/lib/supabase', () => ({
   supabase: {
     rpc: (...args: unknown[]) => mockRpc(...args),
     channel: (...args: unknown[]) => mockChannel(...args),
     removeChannel: (...args: unknown[]) => mockRemoveChannel(...args),
+    getChannels: (...args: unknown[]) => mockGetChannels(...args),
   },
 }));
 
@@ -29,6 +31,11 @@ beforeEach(() => {
     callback?.('SUBSCRIBED');
     return channelInstance;
   });
+  // No pre-existing channel for this topic by default -- every existing
+  // broadcastLocationOnce test below exercises the "create a fresh channel"
+  // path this way. Tests for the reuse-an-existing-channel path override
+  // this per-test.
+  mockGetChannels.mockReturnValue([]);
 });
 
 afterEach(() => {
@@ -255,4 +262,80 @@ test('broadcastLocationOnce ignores a stale duplicate status callback after it a
 
   expect(mockRemoveChannel).toHaveBeenCalledTimes(1);
   expect(mockSend).toHaveBeenCalledTimes(1);
+});
+
+// Regression coverage for a confirmed production bug: supabase-js's
+// RealtimeClient.channel() dedupes by topic name, so calling
+// supabase.channel() for a topic that's already open (e.g. the live map's
+// own long-lived subscribeToLocations channel, still mounted on the same
+// device) used to silently hand broadcastLocationOnce that *same* channel
+// object -- which it then unconditionally tore down via removeChannel()
+// once its send completed, destroying the map's own receiving channel every
+// ~5s. Markers never moved and the map showed "Reconnecting..." forever.
+test('broadcastLocationOnce reuses an already-open channel for the same topic instead of creating a new one', async () => {
+  const existingSend = jest.fn();
+  mockGetChannels.mockReturnValue([{ topic: 'realtime:voyage:voyage-1', state: 'joined', send: existingSend }]);
+
+  await locationRepository.broadcastLocationOnce('voyage-1', {
+    userId: 'user-1',
+    lat: 39.1,
+    lng: -120.0,
+    heading: 90,
+    updatedAt: '2026-07-26T00:00:00Z',
+  });
+
+  expect(existingSend).toHaveBeenCalledWith({
+    type: 'broadcast',
+    event: 'location',
+    payload: { user_id: 'user-1', lat: 39.1, lng: -120.0, heading: 90, updated_at: '2026-07-26T00:00:00Z' },
+  });
+});
+
+test('broadcastLocationOnce never creates or tears down a channel it did not open itself', async () => {
+  mockGetChannels.mockReturnValue([{ topic: 'realtime:voyage:voyage-1', state: 'joined', send: jest.fn() }]);
+
+  await locationRepository.broadcastLocationOnce('voyage-1', {
+    userId: 'user-1',
+    lat: 39.1,
+    lng: -120.0,
+    heading: 90,
+    updatedAt: '2026-07-26T00:00:00Z',
+  });
+
+  expect(mockChannel).not.toHaveBeenCalled();
+  expect(mockRemoveChannel).not.toHaveBeenCalled();
+});
+
+test('broadcastLocationOnce drops the send (does not throw) when the reused channel is not yet joined', async () => {
+  const existingSend = jest.fn();
+  mockGetChannels.mockReturnValue([{ topic: 'realtime:voyage:voyage-1', state: 'joining', send: existingSend }]);
+
+  await expect(
+    locationRepository.broadcastLocationOnce('voyage-1', {
+      userId: 'user-1',
+      lat: 39.1,
+      lng: -120.0,
+      heading: 90,
+      updatedAt: '2026-07-26T00:00:00Z',
+    }),
+  ).resolves.toBeUndefined();
+
+  expect(existingSend).not.toHaveBeenCalled();
+  expect(mockChannel).not.toHaveBeenCalled();
+  expect(mockRemoveChannel).not.toHaveBeenCalled();
+});
+
+test('broadcastLocationOnce ignores an open channel for a different Voyage topic and creates its own', async () => {
+  mockGetChannels.mockReturnValue([{ topic: 'realtime:voyage:some-other-voyage', state: 'joined', send: jest.fn() }]);
+
+  await locationRepository.broadcastLocationOnce('voyage-1', {
+    userId: 'user-1',
+    lat: 39.1,
+    lng: -120.0,
+    heading: 90,
+    updatedAt: '2026-07-26T00:00:00Z',
+  });
+
+  expect(mockChannel).toHaveBeenCalledWith('voyage:voyage-1', { config: { private: true } });
+  expect(mockRemoveChannel).toHaveBeenCalledTimes(1);
 });

@@ -99,16 +99,11 @@ function subscribeToLocations(
     .on('broadcast', { event: BROADCAST_EVENT }, (message: { payload: unknown }) => {
       onLocation(toLiveLocation(message.payload as LiveLocationRow));
     })
-    .subscribe((status: string, err?: Error) => {
-      // TEMPORARY diagnostic logging -- the "Reconnecting..." note has been
-      // reported stuck even with the tab kept focused the whole time, which
-      // rules out browser tab-throttling as the cause. supabase-js's
-      // .subscribe() callback carries a second `err` argument this code was
-      // previously discarding entirely, which is the only way to see *why*
-      // the channel actually failed (an RLS rejection on realtime.messages
-      // would surface here, for one). Remove once diagnosed.
-      // eslint-disable-next-line no-console
-      console.warn('[locationRepository] channel status:', status, err);
+    .subscribe((status: string) => {
+      // Diagnosed and fixed: the "Reconnecting..." note stuck permanently
+      // because broadcastLocationOnce (below) was tearing this exact
+      // channel down every ~5s on a device that was also driving -- not a
+      // server-side rejection. See broadcastLocationOnce's own comment.
       if (status === 'SUBSCRIBED') {
         onStatusChange?.('connected');
       } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
@@ -180,14 +175,61 @@ const BROADCAST_ONCE_TIMEOUT_MS = 10000;
 // out subscribe fails open (resolves without throwing) rather than
 // rejecting, matching this app's established best-effort-broadcast
 // discipline elsewhere.
+//
+// CONFIRMED PRODUCTION BUG, FIXED: supabase-js's RealtimeClient.channel()
+// dedupes by topic name -- calling supabase.channel() for a topic that's
+// already open (e.g. this same device's own live map, whose
+// subscribeToLocations channel above uses the identical `voyage:{id}`
+// topic) silently hands back that *same* channel object instead of
+// creating a second one. This function used to then unconditionally
+// supabase.removeChannel() whatever `.channel()` gave it once its own send
+// completed -- on a device that was both driving (this function, firing
+// every ~5s) and viewing the live map (subscribeToLocations' long-lived
+// listening channel) at the same time, that meant every single location
+// tick tore down the map's own receiving channel moments after it
+// (re)connected: markers never moved, and the map showed "Reconnecting..."
+// continuously, because nothing ever re-subscribed after the ambient
+// teardown. Now: if a channel for this topic already exists, reuse it to
+// send without touching its lifecycle at all -- it isn't this call's to
+// subscribe or tear down. Only create-subscribe-send-teardown a fresh
+// channel when this call is genuinely the first/only thing open on this
+// topic (true background-task delivery with no live map mounted, the
+// scenario this function was originally built for).
 function broadcastLocationOnce(voyageId: string, location: LiveLocation): Promise<void> {
+  const topic = channelName(voyageId);
+  const message = {
+    type: 'broadcast' as const,
+    event: BROADCAST_EVENT,
+    payload: {
+      user_id: location.userId,
+      lat: location.lat,
+      lng: location.lng,
+      heading: location.heading,
+      updated_at: location.updatedAt,
+    },
+  };
+
+  const existing = supabase.getChannels().find((channel) => channel.topic === `realtime:${topic}`);
+  if (existing) {
+    // Only send if it's actually joined -- a channel mid (re)connect can't
+    // reliably push yet, and dropping this tick's send is preferable to
+    // touching a channel this call doesn't own. Whoever does own it (the
+    // live map's own subscribeToLocations) recovers its own subscription on
+    // its own schedule; the next location tick a few seconds later tries
+    // again.
+    if (existing.state === 'joined') {
+      existing.send(message);
+    }
+    return Promise.resolve();
+  }
+
   return new Promise((resolve) => {
     let settled = false;
     // `channel` must be assigned before .subscribe() is called, not chained
     // off it -- a callback that fires synchronously (some SDKs do this for
     // an already-resolved/cached status) would otherwise reference `channel`
     // before its own assignment completes.
-    const channel = supabase.channel(channelName(voyageId), { config: { private: true } });
+    const channel = supabase.channel(topic, { config: { private: true } });
 
     // Guards against acting twice: an unrecognized status, or a stale
     // duplicate callback invocation after this call already settled, would
@@ -204,17 +246,7 @@ function broadcastLocationOnce(voyageId: string, location: LiveLocation): Promis
 
     channel.subscribe((status: string) => {
       if (status === 'SUBSCRIBED') {
-        channel.send({
-          type: 'broadcast',
-          event: BROADCAST_EVENT,
-          payload: {
-            user_id: location.userId,
-            lat: location.lat,
-            lng: location.lng,
-            heading: location.heading,
-            updated_at: location.updatedAt,
-          },
-        });
+        channel.send(message);
         finish();
       } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
         finish();
