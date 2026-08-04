@@ -65,7 +65,8 @@ const styles = StyleSheet.create({
   },
   eyebrow: {
     color: Colors.accentViolet,
-    fontFamily: Typography.body.fontFamily,
+    // 600 (Semibold), not Typography.body's own 400 (Regular).
+    fontFamily: 'GeneralSans-Semibold',
     fontSize: 13,
     fontWeight: '600',
     letterSpacing: 1.8,
@@ -84,7 +85,8 @@ const styles = StyleSheet.create({
   },
   fieldLabel: {
     color: Colors.inkSecondary,
-    fontFamily: Typography.body.fontFamily,
+    // 600 (Semibold), not Typography.body's own 400 (Regular).
+    fontFamily: 'GeneralSans-Semibold',
     fontSize: 13,
     fontWeight: '600',
     letterSpacing: 0.5,
@@ -92,6 +94,7 @@ const styles = StyleSheet.create({
   input: {
     minHeight: 56,
     color: Colors.inkPrimary,
+    fontFamily: Typography.body.fontFamily,
     fontSize: Typography.body.fontSize,
     borderWidth: 1,
     borderColor: Colors.borderHairline,

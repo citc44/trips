@@ -1229,12 +1229,14 @@ const styles = StyleSheet.create({
   },
   hamburgerIcon: {
     color: Hamburger.iconColor,
+    fontFamily: 'GeneralSans-Bold',
     fontSize: 18,
     fontWeight: '700',
   },
   drawerTitle: {
     color: ActionDrawerTokens.ink,
-    fontFamily: Typography.headline.fontFamily,
+    // 700 (Bold), not Typography.headline's own 600 (Semibold).
+    fontFamily: 'GeneralSans-Bold',
     fontSize: 19,
     fontWeight: '700',
     marginBottom: 4,
@@ -1314,6 +1316,10 @@ const styles = StyleSheet.create({
   drawerFooter: {
     marginTop: Spacing['6'],
     color: ActionDrawerTokens.footerText,
+    // The only italic usage anywhere in this codebase -- needs its own
+    // dedicated loaded italic face, not a synthetic OS-level slant applied
+    // to GeneralSans-Regular.
+    fontFamily: 'GeneralSans-Italic',
     fontSize: 11,
     fontStyle: 'italic',
   },
@@ -1338,7 +1344,8 @@ const styles = StyleSheet.create({
   },
   drawerRowLabel: {
     color: ActionDrawerTokens.ink,
-    fontFamily: Typography.body.fontFamily,
+    // 600 (Semibold), not Typography.body's own 400 (Regular).
+    fontFamily: 'GeneralSans-Semibold',
     fontSize: ActionDrawerTokens.rowFontSize,
     fontWeight: '600',
   },
@@ -1356,7 +1363,8 @@ const styles = StyleSheet.create({
   },
   drawerGrantButtonLabel: {
     color: ActionDrawerTokens.rowBackgroundPrimaryText,
-    fontFamily: Typography.label.fontFamily,
+    // 700 (Bold), not Typography.label's own 600 (Semibold).
+    fontFamily: 'GeneralSans-Bold',
     fontSize: 11,
     fontWeight: '700',
   },
@@ -1380,8 +1388,13 @@ const styles = StyleSheet.create({
   },
   cutToGameplayFlashLabel: {
     color: '#FFFFFF',
+    // No loaded General Sans weight goes past Bold (700) -- the requested
+    // 800 doesn't exist as a static file, so this collapses to 700/Bold
+    // rather than requesting a heavier weight than what's loaded (which
+    // would trigger OS-level faux/synthetic bolding on top of it).
+    fontFamily: 'GeneralSans-Bold',
     fontSize: 15,
-    fontWeight: '800',
+    fontWeight: '700',
     letterSpacing: 3,
     textTransform: 'uppercase',
     opacity: 0.9,
@@ -1490,7 +1503,8 @@ const styles = StyleSheet.create({
   mapBannerDestName: {
     flex: 1,
     color: MapBanner.destNameColor,
-    fontFamily: Typography.headline.fontFamily,
+    // 700 (Bold), not Typography.headline's own 600 (Semibold).
+    fontFamily: 'GeneralSans-Bold',
     fontSize: 24,
     fontWeight: '700',
   },
@@ -1508,7 +1522,8 @@ const styles = StyleSheet.create({
   },
   mapBannerCountLabel: {
     color: '#FFFFFF',
-    fontFamily: Typography.label.fontFamily,
+    // 700 (Bold), not Typography.label's own 600 (Semibold).
+    fontFamily: 'GeneralSans-Bold',
     fontSize: 13,
     fontWeight: '700',
   },
@@ -1540,7 +1555,8 @@ const styles = StyleSheet.create({
   },
   hudBarStatLabel: {
     color: WayfinderColors.inkSecondary,
-    fontFamily: Typography.label.fontFamily,
+    // 700 (Bold), not Typography.label's own 600 (Semibold).
+    fontFamily: 'GeneralSans-Bold',
     fontSize: 10.5,
     fontWeight: '700',
     letterSpacing: 1.2,
@@ -1636,6 +1652,7 @@ const styles = StyleSheet.create({
     bottom: -18,
     backgroundColor: MapMarker.chevronColor,
     color: '#FFFFFF',
+    fontFamily: 'GeneralSans-Bold',
     fontSize: 10.5,
     fontWeight: '700',
     paddingHorizontal: Spacing['2'],

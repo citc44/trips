@@ -17,6 +17,7 @@ export const screenStyles = StyleSheet.create({
   },
   headline: {
     color: Colors.inkPrimary,
+    fontFamily: Typography.headline.fontFamily,
     fontSize: Typography.headline.fontSize,
     fontWeight: Typography.headline.fontWeight,
     lineHeight: Typography.headline.lineHeight,
@@ -26,6 +27,7 @@ export const screenStyles = StyleSheet.create({
   },
   error: {
     color: Colors.error,
+    fontFamily: Typography.body.fontFamily,
     fontSize: Typography.body.fontSize,
   },
 });

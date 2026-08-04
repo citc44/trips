@@ -5,6 +5,7 @@
 // not lazily whenever some screen happens to first reference it.
 import '@/shared/lib/background-location-task';
 
+import { useFonts } from 'expo-font';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
@@ -26,6 +27,33 @@ import { getStandardPushTransition } from '@/shared/navigation/standard-push-tra
 initSentry();
 SplashScreen.preventAutoHideAsync();
 
+// DESIGN.md's three-typeface system (Clash Display, General Sans, Space
+// Mono) -- deferred since Story 1.2/1.4 first set these fontFamily values
+// in design-tokens.ts: the names were wired into every screen's styles, but
+// no font FILES were ever added to the project and no useFonts() call ever
+// loaded them, so every screen has been silently falling back to the OS
+// default font this whole time (Fontshare's own EULA is free for personal
+// and commercial use for both faces; Space Mono is a Google Font, SIL OFL --
+// license copies live alongside the files in assets/fonts/).
+//
+// Weight-specific family names, not `fontFamily` + `fontWeight`: React
+// Native does not synthesize a "family + numeric weight" combination into a
+// loaded custom font variant the way CSS can -- each weight has to be
+// registered and referenced under its own literal family name, or the OS
+// falls back to faux (synthetic) bolding on whichever single weight did
+// load. See design-tokens.ts's Typography block and every screen's own
+// per-usage fontFamily overrides for how these exact keys get referenced.
+const FONT_ASSETS = {
+  'ClashDisplay-Semibold': require('@/assets/fonts/ClashDisplay-Semibold.otf'),
+  'ClashDisplay-Bold': require('@/assets/fonts/ClashDisplay-Bold.otf'),
+  'GeneralSans-Regular': require('@/assets/fonts/GeneralSans-Regular.otf'),
+  'GeneralSans-Semibold': require('@/assets/fonts/GeneralSans-Semibold.otf'),
+  'GeneralSans-Bold': require('@/assets/fonts/GeneralSans-Bold.otf'),
+  'GeneralSans-Italic': require('@/assets/fonts/GeneralSans-Italic.otf'),
+  'SpaceMono-Regular': require('@/assets/fonts/SpaceMono-Regular.ttf'),
+  'SpaceMono-Bold': require('@/assets/fonts/SpaceMono-Bold.ttf'),
+};
+
 function AppNavigator() {
   const { session, isLoading: isAuthLoading } = useAuth();
   const { profile, isLoading: isProfileLoading, hasError: profileHasError } = useProfile();
@@ -39,14 +67,22 @@ function AppNavigator() {
     isLoading: isLocationPermissionLoading,
   } = useLocationPermission();
   const { reduceMotion, resolved: reduceMotionResolved } = useReduceMotion();
+  const [fontsLoaded, fontError] = useFonts(FONT_ASSETS);
 
   // Profile/active-Voyage/removal-notice/location-permission data only start
   // loading once a session exists (see use-profile.tsx/use-active-voyage.tsx/
   // use-removal-notice.tsx/use-location-permission.tsx), so only wait on them
   // while signed in -- an unauthenticated user would otherwise be stuck on
-  // the splash screen forever.
+  // the splash screen forever. Fonts have no such dependency -- always
+  // waited on, regardless of auth state, so no screen (including sign-in
+  // itself) ever renders a frame in the OS-default fallback font. A load
+  // error (e.g. a corrupt font file) fails open -- proceeds with whatever
+  // fonts DID load rather than stranding the whole app on the splash screen
+  // forever over a typography-only failure.
   const isLoading =
-    isAuthLoading || (!!session && (isProfileLoading || isActiveVoyageLoading || isRemovalNoticeLoading || isLocationPermissionLoading));
+    (!fontsLoaded && !fontError) ||
+    isAuthLoading ||
+    (!!session && (isProfileLoading || isActiveVoyageLoading || isRemovalNoticeLoading || isLocationPermissionLoading));
 
   useEffect(() => {
     if (!isLoading) {

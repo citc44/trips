@@ -127,12 +127,14 @@ const styles = StyleSheet.create({
   },
   headline: {
     color: WayfinderColors.inkOnNavyPrimary,
-    fontFamily: Typography.display.fontFamily,
+    // 700 (Bold), not Typography.display's own 600 (Semibold).
+    fontFamily: 'ClashDisplay-Bold',
     fontWeight: '700',
     textAlign: 'center',
   },
   supporting: {
     color: WayfinderColors.inkOnNavySecondary,
+    fontFamily: Typography.body.fontFamily,
     fontSize: 15,
     lineHeight: 23,
     maxWidth: 300,
@@ -140,6 +142,7 @@ const styles = StyleSheet.create({
   },
   error: {
     color: WayfinderColors.error,
+    fontFamily: Typography.body.fontFamily,
     fontSize: Typography.body.fontSize,
   },
 });

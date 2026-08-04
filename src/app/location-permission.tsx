@@ -161,6 +161,7 @@ const styles = StyleSheet.create({
   supporting: {
     marginTop: Spacing['4'],
     color: Colors.inkSecondary,
+    fontFamily: Typography.body.fontFamily,
     fontSize: Typography.body.fontSize,
     lineHeight: Typography.body.lineHeight,
     textAlign: 'center',

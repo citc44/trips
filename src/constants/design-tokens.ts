@@ -50,36 +50,44 @@ export const PlayerColors = {
   slate: '#8C9AC4',
 } as const;
 
+// Font-family values reference the exact weight-specific keys loaded by
+// _layout.tsx's useFonts(FONT_ASSETS) call, not the bare face names ("Clash
+// Display", "General Sans", "Space Mono") -- React Native doesn't synthesize
+// a family+fontWeight combination into the correct loaded variant, each
+// weight has to be its own literal family name (see _layout.tsx's own
+// comment). `fontWeight` fields are kept for documentation/semantic value
+// and because many call sites destructure them directly, even though the
+// weight is already baked into the loaded font file itself.
 export const Typography = {
   // -0.02em @ 40px = -0.8 (React Native's letterSpacing is absolute points, not em).
   displayHero: {
-    fontFamily: 'Clash Display',
+    fontFamily: 'ClashDisplay-Semibold',
     fontSize: 40,
     fontWeight: '600',
     lineHeight: 42,
     letterSpacing: -0.8,
   },
   display: {
-    fontFamily: 'Clash Display',
+    fontFamily: 'ClashDisplay-Semibold',
     fontSize: 28,
     fontWeight: '600',
     lineHeight: 31,
   },
   headline: {
-    fontFamily: 'General Sans',
+    fontFamily: 'GeneralSans-Semibold',
     fontSize: 20,
     fontWeight: '600',
     lineHeight: 24,
   },
   body: {
-    fontFamily: 'General Sans',
+    fontFamily: 'GeneralSans-Regular',
     fontSize: 16,
     fontWeight: '400',
     lineHeight: 24,
   },
   // -0.01em @ 32px = -0.32 (React Native's letterSpacing is absolute points, not em).
   statNumeral: {
-    fontFamily: 'Space Mono',
+    fontFamily: 'SpaceMono-Bold',
     fontSize: 32,
     fontWeight: '700',
     lineHeight: 32,
@@ -88,7 +96,7 @@ export const Typography = {
   // +0.04em @ 13px = 0.52; 1.3 line-height ratio @ 13px = 16.9 (React Native's
   // letterSpacing/lineHeight are absolute points, not em/ratio).
   label: {
-    fontFamily: 'General Sans',
+    fontFamily: 'GeneralSans-Semibold',
     fontSize: 13,
     fontWeight: '600',
     lineHeight: 17,

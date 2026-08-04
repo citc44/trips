@@ -247,7 +247,8 @@ const styles = StyleSheet.create({
   },
   eyebrow: {
     color: '#D6E6FF',
-    fontFamily: Typography.label.fontFamily,
+    // 700 (Bold), not Typography.label's own 600 (Semibold).
+    fontFamily: 'GeneralSans-Bold',
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 1.6,
@@ -255,7 +256,8 @@ const styles = StyleSheet.create({
   },
   headline: {
     color: '#FFFFFF',
-    fontFamily: Typography.displayHero.fontFamily,
+    // 700 (Bold), not Typography.displayHero's own 600 (Semibold).
+    fontFamily: 'ClashDisplay-Bold',
     fontSize: 34,
     fontWeight: '700',
     lineHeight: 41,
@@ -291,6 +293,10 @@ const styles = StyleSheet.create({
   },
   trustLineBold: {
     color: '#FFFFFF',
+    // No fontFamily of its own would inherit trustLineText's
+    // GeneralSans-Regular while requesting 700 -- needs its own
+    // weight-specific family to avoid faux (synthetic) bolding.
+    fontFamily: 'GeneralSans-Bold',
     fontWeight: '700',
   },
   // notFound/ended branches: no dedicated mockup frame exists for either, so

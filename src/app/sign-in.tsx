@@ -246,7 +246,8 @@ const styles = StyleSheet.create({
   },
   headline: {
     color: WayfinderColors.inkPrimary,
-    fontFamily: Typography.display.fontFamily,
+    // 700 (Bold), not Typography.display's own 600 (Semibold).
+    fontFamily: 'ClashDisplay-Bold',
     fontSize: 30,
     fontWeight: '700',
     lineHeight: 36,
@@ -259,7 +260,8 @@ const styles = StyleSheet.create({
   },
   fieldLabel: {
     color: WayfinderColors.inkSecondary,
-    fontFamily: Typography.label.fontFamily,
+    // 700 (Bold), not Typography.label's own 600 (Semibold).
+    fontFamily: 'GeneralSans-Bold',
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0.8,
@@ -276,6 +278,7 @@ const styles = StyleSheet.create({
   input: {
     width: '100%',
     color: WayfinderColors.inkPrimary,
+    fontFamily: Typography.body.fontFamily,
     fontSize: 16,
     borderWidth: 2,
     borderColor: WayfinderColors.borderHairline,
@@ -285,6 +288,7 @@ const styles = StyleSheet.create({
   },
   error: {
     color: WayfinderColors.error,
+    fontFamily: Typography.body.fontFamily,
     fontSize: Typography.body.fontSize,
   },
   codeBoxRow: {

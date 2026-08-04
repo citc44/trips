@@ -261,6 +261,7 @@ const styles = StyleSheet.create({
   },
   closeButtonLabel: {
     color: ActionDrawerTokens.ink,
+    fontFamily: 'GeneralSans-Bold',
     fontWeight: '700',
     fontSize: 16,
   },

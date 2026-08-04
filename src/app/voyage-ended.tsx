@@ -130,7 +130,8 @@ const styles = StyleSheet.create({
   },
   title: {
     color: WayfinderColors.inkPrimary,
-    fontFamily: Typography.display.fontFamily,
+    // 700 (Bold), not Typography.display's own 600 (Semibold).
+    fontFamily: 'ClashDisplay-Bold',
     fontSize: 22,
     fontWeight: '700',
   },
@@ -149,7 +150,8 @@ const styles = StyleSheet.create({
   },
   cardDestLabel: {
     color: WayfinderColors.inkSecondary,
-    fontFamily: Typography.label.fontFamily,
+    // 700 (Bold), not Typography.label's own 600 (Semibold).
+    fontFamily: 'GeneralSans-Bold',
     fontSize: 14,
     fontWeight: '700',
     letterSpacing: 1,
@@ -158,7 +160,8 @@ const styles = StyleSheet.create({
   },
   cardDestName: {
     color: WayfinderColors.inkPrimary,
-    fontFamily: Typography.display.fontFamily,
+    // 700 (Bold), not Typography.display's own 600 (Semibold).
+    fontFamily: 'ClashDisplay-Bold',
     fontSize: 20,
     fontWeight: '700',
     marginBottom: Spacing['5'],
@@ -175,7 +178,8 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     color: WayfinderColors.inkSecondary,
-    fontFamily: Typography.label.fontFamily,
+    // 700 (Bold), not Typography.label's own 600 (Semibold).
+    fontFamily: 'GeneralSans-Bold',
     fontSize: 10.5,
     fontWeight: '700',
     letterSpacing: 1.2,

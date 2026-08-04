@@ -65,7 +65,8 @@ const styles = StyleSheet.create({
   },
   wordmark: {
     color: WayfinderColors.inkPrimary,
-    fontFamily: Typography.display.fontFamily,
+    // 700 (Bold), not Typography.display's own 600 (Semibold).
+    fontFamily: 'ClashDisplay-Bold',
     fontSize: 19,
     fontWeight: '700',
     letterSpacing: 0.3,

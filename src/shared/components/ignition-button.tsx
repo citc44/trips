@@ -147,6 +147,11 @@ const styles = StyleSheet.create({
   },
   primaryLabel: {
     color: WayfinderButtonIgnition.foreground,
+    // 700 (Bold) -- no Typography token carries this weight+family
+    // combination (label/headline default to 600), so this is its own
+    // literal weight-specific family, like every other bold button label
+    // below.
+    fontFamily: 'GeneralSans-Bold',
     fontSize: Typography.body.fontSize,
     fontWeight: '700',
   },
@@ -165,6 +170,7 @@ const styles = StyleSheet.create({
   },
   secondaryLabel: {
     color: WayfinderButtonSecondary.foreground,
+    fontFamily: 'GeneralSans-Bold',
     fontSize: Typography.body.fontSize,
     fontWeight: '700',
   },
@@ -178,11 +184,14 @@ const styles = StyleSheet.create({
   },
   inverseLabel: {
     color: WayfinderButtonIgnitionInverse.foreground,
+    fontFamily: 'GeneralSans-Bold',
     fontSize: Typography.body.fontSize,
     fontWeight: '700',
   },
   textLabel: {
     color: WayfinderColors.inkSecondary,
+    // No fontWeight override -- matches Typography.body's own 400 (Regular).
+    fontFamily: Typography.body.fontFamily,
     fontSize: Typography.body.fontSize,
     padding: Spacing['3'],
   },
@@ -199,6 +208,7 @@ const styles = StyleSheet.create({
   },
   destructiveLabel: {
     color: WayfinderButtonDestructive.foreground,
+    fontFamily: 'GeneralSans-Bold',
     fontSize: Typography.body.fontSize,
     fontWeight: '700',
   },

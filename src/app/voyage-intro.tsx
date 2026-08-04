@@ -62,7 +62,8 @@ const styles = StyleSheet.create({
   },
   headline: {
     color: '#FFFFFF',
-    fontFamily: Typography.displayHero.fontFamily,
+    // 700 (Bold), not Typography.displayHero's own 600 (Semibold).
+    fontFamily: 'ClashDisplay-Bold',
     fontSize: 40,
     fontWeight: '700',
     lineHeight: 46,

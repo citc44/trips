@@ -71,11 +71,13 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   caption: {
     color: Colors.inkSecondary,
+    fontFamily: Typography.body.fontFamily,
     fontSize: 13,
     textAlign: 'center',
   },
   backLabel: {
     color: Colors.inkPrimary,
+    fontFamily: Typography.body.fontFamily,
     fontSize: Typography.body.fontSize,
   },
 });

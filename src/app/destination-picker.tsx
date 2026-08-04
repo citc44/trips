@@ -200,7 +200,9 @@ const styles = StyleSheet.create({
   },
   headline: {
     color: WayfinderColors.inkPrimary,
-    fontFamily: Typography.display.fontFamily,
+    // 700 (Bold), not Typography.display's own 600 (Semibold) -- this
+    // headline needs its own weight-specific family, not the shared token's.
+    fontFamily: 'ClashDisplay-Bold',
     fontSize: 27,
     fontWeight: '700',
     lineHeight: 35,
@@ -211,7 +213,8 @@ const styles = StyleSheet.create({
   },
   fieldLabel: {
     color: WayfinderColors.inkSecondary,
-    fontFamily: Typography.label.fontFamily,
+    // 700 (Bold), not Typography.label's own 600 (Semibold).
+    fontFamily: 'GeneralSans-Bold',
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0.8,
@@ -220,6 +223,7 @@ const styles = StyleSheet.create({
   input: {
     minHeight: 56,
     color: WayfinderColors.inkPrimary,
+    fontFamily: Typography.body.fontFamily,
     fontSize: 17,
     borderWidth: 2,
     borderColor: WayfinderColors.borderHairline,
@@ -260,6 +264,7 @@ const styles = StyleSheet.create({
   },
   error: {
     color: WayfinderColors.error,
+    fontFamily: Typography.body.fontFamily,
     fontSize: Typography.body.fontSize,
   },
 });

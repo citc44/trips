@@ -86,6 +86,7 @@ const styles = StyleSheet.create({
     width: '100%',
     minHeight: 56,
     color: Colors.inkPrimary,
+    fontFamily: Typography.body.fontFamily,
     fontSize: Typography.body.fontSize,
     borderWidth: 1,
     borderColor: Colors.borderHairline,
