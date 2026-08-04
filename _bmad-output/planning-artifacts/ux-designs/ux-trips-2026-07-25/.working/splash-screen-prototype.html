@@ -1,0 +1,226 @@
+<title>Voylo — Splash Screen Prototype ("Ignition")</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root {
+    --accent-primary: #0B6FFF;
+    --accent-primary-pressed: #0653C7;
+    --accent-amber: #FFB020;
+    --player-coral: #FF5A5F;
+    --player-teal: #00C2A8;
+    --player-amber: #FFB020;
+    --ink-primary: #101828;
+    --ink-secondary: #667085;
+    --surface-secondary: #F4F6FA;
+    --border-hairline: #DCE1EA;
+    --horizon-sky-top: #EDF3FF;
+    --horizon-sky-mid: #E1EDFF;
+    --horizon-sky-bottom: #D6E6FF;
+    --horizon-sun-glow: #FFE9BE;
+    --horizon-dash: #FFB020;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--surface-secondary);
+    color: var(--ink-primary);
+    font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    padding: 40px 24px 80px;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; }
+  .eyebrow {
+    font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--accent-primary); margin: 0 0 8px;
+  }
+  h1 { font-size: 28px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 8px; }
+  .sub { color: var(--ink-secondary); font-size: 15px; line-height: 1.5; max-width: 620px; margin: 0 0 32px; }
+
+  .stage-row { display: flex; gap: 32px; flex-wrap: wrap; align-items: flex-start; }
+
+  .phone {
+    width: 300px; height: 620px;
+    border-radius: 40px;
+    background: var(--accent-primary);
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 24px 60px -20px rgba(16,24,40,0.5);
+    flex: 0 0 auto;
+  }
+
+  /* Phase 1: three dots converging */
+  .dot {
+    position: absolute;
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    opacity: 0;
+  }
+  .dot-teal { background: var(--player-teal); }
+  .dot-coral { background: var(--player-coral); }
+  .dot-amber { background: var(--player-amber); }
+
+  .run .dot-teal { animation: flyTeal 900ms cubic-bezier(.2,.9,.3,1.3) 200ms forwards, idleBobA 2400ms ease-in-out 1500ms infinite; }
+  .run .dot-coral { animation: flyCoral 900ms cubic-bezier(.2,.9,.3,1.3) 320ms forwards, idleBobB 2600ms ease-in-out 1600ms infinite; }
+  .run .dot-amber { animation: flyAmber 900ms cubic-bezier(.2,.9,.3,1.3) 440ms forwards, idleBobC 2200ms ease-in-out 1700ms infinite; }
+
+  @keyframes flyTeal {
+    0%   { transform: translate(-140px, -220px) scale(0.4); opacity: 0; }
+    70%  { transform: translate(6px, -4px) scale(1.08); opacity: 1; }
+    100% { transform: translate(-8px, 6px) scale(1); opacity: 1; }
+  }
+  @keyframes flyCoral {
+    0%   { transform: translate(160px, -200px) scale(0.4); opacity: 0; }
+    70%  { transform: translate(-4px, -6px) scale(1.08); opacity: 1; }
+    100% { transform: translate(6px, 4px) scale(1); opacity: 1; }
+  }
+  @keyframes flyAmber {
+    0%   { transform: translate(0px, 220px) scale(0.4); opacity: 0; }
+    70%  { transform: translate(2px, 8px) scale(1.08); opacity: 1; }
+    100% { transform: translate(0px, -6px) scale(1); opacity: 1; }
+  }
+  @keyframes idleBobA { 0%,100% { margin-top: 0; } 50% { margin-top: -4px; } }
+  @keyframes idleBobB { 0%,100% { margin-top: 0; } 50% { margin-top: 3px; } }
+  @keyframes idleBobC { 0%,100% { margin-top: 0; } 50% { margin-top: -3px; } }
+
+  .dot-field {
+    position: absolute; top: 200px; left: 50%; transform: translateX(-50%);
+    width: 140px; height: 140px;
+  }
+  .dot-field .dot { left: 42px; top: 42px; }
+
+  /* Phase 2: horizon strip rising */
+  .horizon {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 0;
+    background: linear-gradient(180deg, var(--horizon-sky-top), var(--horizon-sky-mid) 55%, var(--horizon-sky-bottom));
+    overflow: hidden;
+  }
+  .run .horizon { animation: riseHorizon 700ms cubic-bezier(.3,.8,.3,1) 1000ms forwards; }
+  @keyframes riseHorizon { 0% { height: 0; opacity: 0; } 100% { height: 220px; opacity: 1; } }
+
+  .sun-glow {
+    position: absolute; width: 220px; height: 220px; border-radius: 50%;
+    background: radial-gradient(circle, var(--horizon-sun-glow), transparent 70%);
+    left: 50%; bottom: -40px; transform: translateX(-50%);
+    opacity: 0;
+  }
+  .run .sun-glow { animation: fadeIn 600ms ease 1200ms forwards; }
+  @keyframes fadeIn { to { opacity: 0.9; } }
+
+  .road-line {
+    position: absolute; bottom: 64px; left: 0; width: 200%; height: 4px;
+    background-image: repeating-linear-gradient(90deg, var(--horizon-dash) 0 24px, transparent 24px 44px);
+    opacity: 0;
+  }
+  .run .road-line { animation: fadeIn 400ms ease 1350ms forwards, scrollRoad 1400ms linear 1350ms infinite; }
+  @keyframes scrollRoad { from { transform: translateX(0); } to { transform: translateX(-30%); } }
+
+  /* Phase 3: wordmark */
+  .wordmark {
+    position: absolute; left: 50%; bottom: 96px; transform: translate(-50%, 18px);
+    font-size: 30px; font-weight: 700; letter-spacing: -0.01em; color: #FFFFFF;
+    opacity: 0;
+    text-align: center;
+  }
+  .run .wordmark { animation: riseWord 500ms cubic-bezier(.2,.8,.3,1) 1550ms forwards; }
+  @keyframes riseWord { to { transform: translate(-50%, 0); opacity: 1; } }
+  .tagline {
+    position: absolute; left: 50%; bottom: 78px; transform: translateX(-50%);
+    font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255,255,255,0.75);
+    opacity: 0;
+  }
+  .run .tagline { animation: fadeIn 500ms ease 1900ms forwards; }
+
+  /* Reduced-motion variant: no flight paths, no bounce, no continuous scroll -- one soft crossfade */
+  .reduced .dot { animation: none !important; opacity: 1; transform: none; }
+  .reduced .dot-field .dot-teal { left: 12px; top: 12px; }
+  .reduced .dot-field .dot-coral { left: 72px; top: 12px; }
+  .reduced .dot-field .dot-amber { left: 42px; top: 72px; }
+  .reduced .horizon { transition: opacity 400ms ease; height: 220px; opacity: 1; animation: none; }
+  .reduced .sun-glow { animation: none; opacity: 0.9; }
+  .reduced .road-line { animation: none; opacity: 0.9; transform: none; }
+  .reduced .wordmark { animation: none; opacity: 1; transform: translate(-50%, 0); }
+  .reduced .tagline { animation: none; opacity: 1; }
+
+  .controls {
+    flex: 1 1 260px; min-width: 240px;
+    display: flex; flex-direction: column; gap: 16px;
+  }
+  button {
+    font-family: inherit; font-size: 14px; font-weight: 600;
+    padding: 12px 18px; border-radius: 10px; border: none; cursor: pointer;
+    background: var(--accent-primary); color: #fff;
+  }
+  button:active { background: var(--accent-primary-pressed); }
+  .toggle-row { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--ink-secondary); }
+  .phase-list { font-size: 13.5px; line-height: 1.7; color: var(--ink-secondary); padding-left: 18px; margin: 0; }
+  .phase-list b { color: var(--ink-primary); }
+  .note {
+    font-size: 13px; line-height: 1.5; color: var(--ink-secondary);
+    background: #fff; border: 1px solid var(--border-hairline); border-radius: 10px; padding: 14px 16px;
+  }
+
+  footer { margin-top: 48px; padding-top: 24px; border-top: 1px solid var(--border-hairline); color: #98A2B3; font-size: 12.5px; }
+</style>
+
+<div class="wrap">
+  <p class="eyebrow">Voylo · Splash prototype · .working/</p>
+  <h1>"Ignition" — a launch sequence, not a logo screen</h1>
+  <p class="sub">Purely animated, no tap required — it plays once, automatically, then hands off to Home. Built on top of the
+    Horizon Drift ambient-footer language already locked into DESIGN.md, scaled up to fill the whole splash instead of just a
+    footer strip. The three dots use the same player colors as the live map markers, so the very first thing you see already
+    speaks the app's visual language.</p>
+
+  <div class="stage-row">
+    <div class="phone run" id="phone">
+      <div class="dot-field">
+        <div class="dot dot-teal"></div>
+        <div class="dot dot-coral"></div>
+        <div class="dot dot-amber"></div>
+      </div>
+      <div class="horizon">
+        <div class="sun-glow"></div>
+        <div class="road-line"></div>
+      </div>
+      <div class="wordmark">Voylo</div>
+      <div class="tagline">every trip, together</div>
+    </div>
+
+    <div class="controls">
+      <button id="replay">Replay sequence</button>
+      <div class="toggle-row">
+        <input type="checkbox" id="reduce" />
+        <label for="reduce">Preview "Reduce Motion" fallback</label>
+      </div>
+      <div class="note">
+        <b>Accessibility Floor:</b> when the OS reduce-motion setting is on, the flight paths, spring bounce, idle bob, and
+        continuous road-scroll are all disabled. Everything appears already-settled with one soft 400ms crossfade — same end
+        state, no motion in transit. Toggle the checkbox above to preview that fallback.
+      </div>
+      <ol class="phase-list">
+        <li><b>0–200ms</b> — solid accent-primary field, phone already "on."</li>
+        <li><b>200–1140ms</b> — three player-colored dots fly in from off-frame and spring-settle into a loose cluster.</li>
+        <li><b>1000–1750ms</b> — horizon strip rises from the bottom: sky gradient, sun glow, then the dashed amber
+          centerline begins scrolling left, continuously, for the rest of the sequence.</li>
+        <li><b>1550–2050ms</b> — "Voylo" wordmark rises into place under the dot cluster, tagline fades in after.</li>
+        <li><b>2050ms+</b> — idle hold: dots bob gently, road keeps drifting, until the app is ready and cross-fades to Home.</li>
+      </ol>
+    </div>
+  </div>
+
+  <footer>
+    Working exploration, not yet promoted to mockups/. Reuses Horizon Drift tokens: horizon-sky-top #EDF3FF ·
+    horizon-sky-mid #E1EDFF · horizon-sky-bottom #D6E6FF · horizon-sun-glow #FFE9BE · horizon-dash #FFB020. Player colors:
+    teal #00C2A8 · coral #FF5A5F · amber #FFB020. Timing/easing are a first pass — tell me if it should feel snappier, longer,
+    calmer, more playful, etc.
+  </footer>
+</div>
+
+<script>
+  var phone = document.getElementById('phone');
+  document.getElementById('replay').addEventListener('click', function () {
+    phone.classList.remove('run');
+    void phone.offsetWidth;
+    phone.classList.add('run');
+  });
+  document.getElementById('reduce').addEventListener('change', function (e) {
+    phone.classList.toggle('reduced', e.target.checked);
+  });
+</script>

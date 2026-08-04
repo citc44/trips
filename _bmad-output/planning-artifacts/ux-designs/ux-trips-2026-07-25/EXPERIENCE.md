@@ -1,7 +1,7 @@
 ---
 status: final
 created: 2026-07-25
-updated: 2026-08-02
+updated: 2026-08-04
 sources:
   - _bmad-output/planning-artifacts/prds/prd-trips-2026-07-25/prd.md
   - _bmad-output/brainstorming/brainstorm-group-road-trip-tracker-2026-07-21/brainstorm.html
@@ -29,6 +29,7 @@ No tablet layout is specified for v1 — phone-first, often one-handed, often pa
 
 | Surface | Reached from | Purpose | Mockup | Ships |
 |---|---|---|---|---|
+| Splash Screen | Cold app launch (every launch, not once-ever) | Brand launch moment ("The Thread") while the app resolves where to land; not a permission or auth gate | [mockup](mockups/key-splash-screen.html) | v1 |
 | OTP Entry (email) | App open, unauthenticated, no invite link · or "Join" tap on Join Invitation | Passwordless sign-in, step 1 | [mockup](mockups/key-otp-signin.html) | v1 |
 | OTP Verify (code) | OTP Entry submit | Confirms identity, opens/resumes session | [mockup](mockups/key-otp-signin.html) | v1 |
 | Trust Moment | First-ever successful OTP verify on an account (once, ever) | The "we never sell your location" screen, as a real moment, not a settings line | [mockup](mockups/key-trust-moment.html) | v1 |
@@ -51,7 +52,7 @@ No tablet layout is specified for v1 — phone-first, often one-handed, often pa
 | Memory Lane | End-Voyage wrap-up completion (v1.1 onward — replaces the v1 Voyage Ended state above at the same trigger point) · Past Voyages list entry | The shareable highlight-reel payoff, revisitable | — | v1.1 |
 | Share & Consent review | Memory Lane → external share action | Per-person consent gate before content leaves the app | — | v1.1 |
 
-Voylo has **no persistent tab bar and no persistent navigation drawer**. Navigation is a state machine, not a multi-section app: `Home ↔ Intro/Picker/Join → Live Map → Wrap-up → Voyage Ended (v1) / Memory Lane (v1.1+)`. The one exception is the Live Map's breadcrumb icon, which opens an on-demand `action-drawer` (organizer/settings actions) that closes after use — this is a transient action surface, not a persistent nav affordance, and does not reintroduce a tab-bar-style IA. The last hop is a version seam, not a typo: End Voyage always triggers the same Wrap-up beat, but what it lands on differs by build — see the IA table's Voyage Ended / Memory Lane rows and State Patterns. This is a deliberate IA call, not an omission — DESIGN.md describes the Destination Picker confirm → Live Map transition as a "cut to gameplay" (see Motion & Transitions below for the concrete spec), and a bottom tab bar sitting under a full-bleed cinematic hero screen would undercut that immediately. The Live Map is the entire screen for the duration of a Voyage; everything else (Voyager peeks, Organizer controls, Fun Fact logging) surfaces as a sheet, drawer, or toast over it, never a new tab.
+Voylo has **no persistent tab bar and no persistent navigation drawer**. Navigation is a state machine, not a multi-section app: `Splash → (OTP Entry ↔ Home) ↔ Intro/Picker/Join → Live Map → Wrap-up → Voyage Ended (v1) / Memory Lane (v1.1+)`. Splash is a launch-time gate only — it never re-appears mid-session and holds no state of its own; it always resolves forward to whichever surface auth/Voyage state would otherwise land on. The one exception is the Live Map's breadcrumb icon, which opens an on-demand `action-drawer` (organizer/settings actions) that closes after use — this is a transient action surface, not a persistent nav affordance, and does not reintroduce a tab-bar-style IA. The last hop is a version seam, not a typo: End Voyage always triggers the same Wrap-up beat, but what it lands on differs by build — see the IA table's Voyage Ended / Memory Lane rows and State Patterns. This is a deliberate IA call, not an omission — DESIGN.md describes the Destination Picker confirm → Live Map transition as a "cut to gameplay" (see Motion & Transitions below for the concrete spec), and a bottom tab bar sitting under a full-bleed cinematic hero screen would undercut that immediately. The Live Map is the entire screen for the duration of a Voyage; everything else (Voyager peeks, Organizer controls, Fun Fact logging) surfaces as a sheet, drawer, or toast over it, never a new tab.
 
 Modal stacking is capped at one level. The Action Drawer is level 1; tapping End Voyage, Grant Organizer, or Remove Voyager swaps the *same drawer's* content to a confirm step rather than stacking a second panel on top — there is never a dialog on top of a dialog anywhere in the product.
 
@@ -147,6 +148,17 @@ Behavioral. Visual specs live in `DESIGN.md.Components`.
 **Button press feedback.** `button-ignition` depresses 3px on press (its flat offset shadow collapsing from 6px to 3px, mirroring a physical push); icon-only controls (back arrow, hamburger, drawer close) scale to 90% on press. This is discrete, user-triggered feedback tied directly to a tap, not ambient or continuous motion — it is not gated by Reduce Motion, consistent with how most platform press-states behave.
 
 **Horizon-strip drift.** See `DESIGN.md.Components` — the ambient dashed lane-line loop on OTP and Destination Picker. `3.2s` linear loop, freezes to a static frame under Reduce Motion.
+
+**Splash Screen ("The Thread").** `[NEW 2026-08-04]` Plays once per cold launch, fully automatic, no tap/skip control. Binding phase spec (see `mockups/key-splash-screen.html` for the live reference):
+
+1. `0–520ms` — three player-color dots (teal, coral, amber) pop in separately, each with a small spring-settle, at a distance from one another — never converging into a single point.
+2. `620–1770ms` — an `accent-amber` thread draws itself between all three dots via a progressive stroke reveal, tracing the same visual language as `map-road-centerline`.
+3. `1100–1720ms` — three spark marks pop in along the thread as the draw passes them, representing moments collected along the way.
+4. `1760–2460ms` — a soft `accent-primary` ring ripples outward from the final connection point.
+5. `1900–2600ms` — the Voylo wordmark rises in beneath the connected trio; "Every journey tells a story." fades in after.
+6. `2400ms+` — idle hold (gentle dot brightness pulse, spark twinkle) until the app resolves where to land and cross-fades out.
+
+Disabled under Reduce Motion — the fully-connected end state (thread drawn, sparks settled, wordmark in place) appears immediately with one soft crossfade in; no draw, pop, or ripple. Splash always resolves forward per Information Architecture — it is not a branch point and holds no interactive state.
 
 ## Accessibility Floor
 

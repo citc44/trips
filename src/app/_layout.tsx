@@ -8,7 +8,7 @@ import '@/shared/lib/background-location-task';
 import { useFonts } from 'expo-font';
 import { DarkTheme, DefaultTheme, router, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useColorScheme } from 'react-native';
 
 import { initSentry, Sentry } from '@/lib/sentry';
@@ -24,6 +24,7 @@ import { RemovalNoticeProvider, useRemovalNotice } from '@/shared/hooks/use-remo
 import { resolveJustStartedVoyageExit } from '@/shared/navigation/resolve-just-started-voyage-exit';
 import { resolveRoute } from '@/shared/navigation/resolve-route';
 import { getStandardPushTransition } from '@/shared/navigation/standard-push-transition';
+import { SplashThread } from '@/shared/components/splash-thread';
 
 initSentry();
 SplashScreen.preventAutoHideAsync();
@@ -104,6 +105,14 @@ function AppNavigator() {
     isAuthLoading ||
     (!!session && (isProfileLoading || isActiveVoyageLoading || isRemovalNoticeLoading || isLocationPermissionLoading));
 
+  // EXPERIENCE.md "Splash Screen ('The Thread')": plays once, every cold
+  // launch, right after the native (OS-drawn) splash hides -- native splash
+  // covers the isLoading window above, this custom animated one bridges from
+  // there to the resolved route. `hasPlayedSplash` naturally resets to false
+  // on every fresh mount of this component (i.e. every cold launch), so no
+  // extra "have I shown this before" bookkeeping is needed.
+  const [hasPlayedSplash, setHasPlayedSplash] = useState(false);
+
   useEffect(() => {
     if (!isLoading) {
       SplashScreen.hideAsync();
@@ -112,6 +121,10 @@ function AppNavigator() {
 
   if (isLoading) {
     return null;
+  }
+
+  if (!hasPlayedSplash) {
+    return <SplashThread onComplete={() => setHasPlayedSplash(true)} />;
   }
 
   // Fail open on a profile-fetch error: treat "unknown" as "already seen" rather

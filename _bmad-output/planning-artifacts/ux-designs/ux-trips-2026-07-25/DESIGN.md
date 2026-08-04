@@ -1,7 +1,7 @@
 ---
 status: final
 created: 2026-07-25
-updated: 2026-08-02
+updated: 2026-08-04
 sources:
   - _bmad-output/planning-artifacts/prds/prd-trips-2026-07-25/prd.md
   - _bmad-output/brainstorming/brainstorm-group-road-trip-tracker-2026-07-21/brainstorm.html
@@ -292,6 +292,29 @@ components:
     foreground: '{colors.ink-primary}'
     radius: '{rounded.full}'
     padding: '{spacing.2} {spacing.4}'
+  # app-icon — "The Unfinished Loop." Resolves the prior placeholder-icon
+  # assumption. Three player-color dots, deliberately apart (not converged),
+  # joined by a dashed thread that almost but doesn't quite close — "the story
+  # isn't finished yet." Dash rhythm intentionally echoes map-road-centerline.
+  app-icon:
+    background: '{colors.accent-primary}'
+    threadColor: '#FFFFFF'
+    threadDash: '1px 9px @ 100x100 viewBox (scales with size)'
+    threadWidth: 4px
+    dots: ['{colors.player-teal}', '{colors.player-coral}', '{colors.player-amber}']
+    cornerRadius: '~22% of icon width (export full square; platform applies its own mask)'
+  # splash-thread — the splash-screen sequence. See EXPERIENCE.md Motion &
+  # Transitions for the binding phase timing; mockup is the authoritative
+  # visual/timing reference (mockups/key-splash-screen.html).
+  splash-thread:
+    background: 'linear-gradient(180deg, {colors.horizon-sky-top} 0%, {colors.horizon-sky-mid} 60%, {colors.horizon-sky-bottom} 100%)'
+    dots: ['{colors.player-teal}', '{colors.player-coral}', '{colors.player-amber}']
+    threadColor: '{colors.accent-amber}'
+    rippleColor: '{colors.accent-primary}'
+    wordmarkColor: '{colors.ink-primary}'
+    taglineColor: '{colors.ink-secondary}'
+    totalDuration: '~2.6s to idle hold'
+    reducedMotion: 'settled end-state, single crossfade, no draw/pop/ripple'
 
 ---
 
@@ -303,7 +326,7 @@ Voylo is not a tracker you check. It's a road-trip game world you're a character
 
 Three typefaces still carry the whole system, unchanged from v1. **Clash Display** owns every emotional beat — Voyage Intro, the Join invitation, Memory Lane titles (v1.1). **General Sans** runs everything functional. **Space Mono** is reserved exclusively for stat numerals. See Typography below — none of this changed in the Wayfinder pass; only color, elevation, and select components did.
 
-`[ASSUMPTION: the brand mark itself — an app icon/wordmark — is still out of this document's scope; the current placeholder app icon (a generic blue chevron) predates Wayfinder and should be revisited to match the new palette before store submission.]`
+`[RESOLVED 2026-08-04: the app icon and splash screen are now specced — see app-icon and splash-thread in Components below. Both replace the placeholder Expo-default assets that predated any Wayfinder work.]`
 
 **Brand throughline.** The tagline **"Every journey tells a story. We make sure you never miss it."** and the "send me your Voylo" ambition (§Brand & Style history) carry forward unchanged — these are copy/positioning decisions, untouched by the visual pivot. The Voyage Intro and Join Invitation screens still carry the tagline as real on-screen copy (see Screens below).
 
@@ -355,6 +378,8 @@ Map markers stay circles (a Voyager's avatar in a colored ring), never pins — 
 
 ### Screens
 
+**Splash Screen** *(Ships: v1)* [mockup](mockups/key-splash-screen.html) — "The Thread." Cold-launch-only, plays once automatically before the app resolves to OTP Entry, Home, or a resumed Live Map. Three player-color dots appear apart, an `accent-amber` thread draws itself between them with sparks marking collected moments, resolves to the Voylo wordmark and "Every journey tells a story." Built to answer two rejected directions: a gentle drift on a dark-navy field read as too calm and broke Wayfinder's no-dark-surfaces rule, and a flash/comet-collision treatment read as exciting but conceptually disconnected from what Voylo actually is. This one is grounded directly in the brand promise — see Brand & Style — and the product's actual mechanic (separate Voyagers, one connected Voyage, quietly collected moments). Full phase timing in `EXPERIENCE.md` Motion & Transitions.
+
 **OTP Sign-In / Verify** *(Ships: v1)* [mockup](mockups/key-otp-signin.html) — Still plumbing, not a brand moment: `surface-primary` white canvas, no color-blocking on the content itself. The one change from v1: a `horizon-strip` now closes out the bottom of the screen so it never reads as flatly, silently white — this was direct user feedback on the first Wayfinder pass ("every screen that has only and just white background looks very unprofessional").
 
 **Home (no active Voyage)** *(Ships: v1 base — a Past Voyages list is v1.1)* [mockup](mockups/key-home.html) — Unchanged structure from v1: `surface-secondary` fog canvas, a small wordmark for orientation, one dominant `button-ignition` ("Start a Voyage") anchored low in generous whitespace. Left without a `horizon-strip` — it already has enough visual weight (the button's flat offset shadow) not to read as flat; revisit if feedback says otherwise.
@@ -374,6 +399,8 @@ Map markers stay circles (a Voyager's avatar in a colored ring), never pins — 
 **Voyage Ended** *(Ships: v1 — this is v1's actual terminal state)* [mockup](mockups/key-voyage-ended.html) — Deliberately understated next to Voyage Intro/Join Invitation, unchanged in intent from v1: `surface-secondary` fog canvas, one `card` summary panel (destination, duration, Voyager count in `stat-numeral`), one `button-secondary` back to Home.
 
 ### Components
+
+**App icon** *(Ships: v1)* [mockup](mockups/key-app-icon.html) — "The Unfinished Loop." `app-icon` token. Three player-color dots (teal/coral/amber) held apart on an `accent-primary` field, joined by a white dashed thread that almost closes but doesn't — apart-but-connected, and the story isn't finished yet. Dash rhythm deliberately echoes `map-road-centerline`. Replaces the Expo-default placeholder icon; resolves the assumption flagged in Brand & Style. Verify legibility at sub-40px sizes before final export — the dash detail softens at favicon/notification scale (see mockup's size-check row).
 
 **Role-switch pill (Driving / Riding)** *(Ships: v1)* — `status-pill` token, unchanged mechanism from v1, re-skinned: Riding renders as a neutral white pill with a hairline border; Driving renders as a solid `accent-teal` fill with white text — no glow, since Wayfinder has none, but still the same "unmissable at a glance" intent via flat, saturated color contrast against the neutral Riding state.
 

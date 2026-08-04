@@ -1,0 +1,249 @@
+<title>Voylo — Icon Concepts, Round 2</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root {
+    --surface-secondary: #F4F6FA;
+    --border-hairline: #DCE1EA;
+    --ink-primary: #101828;
+    --ink-secondary: #667085;
+    --ink-disabled: #98A2B3;
+    --accent-primary: #0B6FFF;
+    --accent-primary-pressed: #0653C7;
+    --accent-teal: #00C2A8;
+    --accent-coral: #FF5A5F;
+    --accent-amber: #FFB020;
+    --player-coral: #FF5A5F;
+    --player-teal: #00C2A8;
+    --player-amber: #FFB020;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: #12162280;
+    background: var(--ink-primary);
+    color: #fff;
+    font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    padding: 40px 24px 80px;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; }
+  .eyebrow {
+    font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--accent-amber); margin: 0 0 8px;
+  }
+  h1 { font-size: 30px; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 8px; }
+  .sub { color: #A6B4CC; font-size: 15px; line-height: 1.6; max-width: 680px; margin: 0 0 40px; }
+  .sub b { color: #fff; }
+
+  .board {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 24px;
+  }
+  .card {
+    background: #1A2138;
+    border: 1px solid #2B3350;
+    border-radius: 18px;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .card-label {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--accent-amber);
+  }
+  .icon-name { font-size: 18px; font-weight: 700; margin: 2px 0 0; }
+  .icon-stage {
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px 0 8px;
+  }
+  .icon-tile {
+    width: 132px; height: 132px;
+    border-radius: 30px;
+    position: relative;
+    overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 18px 40px -14px rgba(0,0,0,0.65), inset 0 1px 0 rgba(255,255,255,0.12);
+  }
+  .rationale { font-size: 13.5px; line-height: 1.55; color: #A6B4CC; margin: 0; }
+  .rationale b { color: #fff; }
+
+  /* Concept E: Convergence Burst -- dimensional, glowing, motion-streaked */
+  .tile-burst {
+    background: radial-gradient(circle at 50% 42%, #2E8BFF 0%, var(--accent-primary) 45%, var(--accent-primary-pressed) 100%);
+  }
+  .burst-streak {
+    position: absolute; width: 3px; height: 60px; border-radius: 2px;
+    background: linear-gradient(180deg, transparent, rgba(255,255,255,0.55));
+    transform-origin: bottom center;
+  }
+  .burst-glow {
+    position: absolute; width: 150px; height: 150px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,255,255,0.35), transparent 65%);
+  }
+  .burst-orb {
+    position: absolute; border-radius: 50%;
+    box-shadow: inset -4px -5px 8px rgba(0,0,0,0.35), inset 3px 3px 6px rgba(255,255,255,0.5);
+  }
+
+  /* Concept F: Road Portal -- vanishing-point road, radiant */
+  .tile-portal {
+    background: radial-gradient(circle at 50% 100%, #FFE9BE 0%, #FFB020 12%, #0B6FFF 46%, #0A1A3D 100%);
+  }
+  .portal-line { position: absolute; background: rgba(255,255,255,0.9); border-radius: 2px; }
+
+  /* Concept G: Voyager Badge -- game achievement emblem */
+  .tile-badge {
+    background: linear-gradient(135deg, #0B6FFF 0%, #00C2A8 100%);
+  }
+  .badge-ring {
+    position: absolute; border-radius: 50%; border: 5px solid rgba(255,255,255,0.9);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.25), inset 0 2px 4px rgba(255,255,255,0.4);
+  }
+  .badge-star {
+    position: relative; z-index: 2; filter: drop-shadow(0 3px 4px rgba(0,0,0,0.3));
+  }
+
+  /* Concept H: Speed Mark -- diagonal gradient monogram, motion energy */
+  .tile-speed {
+    background: linear-gradient(135deg, #0653C7 0%, #0B6FFF 40%, #FF5A5F 100%);
+  }
+  .speed-bar { position: absolute; border-radius: 4px; }
+
+  .home-strip {
+    border-radius: 12px; padding: 16px 14px 12px; display: flex; align-items: flex-end; gap: 12px;
+    background: linear-gradient(180deg, #2A3350, #10131C);
+  }
+  .home-icon { width: 42px; height: 42px; border-radius: 10.5px; flex: 0 0 auto; overflow: hidden; position: relative; box-shadow: 0 3px 8px -2px rgba(0,0,0,0.5); }
+  .home-icon.decoy { background: rgba(255,255,255,0.14); box-shadow: none; }
+
+  footer { margin-top: 48px; padding-top: 24px; border-top: 1px solid #2B3350; color: #667085; font-size: 12.5px; }
+</style>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Voylo · Icon exploration, round 2 · .working/</p>
+    <h1>Same palette, much more dimension and drama</h1>
+    <p class="sub">Round 1 was flat color-block silhouettes — read as safe/corporate. This round leans into <b>depth, glow,
+      motion streaks, and gradient light</b> instead of flat fills, closer to how a game or arcade-style app icon earns
+      attention on a crowded home screen. Still built only from Wayfinder tokens — nothing new introduced, just used with
+      more dimensionality.</p>
+  </header>
+
+  <div class="board">
+
+    <div class="card">
+      <div>
+        <p class="card-label">Concept E</p>
+        <p class="icon-name">Convergence Burst</p>
+      </div>
+      <div class="icon-stage">
+        <div class="icon-tile tile-burst">
+          <div class="burst-glow"></div>
+          <div class="burst-streak" style="transform: rotate(20deg) translate(-38px,-46px);"></div>
+          <div class="burst-streak" style="transform: rotate(-35deg) translate(40px,-50px);"></div>
+          <div class="burst-streak" style="transform: rotate(150deg) translate(20px,52px);"></div>
+          <div class="burst-orb" style="width:44px;height:44px;background:var(--player-teal);left:26px;top:32px;"></div>
+          <div class="burst-orb" style="width:44px;height:44px;background:var(--player-coral);right:22px;top:24px;"></div>
+          <div class="burst-orb" style="width:44px;height:44px;background:var(--player-amber);left:44px;bottom:16px;"></div>
+        </div>
+      </div>
+      <p class="rationale"><b>Round 1's dots, given impact.</b> Radial light behind them, motion streaks trailing off each
+        orb like they just rocketed in, and inset shading so each dot reads as a lit sphere, not a flat circle. Same "friends
+        converging" idea, now with actual velocity and light instead of static geometry.</p>
+      <div class="home-strip">
+        <div class="home-icon tile-burst" style="width:42px;height:42px;border-radius:10.5px;">
+          <div class="burst-orb" style="width:14px;height:14px;background:var(--player-teal);left:8px;top:11px;"></div>
+          <div class="burst-orb" style="width:14px;height:14px;background:var(--player-coral);right:7px;top:8px;"></div>
+          <div class="burst-orb" style="width:14px;height:14px;background:var(--player-amber);left:15px;bottom:6px;"></div>
+        </div>
+        <div class="home-icon decoy"></div><div class="home-icon decoy"></div><div class="home-icon decoy"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div>
+        <p class="card-label">Concept F</p>
+        <p class="icon-name">Road Portal</p>
+      </div>
+      <div class="icon-stage">
+        <div class="icon-tile tile-portal">
+          <div class="portal-line" style="width:3px;height:120px;left:50%;top:6px;transform:translateX(-50%) rotate(0deg);opacity:.95;"></div>
+          <div class="portal-line" style="width:3px;height:120px;left:50%;top:6px;transform:translateX(-50%) rotate(18deg);opacity:.6;"></div>
+          <div class="portal-line" style="width:3px;height:120px;left:50%;top:6px;transform:translateX(-50%) rotate(-18deg);opacity:.6;"></div>
+          <div class="portal-line" style="width:3px;height:110px;left:50%;top:10px;transform:translateX(-50%) rotate(34deg);opacity:.35;"></div>
+          <div class="portal-line" style="width:3px;height:110px;left:50%;top:10px;transform:translateX(-50%) rotate(-34deg);opacity:.35;"></div>
+        </div>
+      </div>
+      <p class="rationale"><b>The most "wow, what is that" of the four.</b> A radiant vanishing-point — sunrise amber core
+        blooming into Wayfinder blue, then night at the edges — with road lines rushing toward the viewer instead of sitting
+        flat. Reads like a portal into the trip, not a map. Highest-risk, highest-reward option.</p>
+      <div class="home-strip">
+        <div class="home-icon tile-portal" style="width:42px;height:42px;border-radius:10.5px;">
+          <div class="portal-line" style="width:2px;height:44px;left:50%;top:1px;transform:translateX(-50%) rotate(0deg);"></div>
+          <div class="portal-line" style="width:2px;height:44px;left:50%;top:1px;transform:translateX(-50%) rotate(20deg);opacity:.6;"></div>
+          <div class="portal-line" style="width:2px;height:44px;left:50%;top:1px;transform:translateX(-50%) rotate(-20deg);opacity:.6;"></div>
+        </div>
+        <div class="home-icon decoy"></div><div class="home-icon decoy"></div><div class="home-icon decoy"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div>
+        <p class="card-label">Concept G</p>
+        <p class="icon-name">Voyager Badge</p>
+      </div>
+      <div class="icon-stage">
+        <div class="icon-tile tile-badge">
+          <div class="badge-ring" style="width:96px;height:96px;"></div>
+          <svg class="badge-star" width="52" height="52" viewBox="0 0 52 52" fill="none">
+            <path d="M26 4L31.5 20.5H49L34.75 30.9L40.25 47.4L26 37L11.75 47.4L17.25 30.9L3 20.5H20.5L26 4Z"
+              fill="#FFB020" stroke="#FFFFFF" stroke-width="2" stroke-linejoin="round"/>
+          </svg>
+        </div>
+      </div>
+      <p class="rationale"><b>Leans hardest into "reads as entertainment, not a utility"</b> — a game achievement-badge
+        treatment (diagonal teal-to-blue gradient, embossed ring, glossy amber star) instead of anything map-shaped at all.
+        Closest in spirit to a level-complete or trophy icon; a deliberate swing away from navigation-app visual cliché.</p>
+      <div class="home-strip">
+        <div class="home-icon tile-badge" style="width:42px;height:42px;border-radius:10.5px;">
+          <div class="badge-ring" style="width:32px;height:32px;border-width:3px;"></div>
+          <svg width="18" height="18" viewBox="0 0 52 52" fill="none"><path d="M26 4L31.5 20.5H49L34.75 30.9L40.25 47.4L26 37L11.75 47.4L17.25 30.9L3 20.5H20.5L26 4Z" fill="#FFB020" stroke="#FFFFFF" stroke-width="2.5" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="home-icon decoy"></div><div class="home-icon decoy"></div><div class="home-icon decoy"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div>
+        <p class="card-label">Concept H</p>
+        <p class="icon-name">Speed Mark</p>
+      </div>
+      <div class="icon-stage">
+        <div class="icon-tile tile-speed">
+          <div class="speed-bar" style="width:78px;height:11px;left:14px;top:38px;background:#fff;transform:skewX(-22deg);opacity:.95;"></div>
+          <div class="speed-bar" style="width:60px;height:9px;left:32px;top:58px;background:#fff;transform:skewX(-22deg);opacity:.7;"></div>
+          <div class="speed-bar" style="width:42px;height:7px;left:50px;top:76px;background:#fff;transform:skewX(-22deg);opacity:.5;"></div>
+          <div class="speed-bar" style="width:9px;height:60px;left:88px;top:24px;background:var(--player-amber);transform:skewY(-8deg);"></div>
+        </div>
+      </div>
+      <p class="rationale"><b>Purely abstract, purely velocity.</b> No pin, no road, no compass — three white speed-bars
+        racing diagonally out of a blue-to-coral gradient, with a single amber accent stroke standing in for "your Voyage."
+        Most legible at tiny sizes of all eight concepts so far since it's built from bars, not fine linework.</p>
+      <div class="home-strip">
+        <div class="home-icon tile-speed" style="width:42px;height:42px;border-radius:10.5px;">
+          <div class="speed-bar" style="width:26px;height:4px;left:5px;top:13px;background:#fff;transform:skewX(-22deg);"></div>
+          <div class="speed-bar" style="width:20px;height:3px;left:11px;top:20px;background:#fff;transform:skewX(-22deg);opacity:.7;"></div>
+          <div class="speed-bar" style="width:14px;height:2px;left:17px;top:26px;background:#fff;transform:skewX(-22deg);opacity:.5;"></div>
+        </div>
+        <div class="home-icon decoy"></div><div class="home-icon decoy"></div><div class="home-icon decoy"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <footer>
+    Working exploration, round 2 — round 1 (Convergent Voyagers / Road Pin / Compass-Pin / V Road) stays as-is, nothing lost.
+    Tell me which of these eight is closest, or keep pushing further in a specific one's direction.
+  </footer>
+</div>

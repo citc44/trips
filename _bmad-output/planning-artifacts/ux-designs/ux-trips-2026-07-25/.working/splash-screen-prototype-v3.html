@@ -1,0 +1,166 @@
+<title>Voylo — Splash Screen Prototype, Round 3 ("The Thread")</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root {
+    --accent-primary: #0B6FFF;
+    --accent-amber: #FFB020;
+    --player-coral: #FF5A5F;
+    --player-teal: #00C2A8;
+    --player-amber: #FFB020;
+    --ink-primary: #101828;
+    --ink-secondary: #667085;
+    --border-hairline: #DCE1EA;
+    --surface-secondary: #F4F6FA;
+    --horizon-sky-top: #EDF3FF;
+    --horizon-sky-mid: #E1EDFF;
+    --horizon-sky-bottom: #D6E6FF;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--surface-secondary); color: var(--ink-primary);
+    font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif; padding: 40px 24px 80px;
+  }
+  .wrap { max-width: 1000px; margin: 0 auto; }
+  .eyebrow { font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent-primary); margin: 0 0 8px; }
+  h1 { font-size: 28px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 8px; }
+  .sub { color: var(--ink-secondary); font-size: 15px; line-height: 1.6; max-width: 640px; margin: 0 0 32px; }
+  .sub b { color: var(--ink-primary); }
+
+  .stage-row { display: flex; gap: 32px; flex-wrap: wrap; align-items: flex-start; }
+
+  .phone {
+    width: 300px; height: 620px; border-radius: 40px;
+    background: linear-gradient(180deg, var(--horizon-sky-top), var(--horizon-sky-mid) 60%, var(--horizon-sky-bottom));
+    position: relative; overflow: hidden;
+    box-shadow: 0 24px 60px -20px rgba(16,24,40,0.4);
+    flex: 0 0 auto;
+  }
+
+  .dot { position: absolute; width: 40px; height: 40px; border-radius: 50%; opacity: 0; box-shadow: 0 6px 14px -4px rgba(16,24,40,0.35); }
+  .dot-teal { background: var(--player-teal); left: 60px; top: 200px; }
+  .dot-coral { background: var(--player-coral); left: 210px; top: 150px; }
+  .dot-amber { background: var(--player-amber); left: 130px; top: 340px; }
+  .run .dot { animation: dotPop 420ms cubic-bezier(.3,.9,.3,1.3) forwards; }
+  .run .dot-teal { animation-delay: 120ms; }
+  .run .dot-coral { animation-delay: 260ms; }
+  .run .dot-amber { animation-delay: 400ms; }
+  @keyframes dotPop { 0% { opacity: 0; transform: scale(0.3); } 100% { opacity: 1; transform: scale(1); } }
+  .run .dot { animation: dotPop 420ms cubic-bezier(.3,.9,.3,1.3) forwards, dotIdle 2600ms ease-in-out 2400ms infinite; }
+  @keyframes dotIdle { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.12); } }
+
+  .thread-path {
+    fill: none; stroke: var(--accent-amber); stroke-width: 4; stroke-linecap: round;
+    stroke-dasharray: 420; stroke-dashoffset: 420;
+  }
+  .run .thread-path { animation: draw 1150ms cubic-bezier(.4,.1,.2,1) 620ms forwards; }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
+
+  .spark { position: absolute; width: 10px; height: 10px; opacity: 0; }
+  .spark svg { width: 100%; height: 100%; }
+  .run .spark { animation: sparkPop 500ms cubic-bezier(.3,.9,.3,1.4) forwards, sparkTwinkle 1800ms ease-in-out 2600ms infinite; }
+  @keyframes sparkPop { 0% { opacity: 0; transform: scale(0.2) rotate(-20deg); } 60% { opacity: 1; transform: scale(1.3) rotate(6deg); } 100% { opacity: 1; transform: scale(1) rotate(0deg); } }
+  @keyframes sparkTwinkle { 0%,100% { opacity: 1; } 50% { opacity: 0.45; } }
+
+  .glow-ripple {
+    position: absolute; left: 130px; top: 150px; width: 4px; height: 4px; border-radius: 50%;
+    border: 2px solid var(--accent-primary); opacity: 0;
+  }
+  .run .glow-ripple { animation: ripple 700ms ease-out 1760ms forwards; }
+  @keyframes ripple { 0% { width: 4px; height: 4px; opacity: 0.7; transform: translate(0,0); } 100% { width: 260px; height: 260px; opacity: 0; transform: translate(-128px,-128px); } }
+
+  .wordmark-wrap { position: absolute; left: 50%; bottom: 100px; transform: translate(-50%, 16px); opacity: 0; text-align: center; }
+  .run .wordmark-wrap { animation: wordIn 460ms cubic-bezier(.2,.85,.25,1.1) 1900ms forwards; }
+  @keyframes wordIn { to { transform: translate(-50%, 0); opacity: 1; } }
+  .wordmark { font-size: 30px; font-weight: 700; letter-spacing: -0.01em; color: var(--ink-primary); }
+  .tagline { margin-top: 4px; font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-secondary); opacity: 0; }
+  .run .tagline { animation: fadeIn 400ms ease 2200ms forwards; }
+  @keyframes fadeIn { to { opacity: 1; } }
+
+  /* Reduced motion: everything present, settled, one soft crossfade -- no draw, no ripple, no pop */
+  .reduced .dot { animation: none !important; opacity: 1; transform: none; }
+  .reduced .thread-path { animation: none !important; stroke-dashoffset: 0; }
+  .reduced .spark { animation: none !important; opacity: 1; transform: none; }
+  .reduced .glow-ripple { display: none; }
+  .reduced .wordmark-wrap { animation: none; opacity: 1; transform: translate(-50%,0); }
+  .reduced .tagline { animation: none; opacity: 1; }
+
+  .controls { flex: 1 1 260px; min-width: 240px; display: flex; flex-direction: column; gap: 16px; }
+  button { font-family: inherit; font-size: 14px; font-weight: 600; padding: 12px 18px; border-radius: 10px; border: none; cursor: pointer; background: var(--accent-primary); color: #fff; }
+  .toggle-row { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--ink-secondary); }
+  .phase-list { font-size: 13.5px; line-height: 1.7; color: var(--ink-secondary); padding-left: 18px; margin: 0; }
+  .phase-list b { color: var(--ink-primary); }
+  .note { font-size: 13px; line-height: 1.5; color: var(--ink-secondary); background: #fff; border: 1px solid var(--border-hairline); border-radius: 10px; padding: 14px 16px; }
+  footer { margin-top: 48px; padding-top: 24px; border-top: 1px solid var(--border-hairline); color: #98A2B3; font-size: 12.5px; }
+</style>
+
+<div class="wrap">
+  <p class="eyebrow">Voylo · Splash prototype, round 3 · .working/</p>
+  <h1>"The Thread" — apart, connected, and collecting as you go</h1>
+  <p class="sub">Back on the bright Horizon-Drift sky gradient, not the dark navy from round 2. Three Voyagers appear
+    <b>separately</b> — not converging — then a single amber thread draws itself live between them, exactly like a road
+    being traced on the map. Small sparks pop in along the thread as it passes them: moments being collected in real time.
+    It resolves into the Voylo wordmark sitting under the connected trio, echoing the brand line <i>"every journey tells a
+    story, and Voylo makes sure you never miss it."</i></p>
+
+  <div class="stage-row">
+    <div class="phone run" id="phone">
+      <svg width="300" height="620" style="position:absolute; inset:0;">
+        <path class="thread-path" d="M60,220 C90,110 190,90 230,170 C270,230 190,260 150,360" />
+      </svg>
+      <div class="dot dot-teal"></div>
+      <div class="dot dot-coral"></div>
+      <div class="dot dot-amber"></div>
+      <div class="spark" style="left:118px; top:128px; animation-delay:1100ms;">
+        <svg viewBox="0 0 20 20" fill="none"><path d="M10 0L12 8L20 10L12 12L10 20L8 12L0 10L8 8Z" fill="#FFB020"/></svg>
+      </div>
+      <div class="spark" style="left:222px; top:196px; animation-delay:1420ms;">
+        <svg viewBox="0 0 20 20" fill="none"><path d="M10 0L12 8L20 10L12 12L10 20L8 12L0 10L8 8Z" fill="#FFB020"/></svg>
+      </div>
+      <div class="spark" style="left:186px; top:270px; animation-delay:1620ms;">
+        <svg viewBox="0 0 20 20" fill="none"><path d="M10 0L12 8L20 10L12 12L10 20L8 12L0 10L8 8Z" fill="#FFB020"/></svg>
+      </div>
+      <div class="glow-ripple"></div>
+      <div class="wordmark-wrap">
+        <div class="wordmark">Voylo</div>
+        <div class="tagline">every trip, together</div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button id="replay">Replay sequence</button>
+      <div class="toggle-row">
+        <input type="checkbox" id="reduce" />
+        <label for="reduce">Preview "Reduce Motion" fallback</label>
+      </div>
+      <div class="note">
+        <b>Accessibility Floor:</b> reduce-motion shows the fully-connected end state immediately (thread already drawn,
+        sparks already settled) with one soft crossfade in — no drawing animation, no pop, no ripple.
+      </div>
+      <ol class="phase-list">
+        <li><b>0–520ms</b> — the three Voyager dots pop in separately, at a distance from each other.</li>
+        <li><b>620–1770ms</b> — the amber thread draws itself live, tracing a path between all three.</li>
+        <li><b>1100–1720ms</b> — three spark marks pop in along the thread as it passes them — moments being collected.</li>
+        <li><b>1760–2460ms</b> — a soft light ripple pulses out from the last connection point.</li>
+        <li><b>1900–2600ms</b> — the Voylo wordmark rises in under the connected trio, tagline follows.</li>
+        <li><b>2400ms+</b> — idle hold: dots breathe gently, sparks twinkle, until handoff to Home.</li>
+      </ol>
+    </div>
+  </div>
+
+  <footer>
+    Working exploration, round 3 — rounds 1 and 2 stay as-is, nothing lost. Tell me if this finally reads as "Voylo," or
+    what's still missing.
+  </footer>
+</div>
+
+<script>
+  var phone = document.getElementById('phone');
+  document.getElementById('replay').addEventListener('click', function () {
+    phone.classList.remove('run');
+    void phone.offsetWidth;
+    phone.classList.add('run');
+  });
+  document.getElementById('reduce').addEventListener('change', function (e) {
+    phone.classList.toggle('reduced', e.target.checked);
+  });
+</script>

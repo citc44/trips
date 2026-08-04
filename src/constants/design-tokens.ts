@@ -492,3 +492,64 @@ export const HorizonStrip = {
   dashGap: 22,
   driftDurationMs: 3200,
 } as const;
+
+/**
+ * splash-thread component spec (DESIGN.md#components `splash-thread`,
+ * EXPERIENCE.md Motion & Transitions "Splash Screen ('The Thread')" --
+ * 2026-08-04). Plays once per cold launch. All positions/the path `d` are
+ * transcribed directly from mockups/key-splash-screen.html's 300x620
+ * reference frame -- the component scales them to the real device by
+ * multiplying x by `screenWidth / referenceWidth` and y by
+ * `screenHeight / referenceHeight` (a non-uniform stretch, matching how
+ * every other full-bleed Wayfinder screen fills the device rather than
+ * letterboxing). Reduce Motion collapses straight to the settled end state
+ * (thread drawn, sparks in place, wordmark up) with one soft crossfade --
+ * no draw, pop, or ripple -- same rule as every other Motion & Transitions
+ * entry.
+ */
+export const SplashThread = {
+  referenceWidth: 300,
+  referenceHeight: 620,
+  background: ['#EDF3FF', '#E1EDFF', '#D6E6FF'] as const,
+  threadColor: WayfinderColors.accentAmber,
+  threadWidth: 4,
+  rippleColor: WayfinderColors.accentPrimary,
+  wordmarkColor: WayfinderColors.inkPrimary,
+  taglineColor: WayfinderColors.inkSecondary,
+  tagline: 'Every journey tells a story.',
+  // Path 'd' and dot centers, verbatim from the mockup's reference frame.
+  pathD: 'M60,220 C90,110 190,90 230,170 C270,230 190,260 150,360',
+  pathLength: 420,
+  dots: [
+    { color: PlayerColors.teal, cx: 80, cy: 220, popDelayMs: 120 },
+    { color: PlayerColors.coral, cx: 230, cy: 170, popDelayMs: 260 },
+    { color: PlayerColors.gold, cx: 150, cy: 380, popDelayMs: 400 },
+  ],
+  dotRadius: 20,
+  sparks: [
+    { cx: 123, cy: 133, delayMs: 1100 },
+    { cx: 227, cy: 201, delayMs: 1420 },
+    { cx: 191, cy: 275, delayMs: 1620 },
+  ],
+  rippleOrigin: { cx: 135, cy: 155 },
+  wordmarkBottom: 100,
+  // Phase timing (ms from mount) -- see EXPERIENCE.md for the authoritative
+  // prose spec this mirrors exactly.
+  dotPopDurationMs: 420,
+  threadDrawDelayMs: 620,
+  threadDrawDurationMs: 1150,
+  sparkPopDurationMs: 500,
+  rippleDelayMs: 1760,
+  rippleDurationMs: 700,
+  wordmarkDelayMs: 1900,
+  wordmarkDurationMs: 460,
+  taglineDelayMs: 2200,
+  taglineDurationMs: 400,
+  // Total time before handing off to the resolved route; matches the
+  // mockup's "idle hold" starting point rather than its (demo-only)
+  // infinite loop.
+  totalDurationMs: 2600,
+  // Reduce Motion: single soft crossfade to the fully-settled state.
+  reducedCrossfadeDurationMs: 400,
+  reducedHoldMs: 600,
+} as const;

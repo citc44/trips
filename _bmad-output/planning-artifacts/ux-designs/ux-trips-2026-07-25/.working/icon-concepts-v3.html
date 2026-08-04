@@ -1,0 +1,144 @@
+<title>Voylo — Icon Concepts, Round 3</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root {
+    --surface-primary: #FFFFFF;
+    --surface-secondary: #F4F6FA;
+    --border-hairline: #DCE1EA;
+    --ink-primary: #101828;
+    --ink-secondary: #667085;
+    --ink-disabled: #98A2B3;
+    --accent-primary: #0B6FFF;
+    --accent-primary-pressed: #0653C7;
+    --accent-amber: #FFB020;
+    --player-coral: #FF5A5F;
+    --player-teal: #00C2A8;
+    --player-amber: #FFB020;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--surface-secondary); color: var(--ink-primary);
+    font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif; padding: 40px 24px 80px;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; }
+  .eyebrow { font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent-primary); margin: 0 0 8px; }
+  h1 { font-size: 28px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 8px; }
+  .sub { color: var(--ink-secondary); font-size: 15px; line-height: 1.55; max-width: 660px; margin: 0 0 40px; }
+  .sub b { color: var(--ink-primary); }
+
+  .board { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 24px; }
+  .card { background: var(--surface-primary); border: 1px solid var(--border-hairline); border-radius: 16px; padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+  .card-label { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-disabled); }
+  .icon-name { font-size: 17px; font-weight: 600; margin: 2px 0 0; }
+  .icon-stage { display: flex; align-items: center; justify-content: center; padding: 8px 0; }
+  .icon-tile {
+    width: 132px; height: 132px; border-radius: 30px; position: relative; overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 10px 24px -10px rgba(16,24,40,0.35);
+  }
+  .rationale { font-size: 13.5px; line-height: 1.55; color: var(--ink-secondary); margin: 0; }
+  .rationale b { color: var(--ink-primary); }
+
+  .tile-blue { background: var(--accent-primary); }
+
+  .home-strip { border-radius: 12px; padding: 16px 14px 12px; display: flex; align-items: flex-end; gap: 12px; background: linear-gradient(180deg, #E7ECF5, #C9D2E3); }
+  .home-icon { width: 42px; height: 42px; border-radius: 10.5px; flex: 0 0 auto; overflow: hidden; position: relative; box-shadow: 0 3px 8px -2px rgba(16,24,40,0.35); }
+  .home-icon.decoy { background: rgba(16,24,40,0.14); box-shadow: none; }
+
+  footer { margin-top: 48px; padding-top: 24px; border-top: 1px solid var(--border-hairline); color: var(--ink-disabled); font-size: 12.5px; }
+</style>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Voylo · Icon exploration, round 3 · .working/</p>
+    <h1>Apart, but one thread — and the trip leaves marks</h1>
+    <p class="sub">Grounded in what you actually described: separate cars, one shared story, and the app quietly collecting
+      moments as you go. All three below keep the three Voyager dots <b>apart</b>, not merged, joined by a single road-like
+      thread carrying small collected-moment marks — different only in how literal the "road" reads.</p>
+  </header>
+
+  <div class="board">
+
+    <div class="card">
+      <div><p class="card-label">Concept I</p><p class="icon-name">The Thread (dashed road)</p></div>
+      <div class="icon-stage">
+        <div class="icon-tile tile-blue">
+          <svg width="100" height="100" viewBox="0 0 100 100" fill="none">
+            <path d="M22 62 C 34 30, 62 26, 76 44 C 86 58, 70 70, 50 80" stroke="#FFFFFF" stroke-width="4"
+              stroke-dasharray="1 10" stroke-linecap="round" opacity="0.9"/>
+            <circle cx="22" cy="62" r="10" fill="var(--player-teal)"/>
+            <circle cx="76" cy="44" r="10" fill="var(--player-coral)"/>
+            <circle cx="50" cy="80" r="10" fill="var(--player-amber)"/>
+            <circle cx="46" cy="42" r="3" fill="#fff"/>
+            <circle cx="66" cy="60" r="3" fill="#fff"/>
+          </svg>
+        </div>
+      </div>
+      <p class="rationale">Uses the app's own map-road-centerline dash pattern as the connecting thread — literally the
+        same visual language as the live map. Two tiny white dots along the path stand in for collected moments banked
+        along the way.</p>
+      <div class="home-strip">
+        <div class="home-icon tile-blue">
+          <svg width="34" height="34" viewBox="0 0 100 100" fill="none"><path d="M22 62 C 34 30, 62 26, 76 44 C 86 58, 70 70, 50 80" stroke="#FFFFFF" stroke-width="6" stroke-dasharray="1 13" stroke-linecap="round" opacity="0.9"/><circle cx="22" cy="62" r="11" fill="var(--player-teal)"/><circle cx="76" cy="44" r="11" fill="var(--player-coral)"/><circle cx="50" cy="80" r="11" fill="var(--player-amber)"/></svg>
+        </div>
+        <div class="home-icon decoy"></div><div class="home-icon decoy"></div><div class="home-icon decoy"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div><p class="card-label">Concept J</p><p class="icon-name">The Thread (soft ribbon)</p></div>
+      <div class="icon-stage">
+        <div class="icon-tile tile-blue">
+          <svg width="100" height="100" viewBox="0 0 100 100" fill="none">
+            <path d="M22 62 C 34 30, 62 26, 76 44 C 86 58, 70 70, 50 80" stroke="#FFFFFF" stroke-width="5"
+              stroke-linecap="round" opacity="0.85"/>
+            <circle cx="22" cy="62" r="10" fill="var(--player-teal)"/>
+            <circle cx="76" cy="44" r="10" fill="var(--player-coral)"/>
+            <circle cx="50" cy="80" r="10" fill="var(--player-amber)"/>
+            <circle cx="46" cy="42" r="3.5" fill="var(--accent-amber)"/>
+            <circle cx="66" cy="60" r="3.5" fill="var(--accent-amber)"/>
+          </svg>
+        </div>
+      </div>
+      <p class="rationale">Same idea, softer execution — a solid ribbon instead of a dashed road, amber sparks (not white
+        dots) marking the collected moments so they read as small "finds" rather than waypoints. Friendlier, less
+        map-utility, more storybook.</p>
+      <div class="home-strip">
+        <div class="home-icon tile-blue">
+          <svg width="34" height="34" viewBox="0 0 100 100" fill="none"><path d="M22 62 C 34 30, 62 26, 76 44 C 86 58, 70 70, 50 80" stroke="#FFFFFF" stroke-width="7" stroke-linecap="round" opacity="0.85"/><circle cx="22" cy="62" r="11" fill="var(--player-teal)"/><circle cx="76" cy="44" r="11" fill="var(--player-coral)"/><circle cx="50" cy="80" r="11" fill="var(--player-amber)"/></svg>
+        </div>
+        <div class="home-icon decoy"></div><div class="home-icon decoy"></div><div class="home-icon decoy"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div><p class="card-label">Concept K</p><p class="icon-name">The Unfinished Loop</p></div>
+      <div class="icon-stage">
+        <div class="icon-tile tile-blue">
+          <svg width="100" height="100" viewBox="0 0 100 100" fill="none">
+            <path d="M22 62 C 10 40, 24 20, 46 22 C 68 24, 84 34, 76 44 C 86 58, 70 70, 50 80 C 34 88, 18 78, 22 62"
+              stroke="#FFFFFF" stroke-width="4" stroke-dasharray="1 9" stroke-linecap="round" opacity="0.9"/>
+            <circle cx="22" cy="62" r="10" fill="var(--player-teal)"/>
+            <circle cx="76" cy="44" r="10" fill="var(--player-coral)"/>
+            <circle cx="50" cy="80" r="10" fill="var(--player-amber)"/>
+          </svg>
+        </div>
+      </div>
+      <p class="rationale">The thread almost closes into a loop but deliberately doesn't — "the story isn't finished yet."
+        Most abstract of the three; reads as a single continuous journey rather than three fixed points, at slight cost to
+        legibility at the smallest sizes (favicon/notification).</p>
+      <div class="home-strip">
+        <div class="home-icon tile-blue">
+          <svg width="34" height="34" viewBox="0 0 100 100" fill="none"><path d="M22 62 C 10 40, 24 20, 46 22 C 68 24, 84 34, 76 44 C 86 58, 70 70, 50 80 C 34 88, 18 78, 22 62" stroke="#FFFFFF" stroke-width="6" stroke-dasharray="1 11" stroke-linecap="round" opacity="0.9"/><circle cx="22" cy="62" r="11" fill="var(--player-teal)"/><circle cx="76" cy="44" r="11" fill="var(--player-coral)"/><circle cx="50" cy="80" r="11" fill="var(--player-amber)"/></svg>
+        </div>
+        <div class="home-icon decoy"></div><div class="home-icon decoy"></div><div class="home-icon decoy"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <footer>
+    Working exploration, round 3 — rounds 1 and 2 stay as-is, nothing lost. All three here share one concept (apart but
+    connected, moments collected along the way); tell me which reads best, or which pieces to recombine.
+  </footer>
+</div>
