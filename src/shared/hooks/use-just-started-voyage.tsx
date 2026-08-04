@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
 
 type JustStartedVoyageContextValue = {
   hasJustStartedVoyage: boolean;
@@ -32,14 +32,24 @@ const JustStartedVoyageContext = createContext<JustStartedVoyageContextValue | u
 export function JustStartedVoyageProvider({ children }: { children: ReactNode }) {
   const [hasJustStartedVoyage, setHasJustStartedVoyage] = useState(false);
 
-  const markVoyageStarted = () => setHasJustStartedVoyage(true);
-  const clearJustStartedVoyage = () => setHasJustStartedVoyage(false);
-
-  return (
-    <JustStartedVoyageContext.Provider value={{ hasJustStartedVoyage, markVoyageStarted, clearJustStartedVoyage }}>
-      {children}
-    </JustStartedVoyageContext.Provider>
+  // Code review finding, confirmed as the root cause of a real user-reported
+  // bug: unmemoized, these are new function identities on every provider
+  // render. join-code.tsx's own unmount-cleanup effect depends on
+  // `[clearJustStartedVoyage]`, so a changed identity makes React run that
+  // effect's cleanup (which itself calls clearJustStartedVoyage() again) as
+  // a side effect of the *first* call already made from the Continue
+  // button's own onPress -- two overlapping state updates firing back to
+  // back, right as _layout.tsx's guard is trying to re-evaluate and admit
+  // active-voyage.tsx, instead of one clean update. Stable identities here
+  // remove that whole class of extra churn.
+  const markVoyageStarted = useCallback(() => setHasJustStartedVoyage(true), []);
+  const clearJustStartedVoyage = useCallback(() => setHasJustStartedVoyage(false), []);
+  const value = useMemo(
+    () => ({ hasJustStartedVoyage, markVoyageStarted, clearJustStartedVoyage }),
+    [hasJustStartedVoyage, markVoyageStarted, clearJustStartedVoyage],
   );
+
+  return <JustStartedVoyageContext.Provider value={value}>{children}</JustStartedVoyageContext.Provider>;
 }
 
 export function useJustStartedVoyage(): JustStartedVoyageContextValue {

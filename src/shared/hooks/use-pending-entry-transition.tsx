@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
 
 type PendingEntryTransitionContextValue = {
   hasPendingEntryTransition: boolean;
@@ -26,14 +26,18 @@ const PendingEntryTransitionContext = createContext<PendingEntryTransitionContex
 export function PendingEntryTransitionProvider({ children }: { children: ReactNode }) {
   const [hasPendingEntryTransition, setHasPendingEntryTransition] = useState(false);
 
-  const triggerEntryTransition = () => setHasPendingEntryTransition(true);
-  const consumeEntryTransition = () => setHasPendingEntryTransition(false);
-
-  return (
-    <PendingEntryTransitionContext.Provider value={{ hasPendingEntryTransition, triggerEntryTransition, consumeEntryTransition }}>
-      {children}
-    </PendingEntryTransitionContext.Provider>
+  // Stable identities -- same reasoning as JustStartedVoyageProvider's own
+  // comment (a confirmed, real bug fix): consumers elsewhere in the app may
+  // hold these in effect dependency arrays, where an unmemoized identity
+  // would cause spurious cleanup/re-run churn on every provider render.
+  const triggerEntryTransition = useCallback(() => setHasPendingEntryTransition(true), []);
+  const consumeEntryTransition = useCallback(() => setHasPendingEntryTransition(false), []);
+  const value = useMemo(
+    () => ({ hasPendingEntryTransition, triggerEntryTransition, consumeEntryTransition }),
+    [hasPendingEntryTransition, triggerEntryTransition, consumeEntryTransition],
   );
+
+  return <PendingEntryTransitionContext.Provider value={value}>{children}</PendingEntryTransitionContext.Provider>;
 }
 
 export function usePendingEntryTransition(): PendingEntryTransitionContextValue {
