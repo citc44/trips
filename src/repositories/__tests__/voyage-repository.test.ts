@@ -611,3 +611,29 @@ test('setTravelRole surfaces the not-an-active-member rejection as a normal type
 
   expect(result).toEqual({ error: { code: 'ROL01', message: 'You are not an active member of this Voyage.' } });
 });
+
+test('leaveVoyage calls the voluntary leave RPC with the Voyage id', async () => {
+  mockRpc.mockResolvedValue({ data: null, error: null });
+
+  const result = await voyageRepository.leaveVoyage('voyage-1');
+
+  expect(mockRpc).toHaveBeenCalledWith('leave_voyage', { p_voyage_id: 'voyage-1' });
+  expect(result).toEqual({ error: null });
+});
+
+test('leaveVoyage surfaces the starter restriction as a typed error', async () => {
+  mockRpc.mockResolvedValue({ data: null, error: { code: 'LEAV2', message: 'The person who started this Voyage must end it instead.' } });
+
+  const result = await voyageRepository.leaveVoyage('voyage-1');
+
+  expect(result).toEqual({ error: { code: 'LEAV2', message: 'The person who started this Voyage must end it instead.' } });
+});
+
+test('leaveActiveVoyage calls the idempotent pre-sign-out RPC', async () => {
+  mockRpc.mockResolvedValue({ data: null, error: null });
+
+  const result = await voyageRepository.leaveActiveVoyage();
+
+  expect(mockRpc).toHaveBeenCalledWith('leave_active_voyage');
+  expect(result).toEqual({ error: null });
+});

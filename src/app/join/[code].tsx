@@ -7,7 +7,9 @@ import { Spacing, Typography, WayfinderColors } from '@/constants/design-tokens'
 import { voyageRepository, type VoyagePreview } from '@/repositories/voyage-repository';
 import { IgnitionButton } from '@/shared/components/ignition-button';
 import { RoadMotif } from '@/shared/components/road-motif';
+import { useActiveVoyage } from '@/shared/hooks/use-active-voyage';
 import { useAuth } from '@/shared/hooks/use-auth';
+import { useJustStartedVoyage } from '@/shared/hooks/use-just-started-voyage';
 import { usePendingJoin } from '@/shared/hooks/use-pending-join';
 import { useProfile } from '@/shared/hooks/use-profile';
 import { resolveRoute } from '@/shared/navigation/resolve-route';
@@ -23,12 +25,16 @@ import { resolveRoute } from '@/shared/navigation/resolve-route';
 export default function JoinInvitationScreen() {
   const { code } = useLocalSearchParams<{ code: string }>();
   const { session } = useAuth();
+  const { activeVoyage } = useActiveVoyage();
   const { profile, hasError: profileHasError } = useProfile();
   const { pendingJoinCode, setPendingJoinCode } = usePendingJoin();
+  const { clearJustStartedVoyage } = useJustStartedVoyage();
 
   const [preview, setPreview] = useState<VoyagePreview | null>(null);
+  const [resolvedPreviewCode, setResolvedPreviewCode] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const previewRequestId = useRef(0);
   const isMounted = useRef(true);
 
   useEffect(() => {
@@ -38,6 +44,9 @@ export default function JoinInvitationScreen() {
   }, []);
 
   useEffect(() => {
+    const thisRequestId = ++previewRequestId.current;
+    const isCurrentRequest = () => isMounted.current && previewRequestId.current === thisRequestId;
+
     // Resolved via a microtask (not called synchronously in the effect body)
     // so this stays inside a promise callback, matching use-profile.tsx's
     // established pattern and satisfying the react-hooks/set-state-in-effect
@@ -46,16 +55,17 @@ export default function JoinInvitationScreen() {
     // a stale "invalid"/destination from the previous code could briefly show
     // for the new one (code review finding).
     Promise.resolve().then(() => {
-      if (!isMounted.current) return;
+      if (!isCurrentRequest()) return;
       setIsLoading(true);
       setNotFound(false);
       setPreview(null);
+      setResolvedPreviewCode(null);
     });
 
     voyageRepository
       .getVoyagePreview(code)
       .then(({ data, error }) => {
-        if (!isMounted.current) return;
+        if (!isCurrentRequest()) return;
         if (error || !data) {
           setNotFound(true);
           setPreview(null);
@@ -63,12 +73,14 @@ export default function JoinInvitationScreen() {
           setPreview(data);
           setNotFound(false);
         }
+        setResolvedPreviewCode(code);
         setIsLoading(false);
       })
       .catch(() => {
-        if (!isMounted.current) return;
+        if (!isCurrentRequest()) return;
         setNotFound(true);
         setPreview(null);
+        setResolvedPreviewCode(code);
         setIsLoading(false);
       });
   }, [code]);
@@ -94,20 +106,27 @@ export default function JoinInvitationScreen() {
     const nextRoute = resolveRoute({ hasSession: true, hasSeenTrustMoment, hasSeenDriverConsent, hasDisplayName });
 
     if (nextRoute === 'trust-moment') {
-      router.push('/trust-moment');
+      router.replace('/trust-moment');
     } else if (nextRoute === 'driver-attention-consent') {
-      router.push('/driver-attention-consent');
+      router.replace('/driver-attention-consent');
     } else if (nextRoute === 'display-name') {
-      router.push('/display-name');
+      router.replace('/display-name');
     } else {
-      router.push('/voyage-joined');
+      // Joining is now committed navigation state. Replace the invitation so
+      // it cannot reappear underneath the resolver (or via Android Back) once
+      // membership has changed.
+      router.replace('/voyage-joined');
     }
   }, [session, pendingJoinCode, code, profile, profileHasError]);
 
   function handleJoin() {
+    // A creator can open another invite while the one-time join-code reveal
+    // flag is still set. Clear it before committing the new join intent so it
+    // cannot reclaim navigation after the resolver switches memberships.
+    clearJustStartedVoyage();
     setPendingJoinCode(code);
     if (!session) {
-      router.push('/sign-in');
+      router.replace('/sign-in');
     }
     // Authenticated: the effect above navigates once pendingJoinCode commits.
   }
@@ -138,7 +157,7 @@ export default function JoinInvitationScreen() {
     }
   }
 
-  if (isLoading) {
+  if (isLoading || resolvedPreviewCode !== code) {
     return null;
   }
 
@@ -212,6 +231,13 @@ export default function JoinInvitationScreen() {
               riding with you, and only while it&apos;s active.
             </Text>
           </View>
+          {activeVoyage ? (
+            <Text testID="active-voyage-switch-warning" style={styles.switchWarning}>
+              {activeVoyage.role === 'organizer'
+                ? "Joining leaves your current Voyage. If you're its last Organizer, that Voyage will end for everyone."
+                : 'Joining leaves your current Voyage automatically.'}
+            </Text>
+          ) : null}
           <IgnitionButton
             testID="join-the-voyage-button"
             label="Join the Voyage"
@@ -298,6 +324,14 @@ const styles = StyleSheet.create({
     // weight-specific family to avoid faux (synthetic) bolding.
     fontFamily: 'GeneralSans-Bold',
     fontWeight: '700',
+  },
+  switchWarning: {
+    color: '#FFFFFF',
+    fontFamily: 'GeneralSans-Semibold',
+    fontSize: 13,
+    lineHeight: 19,
+    maxWidth: 340,
+    textAlign: 'center',
   },
   // notFound/ended branches: no dedicated mockup frame exists for either, so
   // these follow the app's light-canvas convention already established by

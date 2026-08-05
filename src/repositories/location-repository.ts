@@ -9,6 +9,15 @@ export type LiveLocation = {
   updatedAt: string;
 };
 
+export type RosterChange = {
+  userId: string | null;
+  isActive: boolean | null;
+};
+
+export type VoyageStatusChange = {
+  status: 'active' | 'ended' | null;
+};
+
 type LiveLocationRow = {
   user_id: string;
   lat: number;
@@ -64,6 +73,7 @@ async function upsertLocation(
 
 const LOCATION_EVENT = 'location';
 const ROSTER_EVENT = 'roster_changed';
+const VOYAGE_STATUS_EVENT = 'voyage_status_changed';
 const CLOSED_CHANNEL_RETRY_MS = 1000;
 
 function channelName(voyageId: string): string {
@@ -84,7 +94,8 @@ function subscribeToLocations(
   voyageId: string,
   onLocation: (location: LiveLocation) => void,
   onStatusChange?: (status: 'connected' | 'disconnected') => void,
-  onRosterChange?: () => void,
+  onRosterChange?: (change: RosterChange) => void,
+  onVoyageStatusChange?: (change: VoyageStatusChange) => void,
 ): { unsubscribe: () => void } {
   let isDisposed = false;
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -98,8 +109,16 @@ function subscribeToLocations(
       .on('broadcast', { event: LOCATION_EVENT }, (message: { payload: unknown }) => {
         onLocation(toLiveLocation(message.payload as LiveLocationRow));
       })
-      .on('broadcast', { event: ROSTER_EVENT }, () => {
-        onRosterChange?.();
+      .on('broadcast', { event: ROSTER_EVENT }, (message: { payload: unknown }) => {
+        const payload = message.payload as { user_id?: unknown; is_active?: unknown } | null;
+        onRosterChange?.({
+          userId: typeof payload?.user_id === 'string' ? payload.user_id : null,
+          isActive: typeof payload?.is_active === 'boolean' ? payload.is_active : null,
+        });
+      })
+      .on('broadcast', { event: VOYAGE_STATUS_EVENT }, (message: { payload: unknown }) => {
+        const payload = message.payload as { status?: unknown } | null;
+        onVoyageStatusChange?.({ status: payload?.status === 'active' || payload?.status === 'ended' ? payload.status : null });
       });
 
     currentChannel = channel;

@@ -24,7 +24,9 @@ export default function JoinManualScreen() {
 
   function handleJoin() {
     if (!canSubmit) return;
-    router.push({ pathname: '/join/[code]', params: { code: trimmedCode } });
+    // Manual entry is a committed handoff to the invitation/join flow. Do not
+    // leave the code form underneath it where Back could restart the handoff.
+    router.replace({ pathname: '/join/[code]', params: { code: trimmedCode } });
   }
 
   return (

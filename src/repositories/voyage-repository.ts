@@ -187,9 +187,10 @@ async function getVoyagePreview(joinCode: string): Promise<VoyagePreviewResult> 
 }
 
 async function joinVoyage(joinCode: string): Promise<VoyageResult> {
-  // join_voyage() enforces AD-9 and the invalid/ended-code cases server-side and
-  // surfaces a clear error on rejection -- see its migration for the full
-  // rationale. No client-side multi-step write.
+  // join_voyage() preserves AD-9 atomically: after validating the requested
+  // Voyage, it leaves any prior active membership and joins this one in the
+  // same transaction. Invalid/ended/removed invites fail without disturbing
+  // the current membership. No client-side multi-step write.
   const { data, error } = await supabase.rpc('join_voyage', { p_join_code: normalizeJoinCode(joinCode) });
 
   if (error) {
@@ -286,6 +287,33 @@ async function removeVoyager(voyageId: string, targetUserId: string): Promise<{ 
   return { error: null };
 }
 
+async function leaveVoyage(voyageId: string): Promise<{ error: RepositoryError | null }> {
+  // Voluntary departure is deliberately distinct from remove_voyager(): it
+  // does not create a removal notice or ban the caller from a later rejoin.
+  // The RPC also enforces the starter restriction and preserves the
+  // last-Organizer invariant server-side; hiding the button is only UX.
+  const { error } = await supabase.rpc('leave_voyage', { p_voyage_id: voyageId });
+
+  if (error) {
+    return { error: toRepositoryError(error) };
+  }
+
+  return { error: null };
+}
+
+async function leaveActiveVoyage(): Promise<{ error: RepositoryError | null }> {
+  // Called immediately before auth.signOut(), while the access token still
+  // exists. Idempotent when there is no active membership, so a retry after
+  // an auth-only sign-out failure is safe.
+  const { error } = await supabase.rpc('leave_active_voyage');
+
+  if (error) {
+    return { error: toRepositoryError(error) };
+  }
+
+  return { error: null };
+}
+
 async function getRemovalNotice(): Promise<RemovalNoticeResult> {
   // get_removal_notice() is table-returning, same PostgREST array shape as
   // the other set-returning RPCs. An empty array is the valid "nothing to
@@ -338,6 +366,8 @@ export const voyageRepository = {
   getVoyageMembers,
   grantOrganizerStatus,
   removeVoyager,
+  leaveVoyage,
+  leaveActiveVoyage,
   getRemovalNotice,
   acknowledgeRemoval,
   setTravelRole,

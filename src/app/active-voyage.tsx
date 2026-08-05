@@ -336,11 +336,18 @@ function DrawerRow({
 // (`showOrganizerMenu`) -- functional relocation only, their own internal
 // logic/copy is unchanged from Story 2.6.
 export default function ActiveVoyageScreen() {
-  const { activeVoyage, refetch } = useActiveVoyage();
+  const { activeVoyage, refetch, clearActiveVoyage } = useActiveVoyage();
   const { session } = useAuth();
   const voyageId = activeVoyage?.voyage.id ?? null;
 
-  const { locations, trails, hasError: hasLocationsError, isConnected, rosterRevision } = useLiveLocations(voyageId);
+  const {
+    locations,
+    trails,
+    hasError: hasLocationsError,
+    isConnected,
+    rosterRevision,
+    lifecycleRevision = 0,
+  } = useLiveLocations(voyageId, session?.user.id ?? null);
   useLocationTracking(voyageId);
   // Feeds map-banner's/hud-bar's own top/bottom padding directly (Story
   // 4.3) -- react-native-safe-area-context's web polyfill always reports
@@ -394,6 +401,9 @@ export default function ActiveVoyageScreen() {
   const [removeTarget, setRemoveTarget] = useState<VoyageMember | null>(null);
   const [isRemoving, setIsRemoving] = useState(false);
   const [removeError, setRemoveError] = useState<string | null>(null);
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  const [isLeaving, setIsLeaving] = useState(false);
+  const [leaveError, setLeaveError] = useState<string | null>(null);
   const [showOrganizerMenu, setShowOrganizerMenu] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [isTogglingRole, setIsTogglingRole] = useState(false);
@@ -548,6 +558,16 @@ export default function ActiveVoyageScreen() {
     void loadMembers.current(voyageId);
   }, [rosterRevision, voyageId]);
 
+  // Membership/status broadcasts, authorization failures, reconnects, and
+  // foreground recovery all mean this device may have missed a terminal
+  // lifecycle change. Reconcile the routing source of truth as well as the
+  // roster so another device's Leave/sign-out/End cannot leave this map
+  // mounted until an app restart.
+  useEffect(() => {
+    if (!voyageId || lifecycleRevision === 0) return;
+    void refetch();
+  }, [lifecycleRevision, refetch, voyageId]);
+
   // Reassigned after every render (in an effect with no dependency array, not
   // synchronously during render -- react-hooks/refs forbids writing a ref's
   // .current during render, the same rule this file's own marker-pulse
@@ -662,6 +682,7 @@ export default function ActiveVoyageScreen() {
   }
 
   const isOrganizer = activeVoyage.role === 'organizer';
+  const canLeaveVoyage = !!session?.user.id && session.user.id !== activeVoyage.voyage.createdBy;
 
   // User-reported change: the peek tooltip's distance reading is now "how
   // far is this Voyager from me right now" (Waze's own popup convention),
@@ -824,15 +845,45 @@ export default function ActiveVoyageScreen() {
     }
   }
 
+  async function handleLeaveVoyage() {
+    setIsLeaving(true);
+    setLeaveError(null);
+
+    try {
+      const { error: leaveErr } = await voyageRepository.leaveVoyage(activeVoyage!.voyage.id);
+      if (!isMounted.current) return;
+      if (leaveErr) {
+        setLeaveError(leaveErr.message);
+        return;
+      }
+
+      // The RPC response is authoritative. Clear the routing source locally
+      // instead of depending on a second network request that could fail
+      // after the departure already committed. The protected route then
+      // evicts this screen into Home after the state commit.
+      clearActiveVoyage();
+      resetDrawerState();
+    } catch {
+      if (!isMounted.current) return;
+      setLeaveError(GENERIC_ERROR);
+    } finally {
+      if (isMounted.current) {
+        setIsLeaving(false);
+      }
+    }
+  }
+
   // Full reset of every piece of drawer step-state (which confirm step, and
   // any error left over from a failed attempt) back to the drawer's default
   // (menu) step, nothing stale carried forward.
   function resetDrawerState() {
     setShowOrganizerMenu(false);
     setShowConfirm(false);
+    setShowLeaveConfirm(false);
     setRemoveTarget(null);
     setError(null);
     setRemoveError(null);
+    setLeaveError(null);
   }
 
   // Fires the instant a close is requested (tap, scrim, Android back) --
@@ -887,10 +938,12 @@ export default function ActiveVoyageScreen() {
 
   const isSelf = (memberId: string) => memberId === session?.user.id;
 
-  const drawerStep: 'menu' | 'end-voyage-confirm' | 'remove-confirm' = removeTarget
+  const drawerStep: 'menu' | 'end-voyage-confirm' | 'remove-confirm' | 'leave-confirm' = removeTarget
     ? 'remove-confirm'
     : showConfirm
       ? 'end-voyage-confirm'
+      : showLeaveConfirm
+        ? 'leave-confirm'
       : 'menu';
 
   // `myMember` stays `undefined` until `members` has loaded at least once
@@ -968,7 +1021,7 @@ export default function ActiveVoyageScreen() {
           <Pressable
             testID="organizer-menu-button"
             accessibilityRole="button"
-            accessibilityLabel="Organizer menu"
+            accessibilityLabel="Voyage actions"
             onPress={() => setShowOrganizerMenu(true)}
             style={({ pressed }) => [styles.hamburgerButton, pressed && styles.pressedScale]}
           >
@@ -1170,8 +1223,35 @@ export default function ActiveVoyageScreen() {
                 }}
               />
             ) : null}
+            <DrawerRow
+              testID="join-another-voyage-button"
+              label="Join another Voyage"
+              icon="＋"
+              onPress={() => {
+                resetDrawerState();
+                router.push('/join');
+              }}
+            />
+            <DrawerRow
+              testID="voyage-settings-button"
+              label="Settings"
+              icon="⚙"
+              onPress={() => {
+                resetDrawerState();
+                router.push('/settings');
+              }}
+            />
             {isOrganizer ? (
               <DrawerRow testID="end-voyage-button" label="End Voyage" icon="🚫" variant="danger" onPress={() => setShowConfirm(true)} />
+            ) : null}
+            {canLeaveVoyage ? (
+              <DrawerRow
+                testID="leave-voyage-button"
+                label="Leave Voyage"
+                icon="↩"
+                variant="danger"
+                onPress={() => setShowLeaveConfirm(true)}
+              />
             ) : null}
 
             <View testID="drawer-member-list" style={styles.drawerMemberList}>
@@ -1271,6 +1351,39 @@ export default function ActiveVoyageScreen() {
             {removeError ? (
               <Text testID="remove-voyager-error" style={styles.drawerError}>
                 {removeError}
+              </Text>
+            ) : null}
+          </>
+        ) : null}
+
+        {drawerStep === 'leave-confirm' ? (
+          <>
+            <Text style={styles.drawerEyebrow}>Leave Voyage</Text>
+            <Text style={styles.drawerConfirmTitle}>Leave this Voyage?</Text>
+            <Text style={styles.drawerConfirmSub}>
+              {isOrganizer
+                ? "Your marker disappears right away. If you're the last Organizer, this Voyage will end for everyone. You can join again later unless an Organizer removes you."
+                : 'Your marker disappears right away. You can join again later unless an Organizer removes you.'}
+            </Text>
+            <DrawerRow
+              testID="confirm-leave-voyage-button"
+              label="Leave Voyage"
+              variant="danger"
+              disabled={isLeaving}
+              onPress={handleLeaveVoyage}
+            />
+            <DrawerRow
+              testID="keep-riding-button"
+              label="Keep riding"
+              disabled={isLeaving}
+              onPress={() => {
+                setShowLeaveConfirm(false);
+                setLeaveError(null);
+              }}
+            />
+            {leaveError ? (
+              <Text testID="leave-voyage-error" style={styles.drawerError}>
+                {leaveError}
               </Text>
             ) : null}
           </>

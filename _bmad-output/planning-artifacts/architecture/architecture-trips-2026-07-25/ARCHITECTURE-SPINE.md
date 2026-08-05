@@ -55,8 +55,8 @@ graph LR
 ### AD-3 — Location persistence model
 
 - **Binds:** Live Map (FR-9).
-- **Prevents:** naive per-GPS-ping database writes — a direct cost, battery, and scale risk market research flagged as the category's most-cited failure (Life360's battery drain).
-- **Rule:** live position updates are broadcast ephemerally via Supabase Realtime and are **not** persisted per-ping. Only one latest-known-location row per Voyager (`voyage_member_locations`, upserted in place) is persisted, to serve cold-load/reconnect state. The upsert is conditional — e.g. `WHERE voyage_member_locations.updated_at < EXCLUDED.updated_at` — so a delayed/stale location write arriving after a network hiccup can never overwrite a newer location that already landed.
+- **Prevents:** forged client broadcast identities, divergence between the live message and reconnect snapshot, unbounded location history, and an outbound backlog on slow mobile networks.
+- **Rule:** every accepted navigation-grade fix goes through one authenticated `upsert_location()` RPC. The client coalesces pending fixes to the newest value; the RPC derives `user_id` from `auth.uid()`, overwrites that Voyager's single latest-known row, and emits the matching private `realtime.send()` broadcast in the same transaction. No location history is appended. This shared server-stamped value is the source for both live delivery and cold-load/reconnect freshness comparisons.
 
 ### AD-4 — Single auth session source of truth `[ADOPTED]`
 

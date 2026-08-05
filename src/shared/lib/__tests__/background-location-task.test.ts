@@ -25,7 +25,8 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
 }));
 
 let BACKGROUND_LOCATION_TASK: string;
-let setBackgroundLocationContext: (context: { voyageId: string } | null) => void;
+let setBackgroundLocationContext: (context: { voyageId: string; ownerGeneration?: number } | null) => Promise<void>;
+let clearBackgroundLocationContext: (ownerGeneration: number) => Promise<boolean>;
 let reportLocationFix: (voyageId: string, lat: number, lng: number, heading: number | null) => Promise<void>;
 let taskExecutor: (body: { data: unknown; error: { code: string | number; message: string } | null }) => Promise<void>;
 
@@ -50,6 +51,7 @@ beforeEach(() => {
   const taskModule = require('../background-location-task');
   BACKGROUND_LOCATION_TASK = taskModule.BACKGROUND_LOCATION_TASK;
   setBackgroundLocationContext = taskModule.setBackgroundLocationContext;
+  clearBackgroundLocationContext = taskModule.clearBackgroundLocationContext;
   reportLocationFix = taskModule.reportLocationFix;
   taskExecutor = mockDefineTask.mock.calls[0][1] as typeof taskExecutor;
 });
@@ -129,12 +131,69 @@ test('setBackgroundLocationContext(null) after a context was set stops future ca
   expect(mockUpsertLocation).not.toHaveBeenCalled();
 });
 
-test('setBackgroundLocationContext persists to AsyncStorage when set, and clears it when set to null', () => {
-  setBackgroundLocationContext({ voyageId: 'voyage-1' });
+test('setBackgroundLocationContext persists to AsyncStorage when set, and clears it when set to null', async () => {
+  await setBackgroundLocationContext({ voyageId: 'voyage-1' });
   expect(mockSetItem).toHaveBeenCalledWith('voylo:background-location-context', JSON.stringify({ voyageId: 'voyage-1' }));
 
-  setBackgroundLocationContext(null);
+  await setBackgroundLocationContext(null);
   expect(mockRemoveItem).toHaveBeenCalledWith('voylo:background-location-context');
+});
+
+test('an old generation cannot clear a newer generation context', async () => {
+  await setBackgroundLocationContext({ voyageId: 'voyage-1', ownerGeneration: 1 });
+  await setBackgroundLocationContext({ voyageId: 'voyage-2', ownerGeneration: 2 });
+
+  await expect(clearBackgroundLocationContext(1)).resolves.toBe(false);
+  await taskExecutor({ data: { locations: [locationFixture] }, error: null });
+
+  expect(mockRemoveItem).not.toHaveBeenCalled();
+  expect(mockUpsertLocation).toHaveBeenCalledWith('voyage-2', { lat: 39.1, lng: -120.0, heading: 90 });
+});
+
+test('serializes persistence so a prior clear finishes before the replacement context is written', async () => {
+  await setBackgroundLocationContext({ voyageId: 'voyage-1', ownerGeneration: 1 });
+
+  let resolveRemove!: () => void;
+  mockRemoveItem.mockImplementationOnce(() => new Promise<void>((resolve) => { resolveRemove = resolve; }));
+
+  const clearing = clearBackgroundLocationContext(1);
+  const replacing = setBackgroundLocationContext({ voyageId: 'voyage-2', ownerGeneration: 2 });
+
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(mockRemoveItem).toHaveBeenCalledTimes(1);
+  expect(mockSetItem).toHaveBeenCalledTimes(1);
+
+  resolveRemove();
+  await Promise.all([clearing, replacing]);
+
+  expect(mockSetItem).toHaveBeenCalledTimes(2);
+  expect(mockRemoveItem.mock.invocationCallOrder[0]).toBeLessThan(mockSetItem.mock.invocationCallOrder[1]);
+  expect(mockSetItem).toHaveBeenLastCalledWith(
+    'voylo:background-location-context',
+    JSON.stringify({ voyageId: 'voyage-2', ownerGeneration: 2 }),
+  );
+});
+
+test('an explicit clear cannot rehydrate stale storage while removeItem is still in flight', async () => {
+  await setBackgroundLocationContext({ voyageId: 'voyage-1', ownerGeneration: 1 });
+  mockGetItem.mockResolvedValue(JSON.stringify({ voyageId: 'voyage-1', ownerGeneration: 1 }));
+
+  let resolveRemove!: () => void;
+  mockRemoveItem.mockImplementationOnce(() => new Promise<void>((resolve) => { resolveRemove = resolve; }));
+  const clearing = clearBackgroundLocationContext(1);
+
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+
+  await taskExecutor({ data: { locations: [locationFixture] }, error: null });
+  expect(mockGetItem).not.toHaveBeenCalled();
+  expect(mockUpsertLocation).not.toHaveBeenCalled();
+
+  resolveRemove();
+  await clearing;
 });
 
 test('rehydrates context from AsyncStorage on the first callback after a process restart', async () => {

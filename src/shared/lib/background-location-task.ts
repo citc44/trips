@@ -5,7 +5,14 @@ import { locationRepository } from '@/repositories/location-repository';
 
 export const BACKGROUND_LOCATION_TASK = 'voylo-background-location';
 
-type BackgroundLocationContext = { voyageId: string };
+export type BackgroundLocationContext = {
+  voyageId: string;
+  // Identifies the native hook effect that owns the shared Expo task. The
+  // task callback itself only needs voyageId, but cleanup needs this token so
+  // an obsolete effect cannot clear a newer effect's in-memory or persisted
+  // context.
+  ownerGeneration?: number;
+};
 
 // The only way to bridge React-managed state (which Voyage/user is
 // currently active) into a task defined at module scope -- defineTask()
@@ -15,6 +22,7 @@ type BackgroundLocationContext = { voyageId: string };
 // narrow (just the Voyage id the task needs) -- not a general-purpose global
 // state pattern to reach for elsewhere in this app.
 let currentContext: BackgroundLocationContext | null = null;
+let hasExplicitlyResolvedContext = false;
 
 // Also persisted (Story 3.3 code review finding): the OS can terminate a
 // backgrounded app under memory pressure and later relaunch it headlessly
@@ -25,6 +33,24 @@ let currentContext: BackgroundLocationContext | null = null;
 // for Supabase session persistence (src/lib/supabase.ts); reused here for
 // the same "survive a process restart" reason.
 const CONTEXT_STORAGE_KEY = 'voylo:background-location-context';
+
+// AsyncStorage writes are asynchronous and are not guaranteed to finish in
+// invocation order. Serializing them prevents an old removeItem() from
+// winning the race against a newer setItem() during a rapid Voyage handoff.
+let contextStorageQueue: Promise<void> = Promise.resolve();
+
+function enqueueContextStorageMutation(mutation: () => Promise<unknown>): Promise<void> {
+  const result = contextStorageQueue
+    .catch(() => {})
+    .then(mutation)
+    .then(() => undefined)
+    .catch(() => {
+      // Context persistence is best effort. The in-memory owner is still
+      // authoritative for the current process when storage is unavailable.
+    });
+  contextStorageQueue = result;
+  return result;
+}
 
 type PendingLocationFix = {
   voyageId: string;
@@ -41,14 +67,30 @@ type PendingLocationFix = {
 let pendingFix: PendingLocationFix | null = null;
 let drainPromise: Promise<void> | null = null;
 
-export function setBackgroundLocationContext(context: BackgroundLocationContext | null): void {
+export function setBackgroundLocationContext(context: BackgroundLocationContext | null): Promise<void> {
+  hasExplicitlyResolvedContext = true;
   currentContext = context;
   if (context) {
-    AsyncStorage.setItem(CONTEXT_STORAGE_KEY, JSON.stringify(context)).catch(() => {});
+    return enqueueContextStorageMutation(() => AsyncStorage.setItem(CONTEXT_STORAGE_KEY, JSON.stringify(context)));
   } else {
     pendingFix = null;
-    AsyncStorage.removeItem(CONTEXT_STORAGE_KEY).catch(() => {});
+    return enqueueContextStorageMutation(() => AsyncStorage.removeItem(CONTEXT_STORAGE_KEY));
   }
+}
+
+/**
+ * Clear context only when it still belongs to the supplied native tracking
+ * generation. This is the ownership barrier that makes delayed cleanup safe:
+ * once a newer generation installs its context, an older generation becomes
+ * incapable of removing it from memory or AsyncStorage.
+ */
+export function clearBackgroundLocationContext(ownerGeneration: number): Promise<boolean> {
+  if (currentContext?.ownerGeneration !== ownerGeneration) return Promise.resolve(false);
+
+  hasExplicitlyResolvedContext = true;
+  currentContext = null;
+  pendingFix = null;
+  return enqueueContextStorageMutation(() => AsyncStorage.removeItem(CONTEXT_STORAGE_KEY)).then(() => true);
 }
 
 // Shared by both the native background-task callback below and web's
@@ -101,14 +143,18 @@ type BackgroundLocationTaskData = { locations: BackgroundLocationObject[] };
 TaskManager.defineTask<BackgroundLocationTaskData>(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
   if (error) return;
 
-  if (!currentContext) {
+  if (!currentContext && !hasExplicitlyResolvedContext) {
     // Rehydrate from disk on the first callback of a freshly (re)started
     // process -- covers the OS-terminated-then-relaunched-headlessly case
-    // above. Only attempted when nothing is in memory yet; once rehydrated,
-    // later ticks in the same process use the fast in-memory path.
+    // above. An explicit clear marks the context as resolved even while its
+    // removeItem() is still in flight, preventing that stale stored value
+    // from being resurrected by a concurrent task callback.
     try {
       const stored = await AsyncStorage.getItem(CONTEXT_STORAGE_KEY);
-      if (stored) currentContext = JSON.parse(stored) as BackgroundLocationContext;
+      if (stored && !hasExplicitlyResolvedContext) {
+        currentContext = JSON.parse(stored) as BackgroundLocationContext;
+        hasExplicitlyResolvedContext = true;
+      }
     } catch {
       // Fails open -- if storage can't be read, just skip this tick; the
       // next one will try again.

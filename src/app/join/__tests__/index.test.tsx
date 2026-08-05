@@ -4,11 +4,15 @@ import { act, fireEvent, render } from '@testing-library/react-native';
 import JoinManualScreen from '@/app/join/index';
 
 const mockPush = jest.fn();
+const mockReplace = jest.fn();
 jest.mock('expo-router', () => {
   const actual = jest.requireActual('expo-router') as object;
   return {
     ...actual,
-    router: { push: (...args: unknown[]) => mockPush(...args) },
+    router: {
+      push: (...args: unknown[]) => mockPush(...args),
+      replace: (...args: unknown[]) => mockReplace(...args),
+    },
   };
 });
 
@@ -38,7 +42,7 @@ test('"Join" becomes enabled once a code is entered', async () => {
   expect(getByTestId('join-with-code-button').props.accessibilityState?.disabled).toBe(false);
 });
 
-test('tapping "Join" navigates to /join/[code] with the trimmed code -- all preview/validation/join logic lives there, not duplicated here', async () => {
+test('tapping "Join" replaces into /join/[code] with the trimmed code -- all preview/validation/join logic lives there', async () => {
   const { getByTestId } = await render(<JoinManualScreen />);
 
   await act(async () => {
@@ -48,5 +52,6 @@ test('tapping "Join" navigates to /join/[code] with the trimmed code -- all prev
     fireEvent.press(getByTestId('join-with-code-button'));
   });
 
-  expect(mockPush).toHaveBeenCalledWith({ pathname: '/join/[code]', params: { code: 'ABCD2345' } });
+  expect(mockReplace).toHaveBeenCalledWith({ pathname: '/join/[code]', params: { code: 'ABCD2345' } });
+  expect(mockPush).not.toHaveBeenCalled();
 });

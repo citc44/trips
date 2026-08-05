@@ -22,6 +22,7 @@ import { ProfileProvider, useProfile } from '@/shared/hooks/use-profile';
 import { useReduceMotion } from '@/shared/hooks/use-reduce-motion';
 import { RemovalNoticeProvider, useRemovalNotice } from '@/shared/hooks/use-removal-notice';
 import { resolveJustStartedVoyageExit } from '@/shared/navigation/resolve-just-started-voyage-exit';
+import { resolvePendingJoinExit } from '@/shared/navigation/resolve-pending-join-exit';
 import { resolveRoute } from '@/shared/navigation/resolve-route';
 import { getStandardPushTransition } from '@/shared/navigation/standard-push-transition';
 import { SplashThread } from '@/shared/components/splash-thread';
@@ -84,11 +85,34 @@ function AppNavigator() {
     const exitRoute = resolveJustStartedVoyageExit({
       wasJustStarted,
       hasJustStartedVoyage,
+      // An explicit pending join owns navigation until it resolves, even if
+      // the provider still contains the Voyage the user is switching away
+      // from. Do not let an unrelated join-code cleanup pull them backward.
+      hasActiveVoyage: !!activeVoyage && !pendingJoinCode,
+      needsLocationPermission: locationPermissionStatus === 'undetermined' && !hasCompletedPriming,
+    });
+    if (exitRoute) router.replace(exitRoute);
+  }, [hasJustStartedVoyage, activeVoyage, pendingJoinCode, locationPermissionStatus, hasCompletedPriming]);
+
+  // The invitation/resolver flow is entered via explicit navigation, so a
+  // Stack.Protected guard flip alone can reveal an older route still in the
+  // native stack. Mirror the proven post-start fix above: once a pending code
+  // transitions to cleared, explicitly replace into the now-confirmed active
+  // surface (or Home when the user cancelled without an active Voyage).
+  const previousPendingJoinCodeRef = useRef(pendingJoinCode);
+  useEffect(() => {
+    const previousPendingJoinCode = previousPendingJoinCodeRef.current;
+    previousPendingJoinCodeRef.current = pendingJoinCode;
+
+    const exitRoute = resolvePendingJoinExit({
+      previousPendingJoinCode,
+      pendingJoinCode,
+      hasSession: !!session,
       hasActiveVoyage: !!activeVoyage,
       needsLocationPermission: locationPermissionStatus === 'undetermined' && !hasCompletedPriming,
     });
     if (exitRoute) router.replace(exitRoute);
-  }, [hasJustStartedVoyage, activeVoyage, locationPermissionStatus, hasCompletedPriming]);
+  }, [pendingJoinCode, session, activeVoyage, locationPermissionStatus, hasCompletedPriming]);
 
   // Profile/active-Voyage/removal-notice/location-permission data only start
   // loading once a session exists (see use-profile.tsx/use-active-voyage.tsx/
@@ -144,16 +168,12 @@ function AppNavigator() {
   // construction, same invariant resolve-route.ts's own doc comment already
   // documents (needsLocationPermission is the one exception: it's a split
   // within hasActiveVoyage, not a sibling of it).
-  // hasActiveVoyage takes precedence over hasRemovalNotice/hasPendingJoin --
-  // deliberately, not just because a removed user's activeVoyage happens to
-  // be null: that's only true until they join or start a *different* Voyage
-  // before acknowledging the first removal. Once that happens, this
-  // precedence intentionally keeps them on their new, currently-active trip
-  // rather than interrupting it with a stale notice about a past one; the
-  // notice reappears (get_removal_notice() still has it) as soon as they no
-  // longer have an active Voyage. hasRemovalNotice takes precedence over
-  // hasPendingJoin: a leftover pending join from before removal shouldn't
-  // silently suppress showing the user what happened to their last Voyage.
+  // An explicit pending join has highest priority within the authenticated
+  // Home state. This is what allows join_voyage() to atomically move a user
+  // away from an old/stale active Voyage instead of the old Voyage's map
+  // making the resolver route inaccessible. Once pending clears, the normal
+  // active-Voyage/removal/Home precedence resumes.
+  const hasPendingJoin = !!pendingJoinCode;
   const hasActiveVoyage = !!activeVoyage;
   // Gates hasActiveVoyage's own active-voyage screen, not a fifth mutually
   // exclusive `home`-scoped concern of its own -- location-permission and
@@ -169,8 +189,7 @@ function AppNavigator() {
   // may still need to ask for background permission, or show the explainer)
   // has actually finished.
   const needsLocationPermission = hasActiveVoyage && locationPermissionStatus === 'undetermined' && !hasCompletedPriming;
-  const hasRemovalNotice = !hasActiveVoyage && !!removalNotice;
-  const hasPendingJoin = !hasActiveVoyage && !hasRemovalNotice && !!pendingJoinCode;
+  const hasRemovalNotice = !hasPendingJoin && !hasActiveVoyage && !!removalNotice;
 
   // Story 4.4 Task 11's "Standard push" transition -- see
   // standard-push-transition.ts for the full rationale (extracted so it's
@@ -191,11 +210,10 @@ function AppNavigator() {
           voyage-removed below: the screen that clears the blocking
           condition (location-permission.tsx's own markPrimingComplete()
           call) IS the currently-focused, guarded screen itself. */}
-      <Stack.Protected guard={route === 'home' && hasActiveVoyage && needsLocationPermission}>
+      <Stack.Protected guard={route === 'home' && !hasPendingJoin && hasActiveVoyage && needsLocationPermission}>
         <Stack.Screen name="location-permission" />
       </Stack.Protected>
-      {/* Story 4.3: the Organizer's "cut to gameplay" entry point. Mirrors
-          voyage-joined.tsx's own working eviction-redirect pattern below --
+      {/* Story 4.3: the Organizer's "cut to gameplay" entry point.
           join-code.tsx is Stack.Protected on hasJustStartedVoyage (set by
           destination-picker.tsx right before it pushes here, cleared by
           join-code.tsx's own Continue button) instead of relying on
@@ -206,10 +224,10 @@ function AppNavigator() {
           below, and active-voyage's guard excludes this flag, so the two
           stay mutually exclusive by construction -- same invariant this
           file's own comments already call out for needsLocationPermission. */}
-      <Stack.Protected guard={route === 'home' && hasActiveVoyage && !needsLocationPermission && hasJustStartedVoyage}>
+      <Stack.Protected guard={route === 'home' && !hasPendingJoin && hasActiveVoyage && !needsLocationPermission && hasJustStartedVoyage}>
         <Stack.Screen name="join-code" />
       </Stack.Protected>
-      <Stack.Protected guard={route === 'home' && hasActiveVoyage && !needsLocationPermission && !hasJustStartedVoyage}>
+      <Stack.Protected guard={route === 'home' && !hasPendingJoin && hasActiveVoyage && !needsLocationPermission && !hasJustStartedVoyage}>
         <Stack.Screen name="active-voyage" />
       </Stack.Protected>
       {/* Registered inside its own guard branch (unlike voyage-ended, which
@@ -227,6 +245,10 @@ function AppNavigator() {
       </Stack.Protected>
       <Stack.Protected guard={route === 'home' && !hasActiveVoyage && !hasRemovalNotice && !hasPendingJoin}>
         <Stack.Screen name="index" options={standardPushTransition} />
+      </Stack.Protected>
+      {/* Settings is a signed-in Home-state route, not a no-active-Voyage
+          route. Live Map's action drawer links here while a Voyage is active. */}
+      <Stack.Protected guard={route === 'home'}>
         <Stack.Screen name="settings" />
       </Stack.Protected>
       <Stack.Protected guard={route === 'display-name'}>

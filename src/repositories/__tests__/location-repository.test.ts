@@ -103,6 +103,7 @@ test('subscribeToLocations creates a private, receive-only channel scoped to the
   expect(mockChannel).toHaveBeenCalledWith('voyage:voyage-1', { config: { private: true } });
   expect(mockOn).toHaveBeenCalledWith('broadcast', { event: 'location' }, expect.any(Function));
   expect(mockOn).toHaveBeenCalledWith('broadcast', { event: 'roster_changed' }, expect.any(Function));
+  expect(mockOn).toHaveBeenCalledWith('broadcast', { event: 'voyage_status_changed' }, expect.any(Function));
   expect(mockSubscribe).toHaveBeenCalledTimes(1);
 });
 
@@ -118,14 +119,28 @@ test('subscribeToLocations invokes the callback with a mapped location on each l
   expect(onLocation).toHaveBeenCalledWith({ userId: 'user-1', lat: 39.1, lng: -120.0, heading: 90, updatedAt: '2026-07-26T00:00:00Z' });
 });
 
-test('subscribeToLocations invokes onRosterChange on each roster_changed broadcast', () => {
+test('subscribeToLocations invokes onRosterChange with the changed membership', () => {
   const onRosterChange = jest.fn();
   locationRepository.subscribeToLocations('voyage-1', jest.fn(), undefined, onRosterChange);
 
-  const rosterHandler = mockOn.mock.calls.find((call) => call[1]?.event === 'roster_changed')?.[2] as () => void;
-  rosterHandler();
+  const rosterHandler = mockOn.mock.calls.find((call) => call[1]?.event === 'roster_changed')?.[2] as (message: {
+    payload: unknown;
+  }) => void;
+  rosterHandler({ payload: { user_id: 'user-1', is_active: false } });
 
-  expect(onRosterChange).toHaveBeenCalledTimes(1);
+  expect(onRosterChange).toHaveBeenCalledWith({ userId: 'user-1', isActive: false });
+});
+
+test('subscribeToLocations invokes onVoyageStatusChange on a lifecycle broadcast', () => {
+  const onVoyageStatusChange = jest.fn();
+  locationRepository.subscribeToLocations('voyage-1', jest.fn(), undefined, undefined, onVoyageStatusChange);
+
+  const statusHandler = mockOn.mock.calls.find((call) => call[1]?.event === 'voyage_status_changed')?.[2] as (message: {
+    payload: unknown;
+  }) => void;
+  statusHandler({ payload: { status: 'ended' } });
+
+  expect(onVoyageStatusChange).toHaveBeenCalledWith({ status: 'ended' });
 });
 
 test('subscribeToLocations returns an unsubscribe that removes the channel', () => {

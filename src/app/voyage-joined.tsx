@@ -1,9 +1,7 @@
-import { Redirect } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Colors, Typography } from '@/constants/design-tokens';
 import { voyageRepository } from '@/repositories/voyage-repository';
 import { IgnitionButton } from '@/shared/components/ignition-button';
 import { useActiveVoyage } from '@/shared/hooks/use-active-voyage';
@@ -12,27 +10,42 @@ import { usePendingJoin } from '@/shared/hooks/use-pending-join';
 import { screenStyles } from '@/shared/styles/screen';
 
 const GENERIC_ERROR = 'Something went wrong. Please try again.';
+const ACTIVE_VOYAGE_SYNC_ERROR = "You joined, but we couldn't open the live map. Please try again.";
+const DETERMINISTIC_JOIN_REJECTION_CODES = new Set(['22023', '28000', 'JOIN1', 'JOIN2', 'JOIN3']);
 
-// Interim landing (Story 2.3 Dev Notes): Live Map is Epic 3, so this is where
-// AC2's "live Voyage view" lands for now -- same "build what this story needs"
-// precedent as Destination Picker (2.1) and the Join-code card (2.2). Reached
-// only via _layout.tsx's `route === 'home' && pendingJoinCode` guard branch
-// (fresh-auth case) or a direct push from the Join Invitation screen
-// (already-authenticated case) -- this is the ONE place join_voyage() is
-// called, regardless of which path got the user here.
+function isDeterministicJoinRejection(code: string): boolean {
+  // These are validation/auth/rejection branches that the join_voyage RPC
+  // raises before changing either the target or the prior membership. Every
+  // other failure is treated conservatively: a lost response can mean the
+  // transaction committed even though the client never received its result.
+  return DETERMINISTIC_JOIN_REJECTION_CODES.has(code);
+}
+
+// The single join resolver for both invite links and manually-entered codes.
+// This is intentionally loading/error-only: after the server confirms the
+// join and ActiveVoyageProvider confirms the same Voyage id, clearing the
+// pending code lets _layout.tsx explicitly replace this route with Live Map
+// (or location priming first). There is no post-join Continue step to race the
+// active-Voyage refresh.
 export default function VoyageJoinedScreen() {
   const { pendingJoinCode, clearPendingJoinCode } = usePendingJoin();
   const { triggerEntryTransition } = usePendingEntryTransition();
   const { refetch: refetchActiveVoyage } = useActiveVoyage();
-  const [destination, setDestination] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  // Keyed to the specific code it started for (not a plain boolean latch) --
-  // a second, different pendingJoinCode arriving while this screen is still
-  // mounted (e.g. a second invite link tapped before the first join finishes)
-  // must still trigger a fresh join attempt (code review finding).
+  const [canCancel, setCanCancel] = useState(false);
   const startedFor = useRef<string | null>(null);
+  const requestId = useRef(0);
+  const latestPendingJoinCode = useRef(pendingJoinCode);
+  const joinQueue = useRef<Promise<void>>(Promise.resolve());
   const isMounted = useRef(true);
+
+  // Invalidate an older response as soon as a new pending code is committed,
+  // before passive effects have a chance to enqueue its replacement. This
+  // prevents an old successful request from clearing a newer pending code.
+  useLayoutEffect(() => {
+    latestPendingJoinCode.current = pendingJoinCode;
+  }, [pendingJoinCode]);
 
   useEffect(() => {
     return () => {
@@ -40,90 +53,119 @@ export default function VoyageJoinedScreen() {
     };
   }, []);
 
+  const attemptJoin = useCallback(
+    (joinCode: string) => {
+      startedFor.current = joinCode;
+      const thisRequestId = ++requestId.current;
+      setIsLoading(true);
+      setError(null);
+      setCanCancel(false);
+
+      const isCurrentAttempt = () =>
+        isMounted.current && requestId.current === thisRequestId && latestPendingJoinCode.current === joinCode;
+
+      const runAttempt = async () => {
+        // Only one join RPC may be in flight from this resolver. If several
+        // invite links arrive while one is running, obsolete queued attempts
+        // are skipped and the newest code runs after the in-flight call. The
+        // server therefore always sees the user's final choice last.
+        if (!isCurrentAttempt()) return;
+
+        try {
+          const { data, error: joinError } = await voyageRepository.joinVoyage(joinCode);
+          if (!isCurrentAttempt()) return;
+          if (joinError || !data) {
+            setError(joinError?.message ?? GENERIC_ERROR);
+            setCanCancel(!!joinError && isDeterministicJoinRejection(joinError.code));
+            setIsLoading(false);
+            return;
+          }
+
+          // Do not clear the pending code merely because the write succeeded.
+          // Routing reads ActiveVoyageProvider, so first prove that its refresh
+          // sees this exact Voyage. A retry is safe because join_voyage is
+          // idempotent for an already-current membership.
+          const refreshed = await refetchActiveVoyage();
+          if (!isCurrentAttempt()) return;
+          if (refreshed.error || refreshed.data?.voyage.id !== data.id) {
+            setError(refreshed.error?.message ?? ACTIVE_VOYAGE_SYNC_ERROR);
+            // The membership write definitely committed. Keep the pending
+            // intent until an idempotent retry reconciles provider state.
+            setCanCancel(false);
+            setIsLoading(false);
+            return;
+          }
+
+          triggerEntryTransition();
+          clearPendingJoinCode();
+        } catch {
+          if (!isCurrentAttempt()) return;
+          // A transport exception is ambiguous: the server might have
+          // committed before the response was lost. Retrying is the only safe
+          // recovery because clearing the intent could reveal stale state.
+          setError(GENERIC_ERROR);
+          setCanCancel(false);
+          setIsLoading(false);
+        }
+      };
+
+      joinQueue.current = joinQueue.current.then(runAttempt, runAttempt);
+    },
+    [clearPendingJoinCode, refetchActiveVoyage, triggerEntryTransition],
+  );
+
   useEffect(() => {
     if (!pendingJoinCode || startedFor.current === pendingJoinCode) return;
-    startedFor.current = pendingJoinCode;
-    setIsLoading(true);
-    setError(null);
-    setDestination(null);
-
-    voyageRepository
-      .joinVoyage(pendingJoinCode)
-      .then(({ data, error: joinError }) => {
-        if (!isMounted.current) return;
-        if (joinError || !data) {
-          setError(joinError?.message ?? GENERIC_ERROR);
-          setIsLoading(false);
-          return;
-        }
-        setDestination(data.destination);
-        setIsLoading(false);
-        // Without this, ActiveVoyageProvider only re-fetches on a userId
-        // change -- tapping Continue below would clear pendingJoinCode and
-        // route back to plain Home instead of active-voyage.tsx, since
-        // activeVoyage would still be stale/null (code review finding).
-        refetchActiveVoyage();
-      })
-      .catch(() => {
-        if (!isMounted.current) return;
-        setError(GENERIC_ERROR);
-        setIsLoading(false);
-      });
-  }, [pendingJoinCode, refetchActiveVoyage]);
+    void attemptJoin(pendingJoinCode);
+  }, [attemptJoin, pendingJoinCode]);
 
   if (!pendingJoinCode) {
-    return <Redirect href="/" />;
+    // _layout owns the pending-code transition and explicit destination.
+    // Rendering a second Redirect here would race that root-level replace.
+    return null;
   }
 
-  function handleContinue() {
-    // Story 4.3: triggers active-voyage.tsx's "cut to gameplay" transition
-    // on its next mount (see use-pending-entry-transition.tsx) before
-    // clearing pendingJoinCode -- this is what flips _layout.tsx's guard,
-    // redirecting onto active-voyage.tsx (or location-permission.tsx first,
-    // if that's still outstanding), same mechanism as the rest of the
-    // onboarding cascade. Never leaves a stale pending code behind that
-    // could re-trigger a join on some future, unrelated `home` transition.
-    triggerEntryTransition();
+  function handleRetry() {
+    if (!pendingJoinCode || isLoading) return;
+    void attemptJoin(pendingJoinCode);
+  }
+
+  function handleCancel() {
+    requestId.current += 1;
     clearPendingJoinCode();
   }
 
   return (
     <View style={screenStyles.container}>
       <SafeAreaView style={screenStyles.safeArea}>
-        {isLoading ? null : (
+        {isLoading ? (
+          <Text testID="voyage-joined-loading" style={screenStyles.headline}>
+            Joining your Voyage…
+          </Text>
+        ) : (
           <>
-            <Text style={screenStyles.headline}>{error ? "Couldn't join this trip." : "You're on the trip."}</Text>
-            {destination ? <Text style={styles.subhead}>{destination}</Text> : null}
-            {error ? (
-              <Text testID="voyage-joined-error" style={screenStyles.error}>
-                {error}
-              </Text>
-            ) : null}
-            {/* Story 4.4: "secondary" now means a bordered pill (see
-                ignition-button.tsx) -- this screen isn't in that story's
-                re-skin scope and stays Night-Drive-styled, so "text"
-                preserves this control's current plain-text-link
-                appearance. */}
+            <Text style={screenStyles.headline}>Couldn&apos;t join this trip.</Text>
+            <Text testID="voyage-joined-error" style={screenStyles.error}>
+              {error}
+            </Text>
             <IgnitionButton
-              testID="voyage-joined-continue-button"
-              label="Continue"
+              testID="voyage-joined-retry-button"
+              label="Try again"
               disabled={false}
-              onPress={handleContinue}
-              variant="text"
+              onPress={handleRetry}
             />
+            {canCancel ? (
+              <IgnitionButton
+                testID="voyage-joined-cancel-button"
+                label="Cancel"
+                disabled={false}
+                onPress={handleCancel}
+                variant="text"
+              />
+            ) : null}
           </>
         )}
       </SafeAreaView>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  subhead: {
-    color: Colors.inkSecondary,
-    fontFamily: Typography.body.fontFamily,
-    fontSize: Typography.body.fontSize,
-    lineHeight: Typography.body.lineHeight,
-    textAlign: 'center',
-  },
-});

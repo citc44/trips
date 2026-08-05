@@ -14,8 +14,9 @@ import { outbox } from '@/shared/services/outbox/outbox';
 import ActiveVoyageScreen from '../active-voyage';
 
 const mockPush = jest.fn();
+const mockReplace = jest.fn();
 jest.mock('expo-router', () => ({
-  router: { push: (...args: unknown[]) => mockPush(...args) },
+  router: { push: (...args: unknown[]) => mockPush(...args), replace: (...args: unknown[]) => mockReplace(...args) },
 }));
 
 jest.mock('@/lib/mapbox', () => ({ initMapbox: jest.fn() }));
@@ -66,6 +67,7 @@ jest.mock('@/repositories/voyage-repository', () => ({
     getVoyageMembers: jest.fn(),
     grantOrganizerStatus: jest.fn(),
     removeVoyager: jest.fn(),
+    leaveVoyage: jest.fn(),
     setTravelRole: jest.fn(),
   },
 }));
@@ -104,6 +106,7 @@ const mockEndVoyage = voyageRepository.endVoyage as jest.MockedFunction<typeof v
 const mockGetVoyageMembers = voyageRepository.getVoyageMembers as jest.MockedFunction<typeof voyageRepository.getVoyageMembers>;
 const mockGrantOrganizerStatus = voyageRepository.grantOrganizerStatus as jest.MockedFunction<typeof voyageRepository.grantOrganizerStatus>;
 const mockRemoveVoyager = voyageRepository.removeVoyager as jest.MockedFunction<typeof voyageRepository.removeVoyager>;
+const mockLeaveVoyage = voyageRepository.leaveVoyage as jest.MockedFunction<typeof voyageRepository.leaveVoyage>;
 const mockSetTravelRole = voyageRepository.setTravelRole as jest.MockedFunction<typeof voyageRepository.setTravelRole>;
 const mockUseActiveVoyage = useActiveVoyage as jest.MockedFunction<typeof useActiveVoyage>;
 const mockUseAuth = useAuth as jest.MockedFunction<typeof useAuth>;
@@ -111,7 +114,8 @@ const mockUseLiveLocations = useLiveLocations as jest.MockedFunction<typeof useL
 const mockUsePendingEntryTransition = usePendingEntryTransition as jest.MockedFunction<typeof usePendingEntryTransition>;
 const mockOutboxEnqueue = outbox.enqueue as jest.MockedFunction<typeof outbox.enqueue>;
 const mockOutboxFlush = outbox.flush as jest.MockedFunction<typeof outbox.flush>;
-const mockRefetch = jest.fn<() => Promise<void>>();
+const mockRefetch = jest.fn<(...args: any[]) => Promise<any>>();
+const mockClearActiveVoyage = jest.fn();
 
 const membersFixture = [
   {
@@ -156,6 +160,7 @@ function mockActiveVoyage(role: 'organizer' | 'voyager') {
     isLoading: false,
     hasError: false,
     refetch: mockRefetch,
+    clearActiveVoyage: mockClearActiveVoyage,
   });
 }
 
@@ -607,6 +612,30 @@ test('a realtime roster revision removes a departed Voyager without remounting t
   expect(getByTestId('voyager-marker-user-1')).toBeTruthy();
 });
 
+test('a lifecycle signal reconciles active Voyage state so remote leave/end cannot require a restart', async () => {
+  mockActiveVoyage('voyager');
+  mockRefetch.mockResolvedValue({ data: null, error: null });
+
+  const { rerender } = await render(<ActiveVoyageScreen />);
+  await waitFor(() => expect(mockGetVoyageMembers).toHaveBeenCalled());
+  mockRefetch.mockClear();
+
+  mockUseLiveLocations.mockReturnValue({
+    locations: locationsFixture,
+    trails: {},
+    isLoading: false,
+    hasError: false,
+    isConnected: true,
+    rosterRevision: 0,
+    lifecycleRevision: 1,
+  });
+  await act(async () => {
+    rerender(<ActiveVoyageScreen />);
+  });
+
+  await waitFor(() => expect(mockRefetch).toHaveBeenCalledTimes(1));
+});
+
 test('does not render a marker for a Voyager with no live location yet', async () => {
   mockActiveVoyage('organizer');
   mockUseLiveLocations.mockReturnValue({
@@ -883,6 +912,7 @@ test('tapping the organizer menu button opens the relocated Organizer actions', 
   mockActiveVoyage('organizer');
 
   const { getByTestId } = await render(<ActiveVoyageScreen />);
+  expect(getByTestId('organizer-menu-button').props.accessibilityLabel).toBe('Voyage actions');
 
   await openOrganizerMenu(getByTestId);
 
@@ -999,6 +1029,151 @@ test('does not show the End Voyage control for a plain Voyager', async () => {
   await openOrganizerMenu(getByTestId);
 
   expect(queryByTestId('end-voyage-button')).toBeNull();
+});
+
+test('shows Leave Voyage to a Voyager who did not start the Voyage', async () => {
+  mockActiveVoyage('voyager');
+  mockUseAuth.mockReturnValue({
+    session: { user: { id: 'user-2' } } as any,
+    isLoading: false,
+    signInWithEmail: jest.fn<(...args: any[]) => Promise<any>>(),
+    verifyCode: jest.fn<(...args: any[]) => Promise<any>>(),
+    signOut: jest.fn<(...args: any[]) => Promise<any>>(),
+  });
+
+  const { getByTestId } = await render(<ActiveVoyageScreen />);
+  await openOrganizerMenu(getByTestId);
+
+  expect(getByTestId('leave-voyage-button')).toBeTruthy();
+});
+
+test('shows Leave Voyage to a promoted Organizer who did not start the Voyage', async () => {
+  mockActiveVoyage('organizer');
+  mockUseAuth.mockReturnValue({
+    session: { user: { id: 'user-2' } } as any,
+    isLoading: false,
+    signInWithEmail: jest.fn<(...args: any[]) => Promise<any>>(),
+    verifyCode: jest.fn<(...args: any[]) => Promise<any>>(),
+    signOut: jest.fn<(...args: any[]) => Promise<any>>(),
+  });
+
+  const { getByTestId } = await render(<ActiveVoyageScreen />);
+  await openOrganizerMenu(getByTestId);
+
+  expect(getByTestId('end-voyage-button')).toBeTruthy();
+  expect(getByTestId('leave-voyage-button')).toBeTruthy();
+});
+
+test('does not show Leave Voyage to the person who started the Voyage', async () => {
+  mockActiveVoyage('organizer');
+
+  const { getByTestId, queryByTestId } = await render(<ActiveVoyageScreen />);
+  await openOrganizerMenu(getByTestId);
+
+  expect(queryByTestId('leave-voyage-button')).toBeNull();
+});
+
+test('opens Settings from the active-Voyage drawer and closes the drawer state', async () => {
+  mockActiveVoyage('organizer');
+
+  const { getByTestId, queryByTestId } = await render(<ActiveVoyageScreen />);
+  await openOrganizerMenu(getByTestId);
+  await act(async () => {
+    fireEvent.press(getByTestId('voyage-settings-button'));
+  });
+
+  expect(mockPush).toHaveBeenCalledWith('/settings');
+  await waitFor(() => expect(queryByTestId('end-voyage-button')).toBeNull());
+});
+
+test('offers manual switching from an active Voyage and opens code entry', async () => {
+  mockActiveVoyage('voyager');
+
+  const { getByTestId } = await render(<ActiveVoyageScreen />);
+  await openOrganizerMenu(getByTestId);
+  await act(async () => {
+    fireEvent.press(getByTestId('join-another-voyage-button'));
+  });
+
+  expect(mockPush).toHaveBeenCalledWith('/join');
+});
+
+test('confirms Leave Voyage and clears active state without a fallible post-commit fetch', async () => {
+  mockActiveVoyage('voyager');
+  mockUseAuth.mockReturnValue({
+    session: { user: { id: 'user-2' } } as any,
+    isLoading: false,
+    signInWithEmail: jest.fn<(...args: any[]) => Promise<any>>(),
+    verifyCode: jest.fn<(...args: any[]) => Promise<any>>(),
+    signOut: jest.fn<(...args: any[]) => Promise<any>>(),
+  });
+  mockLeaveVoyage.mockResolvedValue({ error: null });
+  mockRefetch.mockResolvedValue({ data: null, error: null });
+
+  const { getByTestId } = await render(<ActiveVoyageScreen />);
+  await openOrganizerMenu(getByTestId);
+  await act(async () => {
+    fireEvent.press(getByTestId('leave-voyage-button'));
+  });
+  await act(async () => {
+    fireEvent.press(getByTestId('confirm-leave-voyage-button'));
+  });
+
+  expect(mockLeaveVoyage).toHaveBeenCalledWith('voyage-1');
+  expect(mockClearActiveVoyage).toHaveBeenCalledTimes(1);
+  expect(mockRefetch).not.toHaveBeenCalled();
+  expect(mockReplace).not.toHaveBeenCalled();
+});
+
+test('cancelling Leave Voyage returns to the action menu without calling the RPC', async () => {
+  mockActiveVoyage('voyager');
+  mockUseAuth.mockReturnValue({
+    session: { user: { id: 'user-2' } } as any,
+    isLoading: false,
+    signInWithEmail: jest.fn<(...args: any[]) => Promise<any>>(),
+    verifyCode: jest.fn<(...args: any[]) => Promise<any>>(),
+    signOut: jest.fn<(...args: any[]) => Promise<any>>(),
+  });
+
+  const { getByTestId, queryByTestId } = await render(<ActiveVoyageScreen />);
+  await openOrganizerMenu(getByTestId);
+  await act(async () => {
+    fireEvent.press(getByTestId('leave-voyage-button'));
+  });
+  await act(async () => {
+    fireEvent.press(getByTestId('keep-riding-button'));
+  });
+
+  expect(queryByTestId('confirm-leave-voyage-button')).toBeNull();
+  expect(getByTestId('leave-voyage-button')).toBeTruthy();
+  expect(mockLeaveVoyage).not.toHaveBeenCalled();
+});
+
+test('keeps the leave confirmation open and shows a retryable error when Leave Voyage fails', async () => {
+  mockActiveVoyage('voyager');
+  mockUseAuth.mockReturnValue({
+    session: { user: { id: 'user-2' } } as any,
+    isLoading: false,
+    signInWithEmail: jest.fn<(...args: any[]) => Promise<any>>(),
+    verifyCode: jest.fn<(...args: any[]) => Promise<any>>(),
+    signOut: jest.fn<(...args: any[]) => Promise<any>>(),
+  });
+  mockLeaveVoyage.mockResolvedValue({ error: { code: 'unknown', message: 'Network request failed' } });
+
+  const { getByTestId } = await render(<ActiveVoyageScreen />);
+  await openOrganizerMenu(getByTestId);
+  await act(async () => {
+    fireEvent.press(getByTestId('leave-voyage-button'));
+  });
+  await act(async () => {
+    fireEvent.press(getByTestId('confirm-leave-voyage-button'));
+  });
+
+  expect(getByTestId('leave-voyage-error').props.children).toBe('Network request failed');
+  expect(getByTestId('keep-riding-button')).toBeTruthy();
+  expect(mockClearActiveVoyage).not.toHaveBeenCalled();
+  expect(mockRefetch).not.toHaveBeenCalled();
+  expect(mockReplace).not.toHaveBeenCalled();
 });
 
 test('Invite More Voyagers is available to any member (not just the Organizer), and re-opens the join-code screen', async () => {

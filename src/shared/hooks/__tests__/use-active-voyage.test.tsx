@@ -39,13 +39,24 @@ function Probe() {
 }
 
 function RefetchProbe() {
-  const { refetch, hasError } = useActiveVoyage();
+  const { refetch, clearActiveVoyage, hasError } = useActiveVoyage();
   return (
     <>
       <Text testID="refetch" onPress={() => refetch()} />
+      <Text testID="clear" onPress={clearActiveVoyage} />
       <Text testID="refetch-error">{hasError ? 'error' : 'no-error'}</Text>
     </>
   );
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
 }
 
 beforeEach(() => {
@@ -173,11 +184,13 @@ test('refetch re-pulls and updates the exposed active Voyage', async () => {
   await waitFor(() => expect(getByTestId('probe').props.children).toBe('active:organizer'));
 
   mockGetMyActiveVoyage.mockResolvedValue({ data: null, error: null });
+  let refetchResult: unknown;
   await act(async () => {
-    await getByTestId('refetch').props.onPress();
+    refetchResult = await getByTestId('refetch').props.onPress();
   });
 
   await waitFor(() => expect(getByTestId('probe').props.children).toBe('none'));
+  expect(refetchResult).toEqual({ data: null, error: null });
 });
 
 test('refetch does not throw (resolves to hasError) when the repository call rejects -- a caller that fires refetch without awaiting/catching must not see an unhandled rejection', async () => {
@@ -195,9 +208,10 @@ test('refetch does not throw (resolves to hasError) when the repository call rej
 
   mockGetMyActiveVoyage.mockRejectedValueOnce(new Error('network error'));
 
+  let refetchResult: unknown;
   await expect(
     act(async () => {
-      await getByTestId('refetch').props.onPress();
+      refetchResult = await getByTestId('refetch').props.onPress();
     }),
   ).resolves.not.toThrow();
 
@@ -207,4 +221,131 @@ test('refetch does not throw (resolves to hasError) when the repository call rej
   // still-active-Voyage user off active-voyage.tsx on a blip).
   await waitFor(() => expect(getByTestId('refetch-error').props.children).toBe('error'));
   expect(getByTestId('probe').props.children).toBe('active:organizer');
+  expect(refetchResult).toEqual({ data: null, error: { code: 'unknown', message: 'Something went wrong. Please try again.' } });
+});
+
+test('an authoritative local clear cannot be undone by a refetch that began before the leave completed', async () => {
+  mockUseAuth.mockReturnValue({ session: { user: { id: 'user-1' } } });
+  mockGetMyActiveVoyage.mockResolvedValueOnce({ data: activeVoyageFixture, error: null });
+
+  const { getByTestId } = await render(
+    <ActiveVoyageProvider>
+      <RefetchProbe />
+      <Probe />
+    </ActiveVoyageProvider>,
+  );
+  await waitFor(() => expect(getByTestId('probe').props.children).toBe('active:organizer'));
+
+  const staleFetch = deferred<any>();
+  mockGetMyActiveVoyage.mockReturnValueOnce(staleFetch.promise);
+  let staleResultPromise!: Promise<any>;
+  await act(() => {
+    staleResultPromise = getByTestId('refetch').props.onPress();
+  });
+
+  await act(() => {
+    getByTestId('clear').props.onPress();
+  });
+  expect(getByTestId('probe').props.children).toBe('none');
+
+  let staleResult: unknown;
+  await act(async () => {
+    staleFetch.resolve({ data: activeVoyageFixture, error: null });
+    staleResult = await staleResultPromise;
+  });
+
+  expect(getByTestId('probe').props.children).toBe('none');
+  expect(staleResult).toEqual({
+    data: null,
+    error: { code: 'stale_request', message: 'Active Voyage changed while refreshing. Please try again.' },
+  });
+});
+
+test('overlapping refetches commit only the newest request even when the older one resolves last', async () => {
+  mockUseAuth.mockReturnValue({ session: { user: { id: 'user-1' } } });
+  mockGetMyActiveVoyage.mockResolvedValueOnce({ data: activeVoyageFixture, error: null });
+
+  const { getByTestId } = await render(
+    <ActiveVoyageProvider>
+      <RefetchProbe />
+      <Probe />
+    </ActiveVoyageProvider>,
+  );
+  await waitFor(() => expect(getByTestId('probe').props.children).toBe('active:organizer'));
+
+  const olderFetch = deferred<any>();
+  const newerFetch = deferred<any>();
+  mockGetMyActiveVoyage.mockReturnValueOnce(olderFetch.promise).mockReturnValueOnce(newerFetch.promise);
+  let olderResultPromise!: Promise<any>;
+  let newerResultPromise!: Promise<any>;
+  await act(() => {
+    olderResultPromise = getByTestId('refetch').props.onPress();
+    newerResultPromise = getByTestId('refetch').props.onPress();
+  });
+
+  await act(async () => {
+    newerFetch.resolve({ data: null, error: null });
+    await newerResultPromise;
+  });
+  expect(getByTestId('probe').props.children).toBe('none');
+
+  let olderResult: unknown;
+  await act(async () => {
+    olderFetch.resolve({ data: activeVoyageFixture, error: null });
+    olderResult = await olderResultPromise;
+  });
+
+  expect(getByTestId('probe').props.children).toBe('none');
+  expect(olderResult).toEqual({
+    data: null,
+    error: { code: 'stale_request', message: 'Active Voyage changed while refreshing. Please try again.' },
+  });
+});
+
+test('a refetch started for the previous user cannot overwrite the next user active Voyage', async () => {
+  mockUseAuth.mockReturnValue({ session: { user: { id: 'user-1' } } });
+  mockGetMyActiveVoyage.mockResolvedValueOnce({ data: activeVoyageFixture, error: null });
+
+  const { getByTestId, rerender } = await render(
+    <ActiveVoyageProvider>
+      <RefetchProbe />
+      <Probe />
+    </ActiveVoyageProvider>,
+  );
+  await waitFor(() => expect(getByTestId('probe').props.children).toBe('active:organizer'));
+
+  const previousUserFetch = deferred<any>();
+  const nextUserVoyage = {
+    ...activeVoyageFixture,
+    voyage: { ...activeVoyageFixture.voyage, id: 'voyage-2', createdBy: 'someone-else' },
+    role: 'voyager' as const,
+  };
+  mockGetMyActiveVoyage
+    .mockReturnValueOnce(previousUserFetch.promise)
+    .mockResolvedValueOnce({ data: nextUserVoyage, error: null });
+  let previousUserResultPromise!: Promise<any>;
+  await act(() => {
+    previousUserResultPromise = getByTestId('refetch').props.onPress();
+  });
+
+  mockUseAuth.mockReturnValue({ session: { user: { id: 'user-2' } } });
+  await rerender(
+    <ActiveVoyageProvider>
+      <RefetchProbe />
+      <Probe />
+    </ActiveVoyageProvider>,
+  );
+  await waitFor(() => expect(getByTestId('probe').props.children).toBe('active:voyager'));
+
+  let previousUserResult: unknown;
+  await act(async () => {
+    previousUserFetch.resolve({ data: activeVoyageFixture, error: null });
+    previousUserResult = await previousUserResultPromise;
+  });
+
+  expect(getByTestId('probe').props.children).toBe('active:voyager');
+  expect(previousUserResult).toEqual({
+    data: null,
+    error: { code: 'stale_request', message: 'Active Voyage changed while refreshing. Please try again.' },
+  });
 });

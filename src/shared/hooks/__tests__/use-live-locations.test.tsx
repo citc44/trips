@@ -40,6 +40,11 @@ function SyncProbe({ voyageId }: { voyageId: string }) {
   );
 }
 
+function LifecycleProbe({ voyageId, userId = 'user-1' }: { voyageId: string; userId?: string }) {
+  const { lifecycleRevision } = useLiveLocations(voyageId, userId);
+  return <Text testID="lifecycle-probe">{lifecycleRevision ?? 0}</Text>;
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
   appStateListener = null;
@@ -71,6 +76,7 @@ test('subscribes to the Voyage channel after mounting', async () => {
   await waitFor(() =>
     expect(mockSubscribeToLocations).toHaveBeenCalledWith(
       'voyage-1',
+      expect.any(Function),
       expect.any(Function),
       expect.any(Function),
       expect.any(Function),
@@ -266,16 +272,54 @@ test('the fourth subscription callback increments rosterRevision without re-fetc
   const { getByTestId } = await render(<SyncProbe voyageId="voyage-1" />);
   await waitFor(() => expect(mockSubscribeToLocations).toHaveBeenCalled());
   await waitFor(() => expect(mockGetLiveLocations).toHaveBeenCalledTimes(1));
-  const onRosterChange = mockSubscribeToLocations.mock.calls[0][3] as () => void;
+  const onRosterChange = mockSubscribeToLocations.mock.calls[0][3] as (change: {
+    userId: string | null;
+    isActive: boolean | null;
+  }) => void;
 
   await act(async () => {
-    onRosterChange();
+    onRosterChange({ userId: 'user-2', isActive: true });
   });
 
   await waitFor(() => {
     expect(JSON.parse(getByTestId('sync-probe').props.children)).toEqual({ lat: null, isConnected: true, rosterRevision: 1 });
   });
   expect(mockGetLiveLocations).toHaveBeenCalledTimes(1);
+});
+
+test('an own-membership deactivation requests active-Voyage reconciliation', async () => {
+  mockGetLiveLocations.mockResolvedValue({ data: [], error: null });
+
+  const { getByTestId } = await render(<LifecycleProbe voyageId="voyage-1" />);
+  await waitFor(() => expect(mockSubscribeToLocations).toHaveBeenCalled());
+  const onRosterChange = mockSubscribeToLocations.mock.calls[0][3] as (change: {
+    userId: string | null;
+    isActive: boolean | null;
+  }) => void;
+
+  await act(async () => {
+    onRosterChange({ userId: 'user-2', isActive: false });
+  });
+  expect(getByTestId('lifecycle-probe').props.children).toBe(0);
+
+  await act(async () => {
+    onRosterChange({ userId: 'user-1', isActive: false });
+  });
+  expect(getByTestId('lifecycle-probe').props.children).toBe(1);
+});
+
+test('an ended-Voyage broadcast requests active-Voyage reconciliation', async () => {
+  mockGetLiveLocations.mockResolvedValue({ data: [], error: null });
+
+  const { getByTestId } = await render(<LifecycleProbe voyageId="voyage-1" />);
+  await waitFor(() => expect(mockSubscribeToLocations).toHaveBeenCalled());
+  const onVoyageStatusChange = mockSubscribeToLocations.mock.calls[0][4] as (change: { status: 'active' | 'ended' | null }) => void;
+
+  await act(async () => {
+    onVoyageStatusChange({ status: 'ended' });
+  });
+
+  expect(getByTestId('lifecycle-probe').props.children).toBe(1);
 });
 
 test('reconnecting after a disconnect refreshes the durable snapshot and increments rosterRevision', async () => {
@@ -413,6 +457,7 @@ test('re-subscribes when voyageId changes, unsubscribing from the previous chann
       expect.any(Function),
       expect.any(Function),
       expect.any(Function),
+      expect.any(Function),
     ),
   );
 
@@ -425,6 +470,7 @@ test('re-subscribes when voyageId changes, unsubscribing from the previous chann
   await waitFor(() =>
     expect(mockSubscribeToLocations).toHaveBeenCalledWith(
       'voyage-2',
+      expect.any(Function),
       expect.any(Function),
       expect.any(Function),
       expect.any(Function),

@@ -25,18 +25,22 @@ type LiveLocationsState = {
   // it to refresh display names, roles, colors, joins, and removals without
   // coupling this location hook to voyageRepository.
   rosterRevision: number;
+  // Incremented when this device must reconcile its own membership or the
+  // parent Voyage lifecycle, rather than only refreshing marker metadata.
+  lifecycleRevision?: number;
 };
 
 // Not a Context/Provider like use-active-voyage.tsx/use-profile.tsx -- this
 // is a purely local concern of the one screen that renders a map, not an
 // app-wide routing/onboarding input _layout.tsx needs, so a plain
 // parameterized hook (voyageId in, live locations out) is the right shape.
-export function useLiveLocations(voyageId: string | null): LiveLocationsState {
+export function useLiveLocations(voyageId: string | null, currentUserId: string | null = null): LiveLocationsState {
   const [locations, setLocations] = useState<Record<string, LiveLocation>>({});
   const [trails, setTrails] = useState<Record<string, TrailPoint[]>>({});
   const [hasError, setHasError] = useState(false);
   const [isConnected, setIsConnected] = useState(true);
   const [rosterRevision, setRosterRevision] = useState(0);
+  const [lifecycleRevision, setLifecycleRevision] = useState(0);
   // Derived isLoading (compared against the live voyageId), same pattern
   // use-active-voyage.tsx/use-profile.tsx established -- avoids ever needing
   // a synchronous setIsLoading(true) reset at the top of the effect body,
@@ -58,6 +62,7 @@ export function useLiveLocations(voyageId: string | null): LiveLocationsState {
         setHasError(false);
         setIsConnected(true);
         setRosterRevision(0);
+        setLifecycleRevision(0);
         setResolvedForVoyageId(null);
       });
       return () => {
@@ -91,6 +96,7 @@ export function useLiveLocations(voyageId: string | null): LiveLocationsState {
       setHasError(false);
       setIsConnected(true);
       setRosterRevision(0);
+      setLifecycleRevision(0);
     });
     // Closure-local accumulators, not React state read via a functional
     // setState(prev => ...) updater -- scoped fresh to this exact effect run
@@ -169,8 +175,15 @@ export function useLiveLocations(voyageId: string | null): LiveLocationsState {
       (status) => {
         if (!isMounted) return;
         if (status === 'disconnected') {
+          const firstDisconnectedSignal = !wasDisconnected;
           wasDisconnected = true;
           setIsConnected(false);
+          // A private-channel authorization loss looks like a connection
+          // failure. Reconcile active membership immediately so a departed
+          // user cannot sit on a cached map waiting for a future reconnect.
+          if (firstDisconnectedSignal) {
+            setLifecycleRevision((revision) => revision + 1);
+          }
           return;
         }
 
@@ -179,11 +192,19 @@ export function useLiveLocations(voyageId: string | null): LiveLocationsState {
           wasDisconnected = false;
           void refreshLocations();
           setRosterRevision((revision) => revision + 1);
+          setLifecycleRevision((revision) => revision + 1);
         }
       },
-      () => {
+      (change) => {
         if (!isMounted) return;
         setRosterRevision((revision) => revision + 1);
+        if (currentUserId && change.userId === currentUserId && change.isActive === false) {
+          setLifecycleRevision((revision) => revision + 1);
+        }
+      },
+      (change) => {
+        if (!isMounted || change.status !== 'ended') return;
+        setLifecycleRevision((revision) => revision + 1);
       },
     );
 
@@ -194,6 +215,7 @@ export function useLiveLocations(voyageId: string | null): LiveLocationsState {
       if (!isMounted || !becameActive) return;
       void refreshLocations();
       setRosterRevision((revision) => revision + 1);
+      setLifecycleRevision((revision) => revision + 1);
     });
 
     return () => {
@@ -201,7 +223,7 @@ export function useLiveLocations(voyageId: string | null): LiveLocationsState {
       appStateSubscription.remove();
       unsubscribe();
     };
-  }, [voyageId]);
+  }, [voyageId, currentUserId]);
 
-  return { locations, trails, isLoading, hasError, isConnected, rosterRevision };
+  return { locations, trails, isLoading, hasError, isConnected, rosterRevision, lifecycleRevision };
 }

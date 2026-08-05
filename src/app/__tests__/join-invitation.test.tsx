@@ -9,12 +9,15 @@ import { useProfile } from '@/shared/hooks/use-profile';
 import JoinInvitationScreen from '../join/[code]';
 
 const mockPush = jest.fn();
+const mockReplace = jest.fn();
+const mockClearJustStartedVoyage = jest.fn();
 const mockUseLocalSearchParams = jest.fn();
+const mockUseActiveVoyage = jest.fn<() => any>();
 jest.mock('expo-router', () => {
   const actual = jest.requireActual('expo-router') as object;
   return {
     ...actual,
-    router: { push: (...args: unknown[]) => mockPush(...args) },
+    router: { push: (...args: unknown[]) => mockPush(...args), replace: (...args: unknown[]) => mockReplace(...args) },
     useLocalSearchParams: () => mockUseLocalSearchParams(),
   };
 });
@@ -29,6 +32,18 @@ jest.mock('@/shared/hooks/use-auth', () => ({
 
 jest.mock('@/shared/hooks/use-profile', () => ({
   useProfile: jest.fn(),
+}));
+
+jest.mock('@/shared/hooks/use-active-voyage', () => ({
+  useActiveVoyage: () => mockUseActiveVoyage(),
+}));
+
+jest.mock('@/shared/hooks/use-just-started-voyage', () => ({
+  useJustStartedVoyage: () => ({
+    hasJustStartedVoyage: true,
+    markVoyageStarted: jest.fn(),
+    clearJustStartedVoyage: mockClearJustStartedVoyage,
+  }),
 }));
 
 const mockGetVoyagePreview = voyageRepository.getVoyagePreview as jest.MockedFunction<typeof voyageRepository.getVoyagePreview>;
@@ -75,8 +90,17 @@ function mockProfile(
   });
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
+  mockUseActiveVoyage.mockReturnValue({ activeVoyage: null });
   mockUseLocalSearchParams.mockReturnValue({ code: 'ABCD2345' });
   mockAuth(null);
   mockProfile();
@@ -163,7 +187,40 @@ test('re-fetches and resets prior state when the code param changes', async () =
   expect(mockGetVoyagePreview).toHaveBeenLastCalledWith('WXYZ6789');
 });
 
-test('tapping Join while unauthenticated sets the pending join code and pushes to sign-in', async () => {
+test('ignores an older preview response that arrives after the latest code has loaded', async () => {
+  const firstPreview = deferred<any>();
+  const secondPreview = deferred<any>();
+  mockGetVoyagePreview.mockReturnValueOnce(firstPreview.promise).mockReturnValueOnce(secondPreview.promise);
+
+  const { getByText, queryByTestId, rerender } = await renderScreen();
+  await waitFor(() => expect(mockGetVoyagePreview).toHaveBeenCalledWith('ABCD2345'));
+
+  mockUseLocalSearchParams.mockReturnValue({ code: 'WXYZ6789' });
+  await act(async () => {
+    rerender(
+      <PendingJoinProvider>
+        <JoinInvitationScreen />
+      </PendingJoinProvider>,
+    );
+  });
+  await waitFor(() => expect(mockGetVoyagePreview).toHaveBeenCalledWith('WXYZ6789'));
+
+  await act(async () => {
+    secondPreview.resolve({ data: { destination: 'Big Sur', status: 'active', voyagerCount: 1 }, error: null });
+    await secondPreview.promise;
+  });
+  await waitFor(() => expect(getByText(/Big Sur/)).toBeTruthy());
+
+  await act(async () => {
+    firstPreview.resolve({ data: null, error: { code: 'not_found', message: 'This invite link is not valid.' } });
+    await firstPreview.promise;
+  });
+
+  expect(getByText(/Big Sur/)).toBeTruthy();
+  expect(queryByTestId('invitation-invalid')).toBeNull();
+});
+
+test('tapping Join while unauthenticated sets the pending join code and replaces into sign-in', async () => {
   mockGetVoyagePreview.mockResolvedValue({ data: { destination: 'Lake Tahoe', status: 'active', voyagerCount: 2 }, error: null });
 
   const { getByTestId } = await renderScreen();
@@ -173,10 +230,11 @@ test('tapping Join while unauthenticated sets the pending join code and pushes t
     fireEvent.press(getByTestId('join-the-voyage-button'));
   });
 
-  expect(mockPush).toHaveBeenCalledWith('/sign-in');
+  expect(mockClearJustStartedVoyage).toHaveBeenCalledTimes(1);
+  expect(mockReplace).toHaveBeenCalledWith('/sign-in');
 });
 
-test('tapping Join while already authenticated and fully onboarded pushes to voyage-joined', async () => {
+test('tapping Join while already authenticated and fully onboarded replaces the invitation with the join resolver', async () => {
   mockAuth({ user: { id: 'user-1' } });
   mockProfile({ trustMomentSeenAt: '2026-01-01T00:00:00Z', driverConsentSeenAt: '2026-01-01T00:00:00Z', displayName: 'Chintan' });
   mockGetVoyagePreview.mockResolvedValue({ data: { destination: 'Lake Tahoe', status: 'active', voyagerCount: 2 }, error: null });
@@ -188,10 +246,11 @@ test('tapping Join while already authenticated and fully onboarded pushes to voy
     fireEvent.press(getByTestId('join-the-voyage-button'));
   });
 
-  await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/voyage-joined'));
+  await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/voyage-joined'));
+  expect(mockPush).not.toHaveBeenCalledWith('/voyage-joined');
 });
 
-test('tapping Join while authenticated, Trust Moment and Driver Consent seen but no display name set, pushes to display-name (Story 2.5)', async () => {
+test('tapping Join while authenticated, Trust Moment and Driver Consent seen but no display name set, replaces into display-name', async () => {
   mockAuth({ user: { id: 'user-1' } });
   mockProfile({ trustMomentSeenAt: '2026-01-01T00:00:00Z', driverConsentSeenAt: '2026-01-01T00:00:00Z', displayName: null });
   mockGetVoyagePreview.mockResolvedValue({ data: { destination: 'Lake Tahoe', status: 'active', voyagerCount: 2 }, error: null });
@@ -203,10 +262,10 @@ test('tapping Join while authenticated, Trust Moment and Driver Consent seen but
     fireEvent.press(getByTestId('join-the-voyage-button'));
   });
 
-  await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/display-name'));
+  await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/display-name'));
 });
 
-test('tapping Join while authenticated but the Trust Moment has not been seen pushes to trust-moment', async () => {
+test('tapping Join while authenticated but the Trust Moment has not been seen replaces into trust-moment', async () => {
   mockAuth({ user: { id: 'user-1' } });
   mockProfile({ trustMomentSeenAt: null, driverConsentSeenAt: null });
   mockGetVoyagePreview.mockResolvedValue({ data: { destination: 'Lake Tahoe', status: 'active', voyagerCount: 2 }, error: null });
@@ -218,10 +277,10 @@ test('tapping Join while authenticated but the Trust Moment has not been seen pu
     fireEvent.press(getByTestId('join-the-voyage-button'));
   });
 
-  await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/trust-moment'));
+  await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/trust-moment'));
 });
 
-test('tapping Join while authenticated, Trust Moment seen but Driver Consent not, pushes to driver-attention-consent', async () => {
+test('tapping Join while authenticated, Trust Moment seen but Driver Consent not, replaces into driver-attention-consent', async () => {
   mockAuth({ user: { id: 'user-1' } });
   mockProfile({ trustMomentSeenAt: '2026-01-01T00:00:00Z', driverConsentSeenAt: null });
   mockGetVoyagePreview.mockResolvedValue({ data: { destination: 'Lake Tahoe', status: 'active', voyagerCount: 2 }, error: null });
@@ -233,5 +292,17 @@ test('tapping Join while authenticated, Trust Moment seen but Driver Consent not
     fireEvent.press(getByTestId('join-the-voyage-button'));
   });
 
-  await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/driver-attention-consent'));
+  await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/driver-attention-consent'));
+});
+
+test('warns an active Organizer that switching may end the prior Voyage', async () => {
+  mockUseActiveVoyage.mockReturnValue({
+    activeVoyage: { voyage: { id: 'old-voyage' }, role: 'organizer' },
+  });
+  mockGetVoyagePreview.mockResolvedValue({ data: { destination: 'Lake Tahoe', status: 'active', voyagerCount: 2 }, error: null });
+
+  const { getByTestId } = await renderScreen();
+
+  await waitFor(() => expect(getByTestId('active-voyage-switch-warning')).toBeTruthy());
+  expect(getByTestId('active-voyage-switch-warning').props.children).toMatch(/end for everyone/i);
 });
