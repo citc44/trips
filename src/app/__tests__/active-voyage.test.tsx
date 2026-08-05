@@ -27,6 +27,7 @@ jest.mock('react-native-safe-area-context', () => mockSafeAreaContext);
 
 const mockCameraMoveTo = jest.fn();
 const mockCameraFitBounds = jest.fn();
+const mockMarkerViewProps = jest.fn<(props: any) => void>();
 // require(), not import -- jest.mock() factories may only reference
 // out-of-scope bindings that are either "mock"-prefixed or obtained via
 // require() inside the factory itself (Jest's own hoisting rule, not an
@@ -50,7 +51,10 @@ jest.mock('@rnmapbox/maps', () => {
       }));
       return null;
     }),
-    MarkerView: ({ children }: any) => children,
+    MarkerView: (props: any) => {
+      mockMarkerViewProps(props);
+      return props.children;
+    },
     ShapeSource: ({ children }: any) => children ?? null,
     LineLayer: ({ id }: any) => ReactActual.createElement(View, { testID: id }),
   };
@@ -174,7 +178,7 @@ beforeEach(() => {
     verifyCode: jest.fn<(...args: any[]) => Promise<any>>(),
     signOut: jest.fn<(...args: any[]) => Promise<any>>(),
   });
-  mockUseLiveLocations.mockReturnValue({ locations: locationsFixture, trails: {}, isLoading: false, hasError: false, isConnected: true });
+  mockUseLiveLocations.mockReturnValue({ locations: locationsFixture, trails: {}, isLoading: false, hasError: false, isConnected: true, rosterRevision: 0 });
   // Default: not a fresh "cut to gameplay" arrival -- individual tests below
   // override this to exercise the transition itself.
   mockUsePendingEntryTransition.mockReturnValue({
@@ -219,6 +223,7 @@ test('the voyager-count badge counts markers.length (live locations), not member
     isLoading: false,
     hasError: false,
     isConnected: true,
+    rosterRevision: 0,
   });
 
   const { getByTestId } = await render(<ActiveVoyageScreen />);
@@ -531,6 +536,77 @@ test('renders a marker for each Voyager with a live location', async () => {
   expect(getByTestId('voyager-marker-user-2')).toBeTruthy();
 });
 
+test('keeps nearby MarkerViews visible instead of letting Mapbox collapse overlapping Voyagers', async () => {
+  mockActiveVoyage('organizer');
+
+  await render(<ActiveVoyageScreen />);
+
+  await waitFor(() => expect(mockMarkerViewProps).toHaveBeenCalled());
+  expect(mockMarkerViewProps.mock.calls.every(([props]) => props.allowOverlap === true && props.allowOverlapWithPuck === true)).toBe(true);
+});
+
+test('refreshes the roster and renders a newly joined Voyager when their first location arrives', async () => {
+  mockActiveVoyage('organizer');
+  const joinedMember = {
+    userId: 'user-3',
+    displayName: 'Sam',
+    role: 'voyager' as const,
+    joinedAt: '2026-07-26T00:10:00Z',
+    playerColor: 'violet' as const,
+    travelRole: 'riding' as const,
+  };
+  const joinedLocation = {
+    userId: 'user-3',
+    lat: 39.3,
+    lng: -120.2,
+    heading: 45,
+    updatedAt: '2026-07-26T00:10:00Z',
+  };
+
+  const { getByTestId, queryByTestId, rerender } = await render(<ActiveVoyageScreen />);
+  await waitFor(() => expect(getByTestId('voyager-marker-user-2')).toBeTruthy());
+  expect(queryByTestId('voyager-marker-user-3')).toBeNull();
+
+  mockGetVoyageMembers.mockResolvedValueOnce({ data: [...membersFixture, joinedMember], error: null });
+  mockUseLiveLocations.mockReturnValue({
+    locations: { ...locationsFixture, 'user-3': joinedLocation },
+    trails: {},
+    isLoading: false,
+    hasError: false,
+    isConnected: true,
+    rosterRevision: 0,
+  });
+  await act(async () => {
+    rerender(<ActiveVoyageScreen />);
+  });
+
+  await waitFor(() => expect(getByTestId('voyager-marker-user-3')).toBeTruthy());
+  expect(mockGetVoyageMembers).toHaveBeenCalledTimes(2);
+});
+
+test('a realtime roster revision removes a departed Voyager without remounting the map', async () => {
+  mockActiveVoyage('organizer');
+
+  const { getByTestId, queryByTestId, rerender } = await render(<ActiveVoyageScreen />);
+  await waitFor(() => expect(getByTestId('voyager-marker-user-2')).toBeTruthy());
+
+  mockGetVoyageMembers.mockResolvedValue({ data: [membersFixture[0]], error: null });
+  mockUseLiveLocations.mockReturnValue({
+    locations: locationsFixture,
+    trails: {},
+    isLoading: false,
+    hasError: false,
+    isConnected: true,
+    rosterRevision: 1,
+  });
+  await act(async () => {
+    rerender(<ActiveVoyageScreen />);
+  });
+
+  await waitFor(() => expect(queryByTestId('voyager-marker-user-2')).toBeNull());
+  expect(getByTestId('voyager-marker-user-1')).toBeTruthy();
+});
+
 test('does not render a marker for a Voyager with no live location yet', async () => {
   mockActiveVoyage('organizer');
   mockUseLiveLocations.mockReturnValue({
@@ -539,6 +615,7 @@ test('does not render a marker for a Voyager with no live location yet', async (
     isLoading: false,
     hasError: false,
     isConnected: true,
+    rosterRevision: 0,
   });
 
   const { getByTestId, queryByTestId } = await render(<ActiveVoyageScreen />);
@@ -632,6 +709,7 @@ test('marker peek tooltip omits the distance readout when this device does not h
     isLoading: false,
     hasError: false,
     isConnected: true,
+    rosterRevision: 0,
   });
 
   const { getByTestId, queryByTestId } = await render(<ActiveVoyageScreen />);
@@ -690,7 +768,7 @@ test('your own marker always shows a "this is you" ring, even before it is tappe
 
 test('shows a subtle reconnecting note (not the error banner) when the live channel disconnects, and keeps rendering last-known markers', async () => {
   mockActiveVoyage('organizer');
-  mockUseLiveLocations.mockReturnValue({ locations: locationsFixture, trails: {}, isLoading: false, hasError: false, isConnected: false });
+  mockUseLiveLocations.mockReturnValue({ locations: locationsFixture, trails: {}, isLoading: false, hasError: false, isConnected: false, rosterRevision: 0 });
 
   const { getByTestId, queryByTestId } = await render(<ActiveVoyageScreen />);
 
@@ -704,7 +782,7 @@ test('shows a subtle reconnecting note (not the error banner) when the live chan
 
 test('does not show the reconnecting note while connected', async () => {
   mockActiveVoyage('organizer');
-  mockUseLiveLocations.mockReturnValue({ locations: locationsFixture, trails: {}, isLoading: false, hasError: false, isConnected: true });
+  mockUseLiveLocations.mockReturnValue({ locations: locationsFixture, trails: {}, isLoading: false, hasError: false, isConnected: true, rosterRevision: 0 });
 
   const { queryByTestId, getByTestId } = await render(<ActiveVoyageScreen />);
 
@@ -714,7 +792,7 @@ test('does not show the reconnecting note while connected', async () => {
 
 test('shows an inline error when live locations fail to load (code review: not indistinguishable from nobody online)', async () => {
   mockActiveVoyage('organizer');
-  mockUseLiveLocations.mockReturnValue({ locations: {}, trails: {}, isLoading: false, hasError: true, isConnected: true });
+  mockUseLiveLocations.mockReturnValue({ locations: {}, trails: {}, isLoading: false, hasError: true, isConnected: true, rosterRevision: 0 });
 
   const { getByTestId } = await render(<ActiveVoyageScreen />);
 
@@ -734,6 +812,7 @@ test('renders a comet-trail line for a Voyager with 2+ recent trail points (AC1)
     isLoading: false,
     hasError: false,
     isConnected: true,
+    rosterRevision: 0,
   });
 
   const { getByTestId } = await render(<ActiveVoyageScreen />);
@@ -749,6 +828,7 @@ test('does not render a trail line for a Voyager with fewer than 2 recent trail 
     isLoading: false,
     hasError: false,
     isConnected: true,
+    rosterRevision: 0,
   });
 
   const { getByTestId, queryByTestId } = await render(<ActiveVoyageScreen />);
@@ -783,6 +863,7 @@ test('recentering with only one live location moves to it directly instead of ca
     isLoading: false,
     hasError: false,
     isConnected: true,
+    rosterRevision: 0,
   });
 
   const { getByTestId } = await render(<ActiveVoyageScreen />);
@@ -1101,14 +1182,14 @@ test('outbox.flush is attempted on mount, and a successfully flushed end_voyage 
 
 test('a reconnect (isConnected false -> true) triggers another flush attempt', async () => {
   mockActiveVoyage('organizer');
-  mockUseLiveLocations.mockReturnValue({ locations: locationsFixture, trails: {}, isLoading: false, hasError: false, isConnected: false });
+  mockUseLiveLocations.mockReturnValue({ locations: locationsFixture, trails: {}, isLoading: false, hasError: false, isConnected: false, rosterRevision: 0 });
 
   const { rerender } = await render(<ActiveVoyageScreen />);
   // Only the unconditional mount-time flush fires -- isConnected starts
   // false here, so the isConnected-keyed effect does not also fire.
   await waitFor(() => expect(mockOutboxFlush).toHaveBeenCalledTimes(1));
 
-  mockUseLiveLocations.mockReturnValue({ locations: locationsFixture, trails: {}, isLoading: false, hasError: false, isConnected: true });
+  mockUseLiveLocations.mockReturnValue({ locations: locationsFixture, trails: {}, isLoading: false, hasError: false, isConnected: true, rosterRevision: 0 });
   await act(async () => {
     rerender(<ActiveVoyageScreen />);
   });
@@ -1123,7 +1204,7 @@ test('a successfully flushed grant_organizer_status refreshes the roster and sho
   // chance to resolve and populate `members` before the flush this test
   // actually cares about ever runs -- avoids a genuine race between the two
   // independent mount-time effects (flush-on-mount vs. load-members).
-  mockUseLiveLocations.mockReturnValue({ locations: locationsFixture, trails: {}, isLoading: false, hasError: false, isConnected: false });
+  mockUseLiveLocations.mockReturnValue({ locations: locationsFixture, trails: {}, isLoading: false, hasError: false, isConnected: false, rosterRevision: 0 });
 
   const { getByTestId, rerender } = await render(<ActiveVoyageScreen />);
   await waitFor(() => expect(mockGetVoyageMembers).toHaveBeenCalledTimes(1));
@@ -1142,7 +1223,7 @@ test('a successfully flushed grant_organizer_status refreshes the roster and sho
     ],
     conflicts: [],
   });
-  mockUseLiveLocations.mockReturnValue({ locations: locationsFixture, trails: {}, isLoading: false, hasError: false, isConnected: true });
+  mockUseLiveLocations.mockReturnValue({ locations: locationsFixture, trails: {}, isLoading: false, hasError: false, isConnected: true, rosterRevision: 0 });
   await act(async () => {
     rerender(<ActiveVoyageScreen />);
   });
@@ -1182,7 +1263,7 @@ test('a flush pass with multiple items combines their messages into one toast in
   // mount-time flush is a no-op and the initial roster fetch resolves and
   // populates `members` before the flush this test cares about ever runs --
   // avoids a race between the two independent mount-time effects.
-  mockUseLiveLocations.mockReturnValue({ locations: locationsFixture, trails: {}, isLoading: false, hasError: false, isConnected: false });
+  mockUseLiveLocations.mockReturnValue({ locations: locationsFixture, trails: {}, isLoading: false, hasError: false, isConnected: false, rosterRevision: 0 });
 
   const { getByTestId, rerender } = await render(<ActiveVoyageScreen />);
   await waitFor(() => expect(mockGetVoyageMembers).toHaveBeenCalledTimes(1));
@@ -1211,7 +1292,7 @@ test('a flush pass with multiple items combines their messages into one toast in
       },
     ],
   });
-  mockUseLiveLocations.mockReturnValue({ locations: locationsFixture, trails: {}, isLoading: false, hasError: false, isConnected: true });
+  mockUseLiveLocations.mockReturnValue({ locations: locationsFixture, trails: {}, isLoading: false, hasError: false, isConnected: true, rosterRevision: 0 });
   await act(async () => {
     rerender(<ActiveVoyageScreen />);
   });

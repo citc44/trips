@@ -6,13 +6,14 @@ import { BACKGROUND_LOCATION_TASK, reportLocationFix, setBackgroundLocationConte
 import { useAuth } from '@/shared/hooks/use-auth';
 import { useLocationPermission } from '@/shared/hooks/use-location-permission';
 
-// Documented assumption (PRD's own open question, "needs engineering
-// input" -- not settled fact): balances live-feel against the battery-drain
-// risk market research flagged as high-severity. Kept identical to Story
-// 3.2's own foreground-only cadence rather than introducing a second,
-// different background-specific interval without a clear mandate to do so.
-const WATCH_TIME_INTERVAL_MS = 5000;
-const WATCH_DISTANCE_INTERVAL_M = 20;
+// Navigation-grade acquisition. The old Balanced/5s/20m settings could be
+// roughly 100m inaccurate and guaranteed multi-second jumps (at 60 mph, a
+// five-second sample gap is about 134m). One-second fixes plus a small
+// distance filter provide the raw cadence needed for smooth interpolation;
+// outgoing RPCs are latest-value coalesced in background-location-task.ts so
+// slow mobile networks cannot build an unbounded queue.
+const WATCH_TIME_INTERVAL_MS = 1000;
+const WATCH_DISTANCE_INTERVAL_M = 3;
 
 // First-draft copy -- no existing DESIGN.md/EXPERIENCE.md text to draw from
 // (confirmed absent by this story's own research). Flagged for eventual
@@ -47,7 +48,7 @@ const FOREGROUND_SERVICE_NOTIFICATION_BODY = 'Your Voyage group can see you on t
 // browser's real Geolocation API) is the actual ceiling on web, same as
 // this app's own pre-Story-3.3 native behavior. Calls the same
 // reportLocationFix() the native task callback uses, so both platforms
-// share identical throttled-upsert + broadcast behavior.
+// share the same authenticated server-reporting behavior.
 function normalizeHeading(rawHeading: number | null | undefined): number | null {
   return rawHeading != null && rawHeading >= 0 ? rawHeading : null;
 }
@@ -65,10 +66,14 @@ export function useLocationTracking(voyageId: string | null): void {
       let cancelled = false;
 
       Location.watchPositionAsync(
-        { accuracy: Location.Accuracy.Balanced, timeInterval: WATCH_TIME_INTERVAL_MS, distanceInterval: WATCH_DISTANCE_INTERVAL_M },
+        {
+          accuracy: Location.Accuracy.BestForNavigation,
+          timeInterval: WATCH_TIME_INTERVAL_MS,
+          distanceInterval: WATCH_DISTANCE_INTERVAL_M,
+        },
         (position) => {
           const { latitude, longitude, heading } = position.coords;
-          reportLocationFix(voyageId, userId, latitude, longitude, normalizeHeading(heading), new Date(position.timestamp).toISOString());
+          void reportLocationFix(voyageId, latitude, longitude, normalizeHeading(heading));
         },
       )
         .then((sub) => {
@@ -102,12 +107,17 @@ export function useLocationTracking(voyageId: string | null): void {
     // Voyages without an intervening unmount.
     let cancelled = false;
 
-    setBackgroundLocationContext({ voyageId, userId });
+    setBackgroundLocationContext({ voyageId });
 
     Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK, {
-      accuracy: Location.Accuracy.Balanced,
+      accuracy: Location.Accuracy.BestForNavigation,
       timeInterval: WATCH_TIME_INTERVAL_MS,
       distanceInterval: WATCH_DISTANCE_INTERVAL_M,
+      // Explicit zeroes prevent iOS background delivery from batching fixes;
+      // Expo documents zero as immediate delivery, which is what a live
+      // shared map requires.
+      deferredUpdatesDistance: 0,
+      deferredUpdatesInterval: 0,
       // User-reported critical bug: a Voyager's own marker would move
       // briefly after tracking started, then go permanently static for the
       // rest of the drive -- no error, channel still showing connected,

@@ -5,37 +5,32 @@ import { locationRepository } from '@/repositories/location-repository';
 const mockRpc = jest.fn<(...args: any[]) => any>();
 const mockOn = jest.fn<(...args: any[]) => any>();
 const mockSubscribe = jest.fn<(...args: any[]) => any>();
-const mockSend = jest.fn<(...args: any[]) => any>();
 const mockChannel = jest.fn<(...args: any[]) => any>();
 const mockRemoveChannel = jest.fn<(...args: any[]) => any>();
-const mockGetChannels = jest.fn<(...args: any[]) => any>();
 
 jest.mock('@/lib/supabase', () => ({
   supabase: {
     rpc: (...args: unknown[]) => mockRpc(...args),
     channel: (...args: unknown[]) => mockChannel(...args),
     removeChannel: (...args: unknown[]) => mockRemoveChannel(...args),
-    getChannels: (...args: unknown[]) => mockGetChannels(...args),
   },
 }));
 
-beforeEach(() => {
-  jest.clearAllMocks();
-  const channelInstance = {
+function makeChannelInstance() {
+  return {
     on: mockOn.mockReturnThis(),
     subscribe: mockSubscribe,
-    send: mockSend,
   };
+}
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  const channelInstance = makeChannelInstance();
   mockChannel.mockReturnValue(channelInstance);
   mockSubscribe.mockImplementation((callback?: (status: string) => void) => {
     callback?.('SUBSCRIBED');
     return channelInstance;
   });
-  // No pre-existing channel for this topic by default -- every existing
-  // broadcastLocationOnce test below exercises the "create a fresh channel"
-  // path this way. Tests for the reuse-an-existing-channel path override
-  // this per-test.
-  mockGetChannels.mockReturnValue([]);
 });
 
 afterEach(() => {
@@ -96,22 +91,41 @@ test('upsertLocation returns a typed { code, message } error on RPC failure', as
   expect(result).toEqual({ error: { code: 'LOC02', message: 'You are not an active member of this Voyage.' } });
 });
 
-test('subscribeToLocations creates a private channel scoped to the Voyage and subscribes', () => {
+// Story: server-side broadcast (upsert_location() now emits the Realtime
+// message itself, atomically with the write -- see
+// 20260804010000_secure_live_location_delivery.sql). The client is
+// receive-only: no `broadcast: { self: true }` (nothing to self-echo, the
+// client never publishes), and no write-side channel/send API at all
+// anymore -- createBroadcastChannel/broadcastLocationOnce are gone.
+test('subscribeToLocations creates a private, receive-only channel scoped to the Voyage and subscribes', () => {
   locationRepository.subscribeToLocations('voyage-1', jest.fn());
 
-  expect(mockChannel).toHaveBeenCalledWith('voyage:voyage-1', { config: { private: true, broadcast: { self: true } } });
+  expect(mockChannel).toHaveBeenCalledWith('voyage:voyage-1', { config: { private: true } });
   expect(mockOn).toHaveBeenCalledWith('broadcast', { event: 'location' }, expect.any(Function));
+  expect(mockOn).toHaveBeenCalledWith('broadcast', { event: 'roster_changed' }, expect.any(Function));
   expect(mockSubscribe).toHaveBeenCalledTimes(1);
 });
 
-test('subscribeToLocations invokes the callback with a mapped location on each broadcast', () => {
+test('subscribeToLocations invokes the callback with a mapped location on each location broadcast', () => {
   const onLocation = jest.fn();
   locationRepository.subscribeToLocations('voyage-1', onLocation);
 
-  const broadcastHandler = mockOn.mock.calls[0][2] as (message: { payload: unknown }) => void;
-  broadcastHandler({ payload: { user_id: 'user-1', lat: 39.1, lng: -120.0, heading: 90, updated_at: '2026-07-26T00:00:00Z' } });
+  const locationHandler = mockOn.mock.calls.find((call) => call[1]?.event === 'location')?.[2] as (message: {
+    payload: unknown;
+  }) => void;
+  locationHandler({ payload: { user_id: 'user-1', lat: 39.1, lng: -120.0, heading: 90, updated_at: '2026-07-26T00:00:00Z' } });
 
   expect(onLocation).toHaveBeenCalledWith({ userId: 'user-1', lat: 39.1, lng: -120.0, heading: 90, updatedAt: '2026-07-26T00:00:00Z' });
+});
+
+test('subscribeToLocations invokes onRosterChange on each roster_changed broadcast', () => {
+  const onRosterChange = jest.fn();
+  locationRepository.subscribeToLocations('voyage-1', jest.fn(), undefined, onRosterChange);
+
+  const rosterHandler = mockOn.mock.calls.find((call) => call[1]?.event === 'roster_changed')?.[2] as () => void;
+  rosterHandler();
+
+  expect(onRosterChange).toHaveBeenCalledTimes(1);
 });
 
 test('subscribeToLocations returns an unsubscribe that removes the channel', () => {
@@ -129,10 +143,10 @@ test('subscribeToLocations reports a connected status on SUBSCRIBED', () => {
   expect(onStatusChange).toHaveBeenCalledWith('connected');
 });
 
-test.each(['CHANNEL_ERROR', 'TIMED_OUT', 'CLOSED'])('subscribeToLocations reports a disconnected status on %s', (status) => {
+test.each(['CHANNEL_ERROR', 'TIMED_OUT'])('subscribeToLocations reports a disconnected status on %s', (status) => {
   mockSubscribe.mockImplementation((callback?: (status: string) => void) => {
     callback?.(status);
-    return { on: mockOn, subscribe: mockSubscribe, send: mockSend };
+    return makeChannelInstance();
   });
   const onStatusChange = jest.fn();
 
@@ -141,201 +155,88 @@ test.each(['CHANNEL_ERROR', 'TIMED_OUT', 'CLOSED'])('subscribeToLocations report
   expect(onStatusChange).toHaveBeenCalledWith('disconnected');
 });
 
-test('subscribeToLocations does not throw when onStatusChange is omitted', () => {
+test('subscribeToLocations does not throw when onStatusChange/onRosterChange are omitted', () => {
   expect(() => locationRepository.subscribeToLocations('voyage-1', jest.fn())).not.toThrow();
 });
 
-test('createBroadcastChannel creates a private channel scoped to the Voyage and subscribes', () => {
-  locationRepository.createBroadcastChannel('voyage-1');
-
-  expect(mockChannel).toHaveBeenCalledWith('voyage:voyage-1', { config: { private: true } });
-  expect(mockSubscribe).toHaveBeenCalledTimes(1);
-});
-
-test('createBroadcastChannel sends a mapped broadcast payload once subscribed', () => {
-  const { send } = locationRepository.createBroadcastChannel('voyage-1');
-
-  send({ userId: 'user-1', lat: 39.1, lng: -120.0, heading: 90, updatedAt: '2026-07-26T00:00:00Z' });
-
-  expect(mockSend).toHaveBeenCalledWith({
-    type: 'broadcast',
-    event: 'location',
-    payload: { user_id: 'user-1', lat: 39.1, lng: -120.0, heading: 90, updated_at: '2026-07-26T00:00:00Z' },
+// CLOSED is treated as terminal (unlike CHANNEL_ERROR/TIMED_OUT, which are
+// left to Supabase's own rejoin timer) -- a channel left open for a long
+// drive must be able to recover without requiring the screen to remount.
+test('subscribeToLocations rebuilds the channel once, after the retry delay, on CLOSED', () => {
+  jest.useFakeTimers();
+  let callCount = 0;
+  mockSubscribe.mockImplementation((callback?: (status: string) => void) => {
+    callCount += 1;
+    // First connect attempt closes immediately; the rebuilt channel (second
+    // connect() call) settles normally.
+    callback?.(callCount === 1 ? 'CLOSED' : 'SUBSCRIBED');
+    return makeChannelInstance();
   });
-});
 
-test('createBroadcastChannel drops a send that happens before the channel is actually subscribed', () => {
-  mockSubscribe.mockImplementation(() => ({ on: mockOn, subscribe: mockSubscribe, send: mockSend })); // never calls back with 'SUBSCRIBED'
+  locationRepository.subscribeToLocations('voyage-1', jest.fn());
 
-  const { send } = locationRepository.createBroadcastChannel('voyage-1');
-  send({ userId: 'user-1', lat: 39.1, lng: -120.0, heading: 90, updatedAt: '2026-07-26T00:00:00Z' });
-
-  expect(mockSend).not.toHaveBeenCalled();
-});
-
-test('createBroadcastChannel unsubscribe removes the channel', () => {
-  const { unsubscribe } = locationRepository.createBroadcastChannel('voyage-1');
-
-  unsubscribe();
-
+  expect(mockChannel).toHaveBeenCalledTimes(1);
   expect(mockRemoveChannel).toHaveBeenCalledTimes(1);
+
+  jest.advanceTimersByTime(1000);
+
+  expect(mockChannel).toHaveBeenCalledTimes(2);
 });
 
-test('broadcastLocationOnce creates a private channel, sends once subscribed, then tears the channel down', async () => {
-  await locationRepository.broadcastLocationOnce('voyage-1', {
-    userId: 'user-1',
-    lat: 39.1,
-    lng: -120.0,
-    heading: 90,
-    updatedAt: '2026-07-26T00:00:00Z',
-  });
-
-  expect(mockChannel).toHaveBeenCalledWith('voyage:voyage-1', { config: { private: true } });
-  expect(mockSend).toHaveBeenCalledWith({
-    type: 'broadcast',
-    event: 'location',
-    payload: { user_id: 'user-1', lat: 39.1, lng: -120.0, heading: 90, updated_at: '2026-07-26T00:00:00Z' },
-  });
-  expect(mockRemoveChannel).toHaveBeenCalledTimes(1);
-});
-
-test('broadcastLocationOnce resolves without throwing (fails open) if the channel never reaches SUBSCRIBED', async () => {
+test('subscribeToLocations does not schedule a rebuild for CHANNEL_ERROR or TIMED_OUT', () => {
+  jest.useFakeTimers();
   mockSubscribe.mockImplementation((callback?: (status: string) => void) => {
     callback?.('CHANNEL_ERROR');
-    return { on: mockOn, subscribe: mockSubscribe, send: mockSend };
+    return makeChannelInstance();
   });
 
-  await expect(
-    locationRepository.broadcastLocationOnce('voyage-1', {
-      userId: 'user-1',
-      lat: 39.1,
-      lng: -120.0,
-      heading: 90,
-      updatedAt: '2026-07-26T00:00:00Z',
-    }),
-  ).resolves.toBeUndefined();
+  locationRepository.subscribeToLocations('voyage-1', jest.fn());
+  jest.advanceTimersByTime(5000);
 
-  expect(mockSend).not.toHaveBeenCalled();
-  expect(mockRemoveChannel).toHaveBeenCalledTimes(1);
+  expect(mockChannel).toHaveBeenCalledTimes(1);
+  expect(mockRemoveChannel).not.toHaveBeenCalled();
 });
 
-test('broadcastLocationOnce resolves and tears the channel down if no terminal status ever arrives', async () => {
+test('unsubscribe before a scheduled reconnect fires clears the pending timer instead of rebuilding', () => {
   jest.useFakeTimers();
-  mockSubscribe.mockImplementation(() => ({ on: mockOn, subscribe: mockSubscribe, send: mockSend })); // never calls back at all
-
-  const promise = locationRepository.broadcastLocationOnce('voyage-1', {
-    userId: 'user-1',
-    lat: 39.1,
-    lng: -120.0,
-    heading: 90,
-    updatedAt: '2026-07-26T00:00:00Z',
-  });
-
-  await jest.advanceTimersByTimeAsync(10000);
-  await expect(promise).resolves.toBeUndefined();
-
-  expect(mockSend).not.toHaveBeenCalled();
-  expect(mockRemoveChannel).toHaveBeenCalledTimes(1);
-});
-
-test('broadcastLocationOnce ignores a stale duplicate status callback after it already settled', async () => {
-  let capturedCallback: ((status: string) => void) | undefined;
   mockSubscribe.mockImplementation((callback?: (status: string) => void) => {
-    capturedCallback = callback;
-    callback?.('SUBSCRIBED');
-    return { on: mockOn, subscribe: mockSubscribe, send: mockSend };
+    callback?.('CLOSED');
+    return makeChannelInstance();
   });
 
-  await locationRepository.broadcastLocationOnce('voyage-1', {
-    userId: 'user-1',
-    lat: 39.1,
-    lng: -120.0,
-    heading: 90,
-    updatedAt: '2026-07-26T00:00:00Z',
-  });
+  const { unsubscribe } = locationRepository.subscribeToLocations('voyage-1', jest.fn());
+  unsubscribe();
+  jest.advanceTimersByTime(5000);
 
-  expect(mockRemoveChannel).toHaveBeenCalledTimes(1);
-  expect(mockSend).toHaveBeenCalledTimes(1);
-
-  // A stale duplicate callback firing after settlement must not act again.
-  capturedCallback?.('CLOSED');
-
-  expect(mockRemoveChannel).toHaveBeenCalledTimes(1);
-  expect(mockSend).toHaveBeenCalledTimes(1);
+  // One create (initial) + the CLOSED-triggered teardown's own removeChannel,
+  // plus unsubscribe()'s removeChannel if a channel was still current -- the
+  // key assertion is no *second* channel gets created after unsubscribe.
+  expect(mockChannel).toHaveBeenCalledTimes(1);
 });
 
-// Regression coverage for a confirmed production bug: supabase-js's
-// RealtimeClient.channel() dedupes by topic name, so calling
-// supabase.channel() for a topic that's already open (e.g. the live map's
-// own long-lived subscribeToLocations channel, still mounted on the same
-// device) used to silently hand broadcastLocationOnce that *same* channel
-// object -- which it then unconditionally tore down via removeChannel()
-// once its send completed, destroying the map's own receiving channel every
-// ~5s. Markers never moved and the map showed "Reconnecting..." forever.
-test('broadcastLocationOnce reuses an already-open channel for the same topic instead of creating a new one', async () => {
-  const existingSend = jest.fn();
-  mockGetChannels.mockReturnValue([{ topic: 'realtime:voyage:voyage-1', state: 'joined', send: existingSend }]);
-
-  await locationRepository.broadcastLocationOnce('voyage-1', {
-    userId: 'user-1',
-    lat: 39.1,
-    lng: -120.0,
-    heading: 90,
-    updatedAt: '2026-07-26T00:00:00Z',
+test('a stale status callback from a superseded (already-replaced) channel is ignored', () => {
+  jest.useFakeTimers();
+  const capturedCallbacks: ((status: string) => void)[] = [];
+  const firstInstance = makeChannelInstance();
+  const secondInstance = makeChannelInstance();
+  mockChannel.mockReturnValueOnce(firstInstance).mockReturnValueOnce(secondInstance);
+  mockSubscribe.mockImplementation((callback?: (status: string) => void) => {
+    if (callback) capturedCallbacks.push(callback);
+    return undefined;
   });
 
-  expect(existingSend).toHaveBeenCalledWith({
-    type: 'broadcast',
-    event: 'location',
-    payload: { user_id: 'user-1', lat: 39.1, lng: -120.0, heading: 90, updated_at: '2026-07-26T00:00:00Z' },
-  });
-});
+  const onStatusChange = jest.fn();
+  locationRepository.subscribeToLocations('voyage-1', jest.fn(), onStatusChange);
 
-test('broadcastLocationOnce never creates or tears down a channel it did not open itself', async () => {
-  mockGetChannels.mockReturnValue([{ topic: 'realtime:voyage:voyage-1', state: 'joined', send: jest.fn() }]);
+  // First channel closes -> scheduled rebuild.
+  capturedCallbacks[0]('CLOSED');
+  jest.advanceTimersByTime(1000);
+  onStatusChange.mockClear();
 
-  await locationRepository.broadcastLocationOnce('voyage-1', {
-    userId: 'user-1',
-    lat: 39.1,
-    lng: -120.0,
-    heading: 90,
-    updatedAt: '2026-07-26T00:00:00Z',
-  });
+  // The now-superseded first channel's callback fires again (a late/stale
+  // network event) -- must not report status or trigger yet another rebuild.
+  capturedCallbacks[0]('CLOSED');
 
-  expect(mockChannel).not.toHaveBeenCalled();
-  expect(mockRemoveChannel).not.toHaveBeenCalled();
-});
-
-test('broadcastLocationOnce drops the send (does not throw) when the reused channel is not yet joined', async () => {
-  const existingSend = jest.fn();
-  mockGetChannels.mockReturnValue([{ topic: 'realtime:voyage:voyage-1', state: 'joining', send: existingSend }]);
-
-  await expect(
-    locationRepository.broadcastLocationOnce('voyage-1', {
-      userId: 'user-1',
-      lat: 39.1,
-      lng: -120.0,
-      heading: 90,
-      updatedAt: '2026-07-26T00:00:00Z',
-    }),
-  ).resolves.toBeUndefined();
-
-  expect(existingSend).not.toHaveBeenCalled();
-  expect(mockChannel).not.toHaveBeenCalled();
-  expect(mockRemoveChannel).not.toHaveBeenCalled();
-});
-
-test('broadcastLocationOnce ignores an open channel for a different Voyage topic and creates its own', async () => {
-  mockGetChannels.mockReturnValue([{ topic: 'realtime:voyage:some-other-voyage', state: 'joined', send: jest.fn() }]);
-
-  await locationRepository.broadcastLocationOnce('voyage-1', {
-    userId: 'user-1',
-    lat: 39.1,
-    lng: -120.0,
-    heading: 90,
-    updatedAt: '2026-07-26T00:00:00Z',
-  });
-
-  expect(mockChannel).toHaveBeenCalledWith('voyage:voyage-1', { config: { private: true } });
-  expect(mockRemoveChannel).toHaveBeenCalledTimes(1);
+  expect(onStatusChange).not.toHaveBeenCalled();
+  expect(mockChannel).toHaveBeenCalledTimes(2);
 });

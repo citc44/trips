@@ -30,6 +30,7 @@ import { useJustStartedVoyage } from '@/shared/hooks/use-just-started-voyage';
 import { useLiveLocations, type TrailPoint } from '@/shared/hooks/use-live-locations';
 import { useLocationTracking } from '@/shared/hooks/use-location-tracking';
 import { usePendingEntryTransition } from '@/shared/hooks/use-pending-entry-transition';
+import { useSmoothedLocation } from '@/shared/hooks/use-smoothed-location';
 import { formatDistanceMiles, haversineMiles } from '@/shared/lib/geo';
 import { outbox } from '@/shared/services/outbox/outbox';
 
@@ -130,6 +131,7 @@ function VoyagerMarker({
   // does.
   const [pulseValue] = useState(() => new Animated.Value(0));
   const ringColor = member.playerColor ? PlayerColors[member.playerColor] : WayfinderColors.inkSecondary;
+  const displayedLocation = useSmoothedLocation(location, reduceMotion);
 
   useEffect(() => {
     if (reduceMotion) return;
@@ -146,7 +148,13 @@ function VoyagerMarker({
   const initial = (member.displayName ?? '?').charAt(0).toUpperCase();
 
   return (
-    <MarkerView coordinate={[location.lng, location.lat]} anchor={{ x: 0.5, y: 0.5 }}>
+    <MarkerView
+      coordinate={[displayedLocation.lng, displayedLocation.lat]}
+      anchor={{ x: 0.5, y: 0.5 }}
+      allowOverlap
+      allowOverlapWithPuck
+      isSelected={isSelected}
+    >
       {/* MarkerView only accepts a single child element -- this wraps the
           tooltip and the marker itself together, since both need to be
           inside it. */}
@@ -224,9 +232,12 @@ function VoyagerMarker({
           <View style={[styles.markerDot, { backgroundColor: ringColor }]}>
             <Text style={styles.markerInitial}>{initial}</Text>
           </View>
-          {location.heading != null ? (
+          {displayedLocation.heading != null ? (
             <View
-              style={[styles.markerChevron, { borderBottomColor: MapMarker.chevronColor, transform: [{ rotate: `${location.heading}deg` }] }]}
+              style={[
+                styles.markerChevron,
+                { borderBottomColor: MapMarker.chevronColor, transform: [{ rotate: `${displayedLocation.heading}deg` }] },
+              ]}
             />
           ) : null}
           <Text style={styles.markerLabel}>{member.userId === location.userId && member.displayName ? member.displayName : ''}</Text>
@@ -329,7 +340,7 @@ export default function ActiveVoyageScreen() {
   const { session } = useAuth();
   const voyageId = activeVoyage?.voyage.id ?? null;
 
-  const { locations, trails, hasError: hasLocationsError, isConnected } = useLiveLocations(voyageId);
+  const { locations, trails, hasError: hasLocationsError, isConnected, rosterRevision } = useLiveLocations(voyageId);
   useLocationTracking(voyageId);
   // Feeds map-banner's/hud-bar's own top/bottom padding directly (Story
   // 4.3) -- react-native-safe-area-context's web polyfill always reports
@@ -377,6 +388,7 @@ export default function ActiveVoyageScreen() {
 
   const [members, setMembers] = useState<VoyageMember[]>([]);
   const [membersError, setMembersError] = useState<string | null>(null);
+  const [membersResolvedForVoyageId, setMembersResolvedForVoyageId] = useState<string | null>(null);
   const [grantingUserIds, setGrantingUserIds] = useState<Set<string>>(new Set());
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [removeTarget, setRemoveTarget] = useState<VoyageMember | null>(null);
@@ -483,20 +495,58 @@ export default function ActiveVoyageScreen() {
     return () => clearInterval(id);
   }, [showOrganizerMenu]);
 
+  const memberRequestSequence = useRef(0);
+  const memberVoyageId = useRef<string | null>(voyageId);
   const loadMembers = useRef(async (id: string) => {
-    const { data, error: fetchError } = await voyageRepository.getVoyageMembers(id);
-    if (!isMounted.current) return;
-    if (fetchError || !data) {
-      setMembersError(fetchError?.message ?? GENERIC_ERROR);
-      return;
+    const requestSequence = ++memberRequestSequence.current;
+
+    try {
+      const { data, error: fetchError } = await voyageRepository.getVoyageMembers(id);
+      if (!isMounted.current || memberVoyageId.current !== id || requestSequence !== memberRequestSequence.current) return;
+      setMembersResolvedForVoyageId(id);
+      if (fetchError || !data) {
+        setMembersError(fetchError?.message ?? GENERIC_ERROR);
+        return;
+      }
+      setMembers(data);
+      setMembersError(null);
+    } catch {
+      if (!isMounted.current || memberVoyageId.current !== id || requestSequence !== memberRequestSequence.current) return;
+      setMembersResolvedForVoyageId(id);
+      setMembersError(GENERIC_ERROR);
     }
-    setMembers(data);
   });
 
   useEffect(() => {
+    memberVoyageId.current = voyageId;
     if (!voyageId) return;
-    loadMembers.current(voyageId);
+    void loadMembers.current(voyageId);
   }, [voyageId]);
+
+  // A location can be delivered moments after a person joins, before this
+  // screen's original roster read knows that person exists. Markers are
+  // intentionally joined to active member metadata, so use an unknown
+  // location id as a recovery signal instead of silently filtering it until
+  // the app is restarted. The server's roster_changed broadcast below is the
+  // primary path; this is also a fallback for an event missed offline.
+  const unknownLocationUserIds = useMemo(() => {
+    if (membersResolvedForVoyageId !== voyageId || membersError) return '';
+    const knownUserIds = new Set(members.map((member) => member.userId));
+    return Object.keys(locations)
+      .filter((userId) => !knownUserIds.has(userId))
+      .sort()
+      .join(',');
+  }, [locations, members, membersError, membersResolvedForVoyageId, voyageId]);
+
+  useEffect(() => {
+    if (!voyageId || !unknownLocationUserIds) return;
+    void loadMembers.current(voyageId);
+  }, [unknownLocationUserIds, voyageId]);
+
+  useEffect(() => {
+    if (!voyageId || rosterRevision === 0) return;
+    void loadMembers.current(voyageId);
+  }, [rosterRevision, voyageId]);
 
   // Reassigned after every render (in an effect with no dependency array, not
   // synchronously during render -- react-hooks/refs forbids writing a ref's

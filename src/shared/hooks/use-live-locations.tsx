@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { AppState } from 'react-native';
 
 import { MapMarker } from '@/constants/design-tokens';
 import { locationRepository, type LiveLocation } from '@/repositories/location-repository';
@@ -19,6 +20,11 @@ type LiveLocationsState = {
   // every mount never flashes a false "reconnecting" note; only flips to
   // `false` on an actual CHANNEL_ERROR/TIMED_OUT/CLOSED signal.
   isConnected: boolean;
+  // Incremented when the server reports a membership change, and whenever
+  // reconnect/foreground recovery may have missed one. The map screen uses
+  // it to refresh display names, roles, colors, joins, and removals without
+  // coupling this location hook to voyageRepository.
+  rosterRevision: number;
 };
 
 // Not a Context/Provider like use-active-voyage.tsx/use-profile.tsx -- this
@@ -30,6 +36,7 @@ export function useLiveLocations(voyageId: string | null): LiveLocationsState {
   const [trails, setTrails] = useState<Record<string, TrailPoint[]>>({});
   const [hasError, setHasError] = useState(false);
   const [isConnected, setIsConnected] = useState(true);
+  const [rosterRevision, setRosterRevision] = useState(0);
   // Derived isLoading (compared against the live voyageId), same pattern
   // use-active-voyage.tsx/use-profile.tsx established -- avoids ever needing
   // a synchronous setIsLoading(true) reset at the top of the effect body,
@@ -50,6 +57,7 @@ export function useLiveLocations(voyageId: string | null): LiveLocationsState {
         setTrails({});
         setHasError(false);
         setIsConnected(true);
+        setRosterRevision(0);
         setResolvedForVoyageId(null);
       });
       return () => {
@@ -58,14 +66,31 @@ export function useLiveLocations(voyageId: string | null): LiveLocationsState {
     }
 
     let isMounted = true;
+    // Captured once as a local `string` -- TS's narrowing of the `voyageId`
+    // parameter (via the `if (!voyageId) return` above) doesn't carry into
+    // performRefresh()'s own function-declaration body below, since it's a
+    // separate closure invoked later, not inline code right after the
+    // narrowing check. Safe regardless: this whole effect re-runs from
+    // scratch on every `voyageId` change (it's the effect's only dependency).
+    const activeVoyageId = voyageId;
+    let current: Record<string, LiveLocation> = {};
+    let currentTrails: Record<string, TrailPoint[]> = {};
+    let refreshInFlight: Promise<void> | null = null;
+    let refreshQueued = false;
+    let wasDisconnected = false;
+
     // Reset for this Voyage -- otherwise a previous Voyage's disconnected
-    // state could carry over and show a false "reconnecting" note until this
-    // new channel's own first status callback fires. Deferred via a
-    // microtask (not called synchronously in the effect body), same
-    // react-hooks/set-state-in-effect workaround already used by the
-    // null-voyageId branch above.
+    // state, marker positions, or trails could carry over until the first
+    // successful snapshot. Deferred via a microtask (not called
+    // synchronously in the effect body), matching this codebase's
+    // react-hooks/set-state-in-effect convention.
     Promise.resolve().then(() => {
-      if (isMounted) setIsConnected(true);
+      if (!isMounted) return;
+      setLocations(current);
+      setTrails(currentTrails);
+      setHasError(false);
+      setIsConnected(true);
+      setRosterRevision(0);
     });
     // Closure-local accumulators, not React state read via a functional
     // setState(prev => ...) updater -- scoped fresh to this exact effect run
@@ -75,9 +100,6 @@ export function useLiveLocations(voyageId: string | null): LiveLocationsState {
     // finding: the cold-load previously called setLocations(initial)
     // unconditionally, discarding a broadcast that had already arrived and
     // was fresher than the cold-load's own snapshot).
-    let current: Record<string, LiveLocation> = {};
-    let currentTrails: Record<string, TrailPoint[]> = {};
-
     function mergeIn(location: LiveLocation) {
       const existing = current[location.userId];
       // A stale/delayed value can't regress a fresher one already rendered
@@ -95,19 +117,48 @@ export function useLiveLocations(voyageId: string | null): LiveLocationsState {
       setTrails(currentTrails);
     }
 
-    locationRepository.getLiveLocations(voyageId).then(({ data, error }) => {
-      if (!isMounted) return;
-      if (error || !data) {
+    async function performRefresh(): Promise<void> {
+      try {
+        const { data, error } = await locationRepository.getLiveLocations(activeVoyageId);
+        if (!isMounted) return;
+        if (error || !data) {
+          setHasError(true);
+          setResolvedForVoyageId(activeVoyageId);
+          return;
+        }
+        for (const location of data) {
+          mergeIn(location);
+        }
+        setHasError(false);
+        setResolvedForVoyageId(activeVoyageId);
+      } catch {
+        if (!isMounted) return;
         setHasError(true);
-        setResolvedForVoyageId(voyageId);
-        return;
+        setResolvedForVoyageId(activeVoyageId);
       }
-      for (const location of data) {
-        mergeIn(location);
+    }
+
+    // Coalesce repeated connectivity/AppState signals. If one arrives while
+    // a snapshot is already in flight, perform exactly one follow-up read
+    // after it settles; that follow-up is important because the first query
+    // may have started before the reconnect/foreground transition.
+    function refreshLocations(): Promise<void> {
+      if (refreshInFlight) {
+        refreshQueued = true;
+        return refreshInFlight;
       }
-      setHasError(false);
-      setResolvedForVoyageId(voyageId);
-    });
+
+      refreshInFlight = performRefresh().finally(() => {
+        refreshInFlight = null;
+        if (refreshQueued && isMounted) {
+          refreshQueued = false;
+          void refreshLocations();
+        }
+      });
+      return refreshInFlight;
+    }
+
+    void refreshLocations();
 
     const { unsubscribe } = locationRepository.subscribeToLocations(
       voyageId,
@@ -117,15 +168,40 @@ export function useLiveLocations(voyageId: string | null): LiveLocationsState {
       },
       (status) => {
         if (!isMounted) return;
-        setIsConnected(status === 'connected');
+        if (status === 'disconnected') {
+          wasDisconnected = true;
+          setIsConnected(false);
+          return;
+        }
+
+        setIsConnected(true);
+        if (wasDisconnected) {
+          wasDisconnected = false;
+          void refreshLocations();
+          setRosterRevision((revision) => revision + 1);
+        }
+      },
+      () => {
+        if (!isMounted) return;
+        setRosterRevision((revision) => revision + 1);
       },
     );
 
+    let previousAppState = AppState.currentState;
+    const appStateSubscription = AppState.addEventListener('change', (nextAppState) => {
+      const becameActive = nextAppState === 'active' && previousAppState !== 'active';
+      previousAppState = nextAppState;
+      if (!isMounted || !becameActive) return;
+      void refreshLocations();
+      setRosterRevision((revision) => revision + 1);
+    });
+
     return () => {
       isMounted = false;
+      appStateSubscription.remove();
       unsubscribe();
     };
   }, [voyageId]);
 
-  return { locations, trails, isLoading, hasError, isConnected };
+  return { locations, trails, isLoading, hasError, isConnected, rosterRevision };
 }

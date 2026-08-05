@@ -5,14 +5,14 @@ import { locationRepository } from '@/repositories/location-repository';
 
 export const BACKGROUND_LOCATION_TASK = 'voylo-background-location';
 
-type BackgroundLocationContext = { voyageId: string; userId: string };
+type BackgroundLocationContext = { voyageId: string };
 
 // The only way to bridge React-managed state (which Voyage/user is
 // currently active) into a task defined at module scope -- defineTask()
 // below must run once, at import time, before any component ever mounts,
 // so it has no access to hooks/context. use-location-tracking.tsx keeps
 // this in sync via this setter whenever tracking starts/stops. Deliberately
-// narrow (just the two ids the task needs) -- not a general-purpose global
+// narrow (just the Voyage id the task needs) -- not a general-purpose global
 // state pattern to reach for elsewhere in this app.
 let currentContext: BackgroundLocationContext | null = null;
 
@@ -26,59 +26,69 @@ let currentContext: BackgroundLocationContext | null = null;
 // the same "survive a process restart" reason.
 const CONTEXT_STORAGE_KEY = 'voylo:background-location-context';
 
-// Throttles persisted writes the same way Story 3.2's foreground hook did
-// (UPSERT_THROTTLE_MS) -- the ephemeral broadcast carries the "near-real-
-// time" feel every tick; the persisted row only needs to be fresh enough to
-// serve a reconnect/cold load. Module-scope, not a React ref, for the same
-// reason currentContext is: this callback has no component instance to hold
-// state in.
-const UPSERT_THROTTLE_MS = 30000;
-let lastUpsertAt = 0;
+type PendingLocationFix = {
+  voyageId: string;
+  lat: number;
+  lng: number;
+  heading: number | null;
+};
+
+// At navigation cadence a new GPS fix can arrive while the previous RPC is
+// still crossing a slow mobile network. Keep exactly one request in flight
+// and replace any queued value with the newest fix. This preserves ordering,
+// prevents an unbounded request backlog, and still guarantees the latest
+// known position is the next value sent when connectivity recovers.
+let pendingFix: PendingLocationFix | null = null;
+let drainPromise: Promise<void> | null = null;
 
 export function setBackgroundLocationContext(context: BackgroundLocationContext | null): void {
   currentContext = context;
   if (context) {
-    // Fresh tracking session -- always write the first fix immediately
-    // rather than waiting up to 30s, same as the foreground hook resetting
-    // its throttle ref on every new effect mount.
-    lastUpsertAt = 0;
     AsyncStorage.setItem(CONTEXT_STORAGE_KEY, JSON.stringify(context)).catch(() => {});
   } else {
+    pendingFix = null;
     AsyncStorage.removeItem(CONTEXT_STORAGE_KEY).catch(() => {});
   }
 }
 
 // Shared by both the native background-task callback below and web's
-// foreground watchPositionAsync path (use-location-tracking.tsx) -- same
-// throttled-upsert + best-effort-broadcast behavior regardless of which
-// platform-specific mechanism actually produced the fix. lastUpsertAt is
-// module-scope, not per-caller, but that's correct here: a given JS process
-// only ever runs one of the two paths at a time (a session is either native
-// or web, never both), so there's no cross-path throttle interference.
+// foreground watchPositionAsync path. upsert_location() now performs the
+// durable write and authoritative Realtime broadcast atomically, so every
+// accepted fix uses that one path instead of racing a throttled RPC against
+// an unrelated best-effort client channel.send().
 export async function reportLocationFix(
   voyageId: string,
-  userId: string,
   lat: number,
   lng: number,
   heading: number | null,
-  updatedAt: string,
 ): Promise<void> {
-  const now = Date.now();
-  if (now - lastUpsertAt >= UPSERT_THROTTLE_MS) {
-    lastUpsertAt = now;
-    try {
-      await locationRepository.upsertLocation(voyageId, { lat, lng, heading });
-    } catch {
-      // Fails open -- a real network exception here (not unlikely mid-road-
-      // trip) shouldn't crash the caller; the next tick tries again.
-    }
+  pendingFix = { voyageId, lat, lng, heading };
+
+  if (!drainPromise) {
+    drainPromise = (async () => {
+      while (pendingFix) {
+        const fix = pendingFix;
+        pendingFix = null;
+
+        try {
+          // Repository errors are returned rather than thrown. No special
+          // retry loop is needed here: the next GPS callback is itself the
+          // retry and pendingFix coalescing ensures it carries fresh data.
+          await locationRepository.upsertLocation(fix.voyageId, {
+            lat: fix.lat,
+            lng: fix.lng,
+            heading: fix.heading,
+          });
+        } catch {
+          // A real network exception must not crash Expo's background task.
+        }
+      }
+    })().finally(() => {
+      drainPromise = null;
+    });
   }
 
-  try {
-    await locationRepository.broadcastLocationOnce(voyageId, { userId, lat, lng, heading, updatedAt });
-  } catch {
-    // Swallowed on purpose -- fails open.
-  }
+  await drainPromise;
 }
 
 type BackgroundLocationCoords = { latitude: number; longitude: number; heading: number | null };
@@ -114,7 +124,7 @@ TaskManager.defineTask<BackgroundLocationTaskData>(BACKGROUND_LOCATION_TASK, asy
   const latest = locations[locations.length - 1];
   if (!latest) return;
 
-  const { voyageId, userId } = currentContext;
+  const { voyageId } = currentContext;
   const lat = latest.coords.latitude;
   const lng = latest.coords.longitude;
   // Same platform heading-sentinel normalization the foreground path
@@ -122,7 +132,5 @@ TaskManager.defineTask<BackgroundLocationTaskData>(BACKGROUND_LOCATION_TASK, asy
   // "undetermined" rather than null.
   const rawHeading = latest.coords.heading;
   const heading = rawHeading != null && rawHeading >= 0 ? rawHeading : null;
-  const updatedAt = new Date(latest.timestamp).toISOString();
-
-  await reportLocationFix(voyageId, userId, lat, lng, heading, updatedAt);
+  await reportLocationFix(voyageId, lat, lng, heading);
 });

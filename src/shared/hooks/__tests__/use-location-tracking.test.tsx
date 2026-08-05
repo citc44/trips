@@ -11,7 +11,7 @@ const mockStopLocationUpdatesAsync = jest.fn<(...args: any[]) => Promise<any>>()
 const mockWatchPositionAsync = jest.fn<(...args: any[]) => Promise<any>>();
 const mockSubscriptionRemove = jest.fn();
 jest.mock('expo-location', () => ({
-  Accuracy: { Balanced: 3 },
+  Accuracy: { BestForNavigation: 6 },
   LocationActivityType: { AutomotiveNavigation: 2 },
   startLocationUpdatesAsync: (...args: unknown[]) => mockStartLocationUpdatesAsync(...args),
   stopLocationUpdatesAsync: (...args: unknown[]) => mockStopLocationUpdatesAsync(...args),
@@ -88,13 +88,19 @@ test('does not start tracking with no voyageId', async () => {
   expect(mockStartLocationUpdatesAsync).not.toHaveBeenCalled();
 });
 
-test('sets the background task context and starts background-capable tracking with the documented 5s/20m interval', async () => {
+test('starts navigation-grade tracking with immediate background delivery', async () => {
   await render(<Harness voyageId="voyage-1" />);
 
-  expect(mockSetBackgroundLocationContext).toHaveBeenCalledWith({ voyageId: 'voyage-1', userId: 'user-1' });
+  expect(mockSetBackgroundLocationContext).toHaveBeenCalledWith({ voyageId: 'voyage-1' });
   expect(mockStartLocationUpdatesAsync).toHaveBeenCalledWith(
     'voylo-background-location',
-    expect.objectContaining({ accuracy: 3, timeInterval: 5000, distanceInterval: 20 }),
+    expect.objectContaining({
+      accuracy: 6,
+      timeInterval: 1000,
+      distanceInterval: 3,
+      deferredUpdatesDistance: 0,
+      deferredUpdatesInterval: 0,
+    }),
   );
 });
 
@@ -156,7 +162,7 @@ test('does not re-issue stop when start resolves normally before any cleanup', a
   await render(<Harness voyageId="voyage-1" />);
 
   expect(mockStopLocationUpdatesAsync).not.toHaveBeenCalled();
-  expect(mockSetBackgroundLocationContext).toHaveBeenLastCalledWith({ voyageId: 'voyage-1', userId: 'user-1' });
+  expect(mockSetBackgroundLocationContext).toHaveBeenLastCalledWith({ voyageId: 'voyage-1' });
 });
 
 test('stops tracking and clears context when permission is lost while a Voyage is still active', async () => {
@@ -184,7 +190,7 @@ test('on web, uses foreground watchPositionAsync instead of the background task 
   await render(<Harness voyageId="voyage-1" />);
 
   expect(mockWatchPositionAsync).toHaveBeenCalledWith(
-    expect.objectContaining({ accuracy: 3, timeInterval: 5000, distanceInterval: 20 }),
+    expect.objectContaining({ accuracy: 6, timeInterval: 1000, distanceInterval: 3 }),
     expect.any(Function),
   );
   expect(mockStartLocationUpdatesAsync).not.toHaveBeenCalled();
@@ -203,7 +209,7 @@ test('on web, each position update is reported through the same reportLocationFi
 
   // heading -1 normalizes to null, same sentinel-normalization the native
   // task callback applies.
-  expect(mockReportLocationFix).toHaveBeenCalledWith('voyage-1', 'user-1', 39.1, -120.0, null, new Date(1753488000000).toISOString());
+  expect(mockReportLocationFix).toHaveBeenCalledWith('voyage-1', 39.1, -120.0, null);
 });
 
 test('on web, removes the watchPositionAsync subscription on unmount', async () => {

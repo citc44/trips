@@ -1,12 +1,19 @@
 import { beforeEach, expect, jest, test } from '@jest/globals';
 import { act, render, waitFor } from '@testing-library/react-native';
-import { Text } from 'react-native';
+import { AppState, Text, type AppStateStatus } from 'react-native';
 
 import { useLiveLocations } from '@/shared/hooks/use-live-locations';
 
 const mockGetLiveLocations = jest.fn<(...args: any[]) => Promise<any>>();
 const mockSubscribeToLocations = jest.fn<(...args: any[]) => any>();
 const mockUnsubscribe = jest.fn();
+const mockRemoveAppStateListener = jest.fn();
+let appStateListener: ((state: AppStateStatus) => void) | null = null;
+
+jest.spyOn(AppState, 'addEventListener').mockImplementation((_type, listener) => {
+  appStateListener = listener;
+  return { remove: mockRemoveAppStateListener };
+});
 
 jest.mock('@/repositories/location-repository', () => ({
   locationRepository: {
@@ -24,8 +31,18 @@ function Probe({ voyageId }: { voyageId: string | null }) {
   );
 }
 
+function SyncProbe({ voyageId }: { voyageId: string }) {
+  const { locations, isConnected, rosterRevision } = useLiveLocations(voyageId);
+  return (
+    <Text testID="sync-probe">
+      {JSON.stringify({ lat: locations['user-1']?.lat ?? null, isConnected, rosterRevision })}
+    </Text>
+  );
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
+  appStateListener = null;
   mockSubscribeToLocations.mockReturnValue({ unsubscribe: mockUnsubscribe });
 });
 
@@ -51,7 +68,14 @@ test('subscribes to the Voyage channel after mounting', async () => {
 
   await render(<Probe voyageId="voyage-1" />);
 
-  await waitFor(() => expect(mockSubscribeToLocations).toHaveBeenCalledWith('voyage-1', expect.any(Function), expect.any(Function)));
+  await waitFor(() =>
+    expect(mockSubscribeToLocations).toHaveBeenCalledWith(
+      'voyage-1',
+      expect.any(Function),
+      expect.any(Function),
+      expect.any(Function),
+    ),
+  );
 });
 
 test('exposes hasError (not stuck loading) when the cold-load fetch fails', async () => {
@@ -236,6 +260,105 @@ test('isConnected flips to false on a disconnected status callback, and back to 
   expect(getByTestId('connected').props.children).toBe('true');
 });
 
+test('the fourth subscription callback increments rosterRevision without re-fetching locations', async () => {
+  mockGetLiveLocations.mockResolvedValue({ data: [], error: null });
+
+  const { getByTestId } = await render(<SyncProbe voyageId="voyage-1" />);
+  await waitFor(() => expect(mockSubscribeToLocations).toHaveBeenCalled());
+  await waitFor(() => expect(mockGetLiveLocations).toHaveBeenCalledTimes(1));
+  const onRosterChange = mockSubscribeToLocations.mock.calls[0][3] as () => void;
+
+  await act(async () => {
+    onRosterChange();
+  });
+
+  await waitFor(() => {
+    expect(JSON.parse(getByTestId('sync-probe').props.children)).toEqual({ lat: null, isConnected: true, rosterRevision: 1 });
+  });
+  expect(mockGetLiveLocations).toHaveBeenCalledTimes(1);
+});
+
+test('reconnecting after a disconnect refreshes the durable snapshot and increments rosterRevision', async () => {
+  const recoveredLocation = { ...locationFixture, lat: 40.0, updatedAt: '2026-07-26T00:05:00Z' };
+  mockGetLiveLocations
+    .mockResolvedValueOnce({ data: [locationFixture], error: null })
+    .mockResolvedValueOnce({ data: [recoveredLocation], error: null });
+
+  const { getByTestId } = await render(<SyncProbe voyageId="voyage-1" />);
+  await waitFor(() => {
+    expect(JSON.parse(getByTestId('sync-probe').props.children).lat).toBe(39.1);
+  });
+  const onStatusChange = mockSubscribeToLocations.mock.calls[0][2] as (status: 'connected' | 'disconnected') => void;
+
+  await act(async () => {
+    onStatusChange('disconnected');
+  });
+  expect(JSON.parse(getByTestId('sync-probe').props.children).isConnected).toBe(false);
+
+  await act(async () => {
+    onStatusChange('connected');
+  });
+
+  await waitFor(() => expect(mockGetLiveLocations).toHaveBeenCalledTimes(2));
+  await waitFor(() => {
+    expect(JSON.parse(getByTestId('sync-probe').props.children)).toEqual({ lat: 40, isConnected: true, rosterRevision: 1 });
+  });
+});
+
+test('a reconnect snapshot cannot regress a fresher broadcast received while the hook stayed mounted', async () => {
+  const staleRecoveryLocation = { ...locationFixture, lat: 40.0, updatedAt: '2026-07-26T00:02:00Z' };
+  const freshBroadcastLocation = { ...locationFixture, lat: 41.0, updatedAt: '2026-07-26T00:05:00Z' };
+  mockGetLiveLocations
+    .mockResolvedValueOnce({ data: [locationFixture], error: null })
+    .mockResolvedValueOnce({ data: [staleRecoveryLocation], error: null });
+
+  const { getByTestId } = await render(<SyncProbe voyageId="voyage-1" />);
+  await waitFor(() => expect(JSON.parse(getByTestId('sync-probe').props.children).lat).toBe(39.1));
+  const onLocation = mockSubscribeToLocations.mock.calls[0][1] as (location: typeof locationFixture) => void;
+  const onStatusChange = mockSubscribeToLocations.mock.calls[0][2] as (status: 'connected' | 'disconnected') => void;
+
+  await act(async () => {
+    onLocation(freshBroadcastLocation);
+  });
+  await waitFor(() => expect(JSON.parse(getByTestId('sync-probe').props.children).lat).toBe(41));
+
+  await act(async () => {
+    onStatusChange('disconnected');
+    onStatusChange('connected');
+  });
+
+  await waitFor(() => expect(mockGetLiveLocations).toHaveBeenCalledTimes(2));
+  expect(JSON.parse(getByTestId('sync-probe').props.children).lat).toBe(41);
+});
+
+test('returning to the foreground refreshes missed locations and roster state exactly once per transition', async () => {
+  const foregroundLocation = { ...locationFixture, lat: 42.0, updatedAt: '2026-07-26T00:06:00Z' };
+  mockGetLiveLocations
+    .mockResolvedValueOnce({ data: [locationFixture], error: null })
+    .mockResolvedValueOnce({ data: [foregroundLocation], error: null });
+
+  const { getByTestId } = await render(<SyncProbe voyageId="voyage-1" />);
+  await waitFor(() => expect(JSON.parse(getByTestId('sync-probe').props.children).lat).toBe(39.1));
+  expect(AppState.addEventListener).toHaveBeenCalledWith('change', expect.any(Function));
+  expect(appStateListener).not.toBeNull();
+
+  await act(async () => {
+    appStateListener?.('background');
+    appStateListener?.('active');
+  });
+
+  await waitFor(() => expect(mockGetLiveLocations).toHaveBeenCalledTimes(2));
+  await waitFor(() => {
+    expect(JSON.parse(getByTestId('sync-probe').props.children)).toEqual({ lat: 42, isConnected: true, rosterRevision: 1 });
+  });
+
+  await act(async () => {
+    appStateListener?.('active');
+  });
+  expect(mockGetLiveLocations).toHaveBeenCalledTimes(2);
+  expect(JSON.parse(getByTestId('sync-probe').props.children).rosterRevision).toBe(1);
+});
+
 test('isConnected resets to true on a voyageId change', async () => {
   mockGetLiveLocations.mockResolvedValue({ data: [], error: null });
 
@@ -259,29 +382,52 @@ test('isConnected resets to true on a voyageId change', async () => {
   await waitFor(() => expect(getByTestId('connected').props.children).toBe('true'));
 });
 
-test('unsubscribes from the channel on unmount', async () => {
+test('unsubscribes from the channel and removes the AppState listener on unmount', async () => {
   mockGetLiveLocations.mockResolvedValue({ data: [], error: null });
 
   const { unmount } = await render(<Probe voyageId="voyage-1" />);
   await waitFor(() => expect(mockSubscribeToLocations).toHaveBeenCalled());
+  const staleAppStateListener = appStateListener;
 
   await act(async () => {
     unmount();
   });
 
   expect(mockUnsubscribe).toHaveBeenCalledTimes(1);
+  expect(mockRemoveAppStateListener).toHaveBeenCalledTimes(1);
+
+  await act(async () => {
+    staleAppStateListener?.('background');
+    staleAppStateListener?.('active');
+  });
+  expect(mockGetLiveLocations).toHaveBeenCalledTimes(1);
 });
 
 test('re-subscribes when voyageId changes, unsubscribing from the previous channel', async () => {
   mockGetLiveLocations.mockResolvedValue({ data: [], error: null });
 
   const { rerender } = await render(<Probe voyageId="voyage-1" />);
-  await waitFor(() => expect(mockSubscribeToLocations).toHaveBeenCalledWith('voyage-1', expect.any(Function), expect.any(Function)));
+  await waitFor(() =>
+    expect(mockSubscribeToLocations).toHaveBeenCalledWith(
+      'voyage-1',
+      expect.any(Function),
+      expect.any(Function),
+      expect.any(Function),
+    ),
+  );
 
   await act(async () => {
     rerender(<Probe voyageId="voyage-2" />);
   });
 
   expect(mockUnsubscribe).toHaveBeenCalledTimes(1);
-  await waitFor(() => expect(mockSubscribeToLocations).toHaveBeenCalledWith('voyage-2', expect.any(Function), expect.any(Function)));
+  expect(mockRemoveAppStateListener).toHaveBeenCalledTimes(1);
+  await waitFor(() =>
+    expect(mockSubscribeToLocations).toHaveBeenCalledWith(
+      'voyage-2',
+      expect.any(Function),
+      expect.any(Function),
+      expect.any(Function),
+    ),
+  );
 });
