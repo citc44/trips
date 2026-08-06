@@ -1,7 +1,8 @@
 import Mapbox, { Camera, LineLayer, MapView, MarkerView, ShapeSource } from '@rnmapbox/maps';
+import * as Clipboard from 'expo-clipboard';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AccessibilityInfo, Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
+import { AccessibilityInfo, Animated, Easing, Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
@@ -11,6 +12,7 @@ import {
   HudBar,
   MapBanner,
   MapMarker,
+  MarkerPeekCardMotion,
   PlayerColors,
   Rounded,
   Spacing,
@@ -31,8 +33,12 @@ import { useLiveLocations, type TrailPoint } from '@/shared/hooks/use-live-locat
 import { useLocationTracking } from '@/shared/hooks/use-location-tracking';
 import { usePendingEntryTransition } from '@/shared/hooks/use-pending-entry-transition';
 import { useSmoothedLocation } from '@/shared/hooks/use-smoothed-location';
-import { formatDistanceMiles, haversineMiles } from '@/shared/lib/geo';
+import { formatCoordinate, formatDistanceMiles, haversineMiles } from '@/shared/lib/geo';
 import { outbox } from '@/shared/services/outbox/outbox';
+
+const COPIED_LABEL_DURATION_MS = 1100;
+// DESIGN.md copyButton.copiedIconMorph: "~250ms crossfade".
+const COPY_ICON_MORPH_MS = 250;
 
 const GENERIC_ERROR = 'Something went wrong. Please try again.';
 const DEFAULT_ZOOM = 13;
@@ -105,6 +111,48 @@ function formatElapsed(createdAt: string, now: number): string {
   return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
 }
 
+// Get Directions (Story 4.6): no existing code in this repo opens an
+// external maps app. Deliberately simple, no `canOpenURL` pre-check -- no
+// similar external-action call site in this codebase guards one either (see
+// join-code.tsx's handleShare), and adding one here would be inconsistent.
+function buildDirectionsUrl(lat: number, lng: number): string {
+  return Platform.OS === 'ios' ? `maps://?daddr=${lat},${lng}&dirflg=d` : `google.navigation:q=${lat},${lng}`;
+}
+
+// One-shot amber spark, radiating outward from the marker on peek-card open
+// ("Pop & Bounce", DESIGN.md#marker-peek-card). Fires once on mount --
+// remounting (via a changing `key` on the caller's side) is how a later open
+// replays the burst, rather than a loop.
+function MarkerSpark({ angleDeg }: { angleDeg: number }) {
+  const [progress] = useState(() => new Animated.Value(0));
+
+  useEffect(() => {
+    Animated.timing(progress, {
+      toValue: 1,
+      duration: MarkerPeekCardMotion.sparkBurstDurationMs,
+      easing: Easing.out(Easing.ease),
+      useNativeDriver: true,
+    }).start();
+  }, [progress]);
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        styles.markerSpark,
+        {
+          opacity: progress.interpolate({ inputRange: [0, 0.25, 1], outputRange: [0, 1, 0] }),
+          transform: [
+            { rotate: `${angleDeg}deg` },
+            { translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [-6, -34] }) },
+            { scale: progress.interpolate({ inputRange: [0, 0.25, 1], outputRange: [0.4, 1, 1] }) },
+          ],
+        },
+      ]}
+    />
+  );
+}
+
 function VoyagerMarker({
   member,
   location,
@@ -112,6 +160,8 @@ function VoyagerMarker({
   isSelf,
   isSelected,
   distanceLabel,
+  destinationLabel,
+  destinationName,
   onPress,
   onClose,
 }: {
@@ -121,6 +171,8 @@ function VoyagerMarker({
   isSelf: boolean;
   isSelected: boolean;
   distanceLabel: string | null;
+  destinationLabel: string | null;
+  destinationName: string;
   onPress: () => void;
   onClose: () => void;
 }) {
@@ -147,6 +199,167 @@ function VoyagerMarker({
 
   const initial = (member.displayName ?? '?').charAt(0).toUpperCase();
 
+  // Story 4.6 "Pop & Bounce": the card keeps rendering for its own close
+  // animation's duration after `isSelected` flips false, rather than
+  // unmounting the instant the parent's selection state changes -- that's
+  // what makes a real close animation possible (see EXPERIENCE.md#Motion &
+  // Transitions).
+  const [isRendering, setIsRendering] = useState(isSelected);
+  const [copied, setCopied] = useState(false);
+  const [sparkKey, setSparkKey] = useState(0);
+  // Code review finding (Story 4.6): a single bezier-eased Animated.timing
+  // cannot reproduce a curve that overshoots past 1 and dips back below it --
+  // open and close each get their own 0->1 progress value, interpolated
+  // through the real keyframe stops (same technique as hopProgress below and
+  // CutToGameplayMotion's flashProgress), rather than animating scale/opacity
+  // directly to a single target value.
+  const [cardOpenProgress] = useState(() => new Animated.Value(isSelected ? 1 : 0));
+  const [cardCloseProgress] = useState(() => new Animated.Value(0));
+  const [hopProgress] = useState(() => new Animated.Value(0));
+  const [copyIconProgress] = useState(() => new Animated.Value(0));
+  const isMountedRef = useRef(true);
+  const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      if (copiedTimeoutRef.current) clearTimeout(copiedTimeoutRef.current);
+      if (closeTimeoutRef.current) clearTimeout(closeTimeoutRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isSelected) {
+      if (closeTimeoutRef.current) {
+        clearTimeout(closeTimeoutRef.current);
+        closeTimeoutRef.current = null;
+      }
+      // Deferred via a microtask, not called synchronously in the effect
+      // body -- this codebase's established react-hooks/set-state-in-effect
+      // workaround (see use-live-locations.tsx's own Promise.resolve().then()
+      // resets). Also resets any stale "copied" checkmark left over from a
+      // previous open (code review finding: copying, closing, and reopening
+      // the same marker within COPIED_LABEL_DURATION_MS used to show a
+      // checkmark with no new copy action behind it).
+      if (copiedTimeoutRef.current) {
+        clearTimeout(copiedTimeoutRef.current);
+        copiedTimeoutRef.current = null;
+      }
+      copyIconProgress.setValue(0);
+      Promise.resolve().then(() => {
+        if (isMountedRef.current) {
+          setIsRendering(true);
+          setCopied(false);
+        }
+      });
+
+      if (reduceMotion) {
+        cardOpenProgress.setValue(1);
+        hopProgress.setValue(0);
+      } else {
+        cardOpenProgress.setValue(0);
+        hopProgress.setValue(0);
+        Animated.timing(cardOpenProgress, {
+          toValue: 1,
+          duration: MarkerPeekCardMotion.openDurationMs,
+          easing: Easing.bezier(...MarkerPeekCardMotion.openEasing),
+          useNativeDriver: true,
+        }).start();
+        Animated.timing(hopProgress, {
+          toValue: 1,
+          duration: MarkerPeekCardMotion.markerHopDurationMs,
+          easing: Easing.bezier(...MarkerPeekCardMotion.markerHopEasing),
+          useNativeDriver: true,
+        }).start();
+        Promise.resolve().then(() => {
+          if (isMountedRef.current) setSparkKey((key) => key + 1);
+        });
+      }
+
+      // Accessibility floor: the card announces its full content on open,
+      // not just individual fields on demand -- built from whichever
+      // labels are actually present, mirroring the visual self-card/null-
+      // destination omissions rather than a fixed template. Self case gets
+      // an explicit "this is you" (code review finding: the visible "This
+      // is you." text had no spoken equivalent).
+      const speechParts = [member.displayName ?? 'Voyager'];
+      if (isSelf) {
+        speechParts.push('this is you');
+      } else {
+        speechParts.push(member.role === 'organizer' ? 'Organizer' : member.travelRole === 'driving' ? 'Driving' : 'Riding');
+        if (distanceLabel) speechParts.push(`${distanceLabel} from you`);
+      }
+      if (destinationLabel) speechParts.push(`${destinationLabel} to ${destinationName}`);
+      const latDir = displayedLocation.lat >= 0 ? 'north' : 'south';
+      const lngDir = displayedLocation.lng >= 0 ? 'east' : 'west';
+      speechParts.push(`coordinates ${Math.abs(displayedLocation.lat).toFixed(4)} ${latDir}, ${Math.abs(displayedLocation.lng).toFixed(4)} ${lngDir}`);
+      AccessibilityInfo.announceForAccessibility(speechParts.join(', '));
+    } else {
+      if (reduceMotion) {
+        Promise.resolve().then(() => {
+          if (isMountedRef.current) setIsRendering(false);
+        });
+      } else {
+        cardCloseProgress.setValue(0);
+        Animated.timing(cardCloseProgress, {
+          toValue: 1,
+          duration: MarkerPeekCardMotion.closeDurationMs,
+          easing: Easing.bezier(...MarkerPeekCardMotion.closeEasing),
+          useNativeDriver: true,
+        }).start();
+        closeTimeoutRef.current = setTimeout(() => {
+          if (isMountedRef.current) setIsRendering(false);
+        }, MarkerPeekCardMotion.closeDurationMs);
+      }
+    }
+    // member/isSelf/distanceLabel/destinationLabel/destinationName/displayedLocation below are read for the open-announcement's speech string,
+    // not state this effect should re-run for on their own -- it's gated on the isSelected/reduceMotion transition itself, same narrow-deps
+    // precedent as this file's own hasStartedEntryTransitionRef effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSelected, reduceMotion, cardOpenProgress, cardCloseProgress, hopProgress, copyIconProgress]);
+
+  // Code review finding (Story 4.6): open and close each get their own
+  // progress value (see cardOpenProgress/cardCloseProgress above) so open's
+  // real overshoot-then-undershoot keyframe shape and close's plain 2-point
+  // shrink don't have to share one curve. Only one is ever "live" at once --
+  // `isSelected` (not `isRendering`) picks which, since isRendering stays
+  // true through the tail end of a close.
+  const cardScale = isSelected
+    ? cardOpenProgress.interpolate({
+        inputRange: [...MarkerPeekCardMotion.cardScaleKeyframeStops],
+        outputRange: [...MarkerPeekCardMotion.cardScaleStops],
+      })
+    : cardCloseProgress.interpolate({ inputRange: [0, 1], outputRange: [1, MarkerPeekCardMotion.cardScaleFrom] });
+  const cardOpacity = isSelected
+    ? cardOpenProgress.interpolate({ inputRange: [0, 1], outputRange: [0, 1] })
+    : cardCloseProgress.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
+
+  async function handleCopy() {
+    try {
+      await Clipboard.setStringAsync(formatCoordinate(displayedLocation.lat, displayedLocation.lng));
+      if (!isMountedRef.current) return;
+      setCopied(true);
+      Animated.timing(copyIconProgress, { toValue: 1, duration: COPY_ICON_MORPH_MS, useNativeDriver: true }).start();
+      AccessibilityInfo.announceForAccessibility('Copied');
+      if (copiedTimeoutRef.current) clearTimeout(copiedTimeoutRef.current);
+      copiedTimeoutRef.current = setTimeout(() => {
+        if (!isMountedRef.current) return;
+        setCopied(false);
+        Animated.timing(copyIconProgress, { toValue: 0, duration: COPY_ICON_MORPH_MS, useNativeDriver: true }).start();
+      }, COPIED_LABEL_DURATION_MS);
+    } catch {
+      // Clipboard write failed silently -- no confirmation shown is the correct feedback.
+    }
+  }
+
+  function handleGetDirections() {
+    Linking.openURL(buildDirectionsUrl(displayedLocation.lat, displayedLocation.lng)).catch(() => {
+      // User has no maps app that resolves the scheme, or the OS rejected it -- nothing actionable to surface.
+    });
+  }
+
   return (
     <MarkerView
       coordinate={[displayedLocation.lng, displayedLocation.lat]}
@@ -164,9 +377,15 @@ function VoyagerMarker({
             above this marker, with the map still fully visible/interactive
             behind it. Lives inside the same MarkerView as the marker itself
             so it tracks the map's pan/zoom for free, no separate screen-
-            coordinate math needed. */}
-        {isSelected ? (
-          <View testID="marker-peek-card" style={styles.markerTooltipWrap} pointerEvents="box-none">
+            coordinate math needed. Stays mounted through `isRendering`
+            (not `isSelected` directly) so the close animation above can
+            finish before this unmounts (Story 4.6). */}
+        {isRendering ? (
+          <Animated.View
+            testID="marker-peek-card"
+            style={[styles.markerTooltipWrap, { opacity: cardOpacity, transform: [{ scale: cardScale }] }]}
+            pointerEvents="box-none"
+          >
             <View style={styles.markerTooltip}>
               <View style={styles.markerTooltipHeader}>
                 <View style={styles.markerTooltipNameRow}>
@@ -177,28 +396,94 @@ function VoyagerMarker({
                   {'✕'}
                 </Text>
               </View>
-              {isSelf ? (
-                // "How far are you from yourself" isn't a real question --
-                // role/distance are dropped entirely rather than showing a
-                // meaningless "0 mi from you" (Waze's own convention for
-                // your own car).
-                <Text style={styles.markerTooltipSelfNote}>This is you.</Text>
-              ) : (
-                <>
-                  <Text style={styles.markerTooltipRole}>
-                    {member.role === 'organizer' ? 'Organizer' : member.travelRole === 'driving' ? 'Driving' : 'Riding'}
-                  </Text>
-                  {distanceLabel ? (
-                    <Text testID="marker-peek-distance" style={styles.markerTooltipDistance}>
-                      {`${distanceLabel} `}
-                      <Text style={styles.markerTooltipDistanceEmphasis}>from you</Text>
-                    </Text>
+              {!isSelf ? (
+                <Text style={styles.markerTooltipRole}>
+                  {member.role === 'organizer' ? 'Organizer' : member.travelRole === 'driving' ? 'Driving' : 'Riding'}
+                </Text>
+              ) : null}
+
+              <View style={styles.markerTooltipCoordRow}>
+                <Text testID="marker-peek-coordinates" style={styles.markerTooltipCoordText}>
+                  {formatCoordinate(displayedLocation.lat, displayedLocation.lng)}
+                </Text>
+                <View style={styles.markerTooltipCoordActions}>
+                  <Pressable
+                    testID="marker-peek-copy-button"
+                    accessibilityRole="button"
+                    accessibilityLabel="Copy coordinates"
+                    onPress={handleCopy}
+                    // 26px visual, 44pt/48dp hit-region via invisible hit-slop
+                    // padding -- same visual-vs-hit-region split map-marker
+                    // itself already uses (code review finding).
+                    hitSlop={9}
+                    style={[styles.markerTooltipCopyButton, copied && styles.markerTooltipCopyButtonActive]}
+                  >
+                    {/* Crossfade, not an instant swap (DESIGN.md
+                        copyButton.copiedIconMorph, code review finding) --
+                        both icons stacked, opacity driven in opposite
+                        directions by the same progress value. */}
+                    <Animated.Text
+                      style={[styles.markerTooltipCopyIcon, { opacity: copyIconProgress.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) }]}
+                    >
+                      {'⧉'}
+                    </Animated.Text>
+                    <Animated.Text
+                      style={[
+                        styles.markerTooltipCopyIcon,
+                        styles.markerTooltipCopyIconActive,
+                        styles.markerTooltipCopyIconOverlay,
+                        { opacity: copyIconProgress.interpolate({ inputRange: [0, 1], outputRange: [0, 1] }) },
+                      ]}
+                    >
+                      {'✓'}
+                    </Animated.Text>
+                  </Pressable>
+                  {!isSelf ? (
+                    <Pressable
+                      testID="marker-peek-navigate-button"
+                      accessibilityRole="button"
+                      accessibilityLabel={`Get directions to ${member.displayName ?? 'Voyager'}`}
+                      onPress={handleGetDirections}
+                      hitSlop={9}
+                      style={styles.markerTooltipNavButton}
+                    >
+                      <Text style={styles.markerTooltipNavIcon}>{'➤'}</Text>
+                    </Pressable>
                   ) : null}
-                </>
-              )}
+                </View>
+              </View>
+
+              {isSelf ? (
+                // "How far are you from yourself" / "navigate to yourself"
+                // aren't real questions -- role, distance-from-you, and Get
+                // Directions are dropped entirely (Waze's own convention for
+                // your own car), but distance-to-destination is meaningful
+                // even for your own marker.
+                <Text style={styles.markerTooltipSelfNote}>This is you.</Text>
+              ) : null}
+
+              {(!isSelf && distanceLabel) || destinationLabel ? (
+                <View style={styles.markerTooltipStatPair}>
+                  {!isSelf && distanceLabel ? (
+                    <View testID="marker-peek-distance-you" style={styles.markerTooltipStatCell}>
+                      <Text style={[styles.markerTooltipStatNum, { color: WayfinderColors.accentTeal }]}>{distanceLabel}</Text>
+                      <Text style={styles.markerTooltipStatCap}>From you</Text>
+                    </View>
+                  ) : null}
+                  {destinationLabel ? (
+                    <View
+                      testID="marker-peek-distance-destination"
+                      style={[styles.markerTooltipStatCell, !isSelf && distanceLabel && styles.markerTooltipStatCellBordered]}
+                    >
+                      <Text style={[styles.markerTooltipStatNum, { color: WayfinderColors.warning }]}>{destinationLabel}</Text>
+                      <Text style={styles.markerTooltipStatCap}>{`To ${destinationName}`}</Text>
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
             </View>
             <View style={styles.markerTooltipTail} />
-          </View>
+          </Animated.View>
         ) : null}
         <Pressable
           testID={`voyager-marker-${member.userId}`}
@@ -229,17 +514,42 @@ function VoyagerMarker({
               ]}
             />
           )}
-          <View style={[styles.markerDot, { backgroundColor: ringColor }]}>
-            <Text style={styles.markerInitial}>{initial}</Text>
-          </View>
-          {displayedLocation.heading != null ? (
-            <View
-              style={[
-                styles.markerChevron,
-                { borderBottomColor: MapMarker.chevronColor, transform: [{ rotate: `${displayedLocation.heading}deg` }] },
-              ]}
-            />
+          {!reduceMotion && isSelected ? (
+            <View style={styles.markerSparkWrap} pointerEvents="none">
+              {Array.from({ length: MarkerPeekCardMotion.sparkCount }, (_, i) => (
+                <MarkerSpark key={`${sparkKey}-${i}`} angleDeg={(360 / MarkerPeekCardMotion.sparkCount) * i} />
+              ))}
+            </View>
           ) : null}
+          {/* Wrapped together (not just the dot alone) so the chevron hops
+              in lockstep with the avatar on peek-card open -- the name
+              label stays put (a sibling below, absolute-positioned off the
+              hit region itself), matching a video-game character "hop"
+              without the nameplate jumping too. */}
+          <Animated.View
+            style={{
+              transform: [
+                {
+                  translateY: hopProgress.interpolate({
+                    inputRange: [...MarkerPeekCardMotion.hopKeyframeStops],
+                    outputRange: [...MarkerPeekCardMotion.hopTranslateY],
+                  }),
+                },
+              ],
+            }}
+          >
+            <View style={[styles.markerDot, { backgroundColor: ringColor }]}>
+              <Text style={styles.markerInitial}>{initial}</Text>
+            </View>
+            {displayedLocation.heading != null ? (
+              <View
+                style={[
+                  styles.markerChevron,
+                  { borderBottomColor: MapMarker.chevronColor, transform: [{ rotate: `${displayedLocation.heading}deg` }] },
+                ]}
+              />
+            ) : null}
+          </Animated.View>
           <Text style={styles.markerLabel}>{member.userId === location.userId && member.displayName ? member.displayName : ''}</Text>
         </Pressable>
       </View>
@@ -700,6 +1010,18 @@ export default function ActiveVoyageScreen() {
     return formatDistanceMiles(haversineMiles({ lat: location.lat, lng: location.lng }, myLocation));
   }
 
+  // Story 4.6: unlike distance-from-me, this is meaningful for every
+  // marker including your own. A Voyage started via free-text/no place
+  // selected has both destination coordinates null (Voyage type's own doc
+  // comment) -- degrade gracefully (omit the readout), never "NaN"/throw.
+  function getDistanceToDestinationLabel(userId: string): string | null {
+    const { destinationLat, destinationLng } = activeVoyage!.voyage;
+    if (destinationLat == null || destinationLng == null) return null;
+    const location = locations[userId];
+    if (!location) return null;
+    return formatDistanceMiles(haversineMiles({ lat: location.lat, lng: location.lng }, { lat: destinationLat, lng: destinationLng }));
+  }
+
   async function handleEndVoyage() {
     setIsSubmitting(true);
     setError(null);
@@ -1102,6 +1424,8 @@ export default function ActiveVoyageScreen() {
               isSelf={isSelf(member.userId)}
               isSelected={selectedUserId === member.userId}
               distanceLabel={getDistanceFromMeLabel(member.userId)}
+              destinationLabel={getDistanceToDestinationLabel(member.userId)}
+              destinationName={activeVoyage.voyage.destination}
               // Tapping the already-open marker again closes it (toggle),
               // matching the explicit close X's own behavior -- same
               // "tap it again to dismiss" affordance Waze's own popups use.
@@ -1864,6 +2188,24 @@ const styles = StyleSheet.create({
     borderWidth: MapMarker.ringWidth,
     backgroundColor: 'transparent',
   },
+  // One-shot amber spark burst on peek-card open (Story 4.6, "Pop &
+  // Bounce") -- centered on the marker the same way markerPulse/
+  // markerReduceMotionRing already are (absolute + MapMarker.size, relying
+  // on markerHitRegion's own alignItems/justifyContent centering).
+  markerSparkWrap: {
+    position: 'absolute',
+    width: MapMarker.size,
+    height: MapMarker.size,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  markerSpark: {
+    position: 'absolute',
+    width: 4,
+    height: 10,
+    borderRadius: 2,
+    backgroundColor: MarkerPeekCardMotion.sparkColor,
+  },
   // Fill is the per-Voyager player color itself, passed inline
   // (backgroundColor) -- a structural inversion from Night Drive's neutral-
   // fill/colored-ring treatment (see design-tokens.ts's MapMarker comment).
@@ -1937,10 +2279,15 @@ const styles = StyleSheet.create({
     backgroundColor: WayfinderColors.surfacePrimary,
     borderWidth: 1,
     borderColor: WayfinderColors.borderHairline,
-    borderRadius: 14,
-    paddingVertical: Spacing['3'],
+    borderRadius: Rounded.md,
+    // 14, not Spacing['3']'s 12 -- literal mockup value (mockups/key-marker-
+    // peek-card.html: padding: 14px 16px), same "don't force an existing
+    // scale step" convention as the coordinate row/stat pair below.
+    paddingVertical: 14,
     paddingHorizontal: Spacing['4'],
-    minWidth: 168,
+    // 230, not the old 168 -- widened for Story 4.6's coordinate row/stat
+    // pair content, matching mockups/key-marker-peek-card.html's real width.
+    minWidth: 230,
     shadowColor: WayfinderColors.inkPrimary,
     shadowOpacity: 0.15,
     shadowRadius: 12,
@@ -1980,27 +2327,115 @@ const styles = StyleSheet.create({
     fontFamily: Typography.body.fontFamily,
     fontSize: 11.5,
   },
-  markerTooltipDistance: {
-    marginTop: Spacing['1'] + 2,
-    paddingTop: Spacing['1'] + 2,
-    // Literal one-off, not WayfinderColors.surfaceSecondary -- a fainter
-    // hairline than the tooltip's own outer border, same relationship the
-    // mockup's own two hairline shades have to each other.
-    borderTopWidth: 1,
-    borderTopColor: '#F0F2F6',
-    color: WayfinderColors.inkPrimary,
-    fontFamily: 'GeneralSans-Semibold',
-    fontSize: 12,
-    fontWeight: '600',
+  // Coordinate row (Story 4.6) -- decimal-degrees text + copy/Get
+  // Directions controls, literal per-mockup values (not forced onto an
+  // existing scale step, same convention Story 4.4's Dev Notes established
+  // for Voyage Ended's stat values).
+  markerTooltipCoordRow: {
+    marginTop: Spacing['1'] + 6,
+    paddingVertical: Spacing['2'],
+    paddingHorizontal: Spacing['2'] + 2,
+    backgroundColor: WayfinderColors.surfaceSecondary,
+    borderRadius: Rounded.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing['2'],
   },
-  markerTooltipDistanceEmphasis: {
-    color: WayfinderColors.accentPrimary,
+  markerTooltipCoordText: {
+    color: WayfinderColors.inkPrimary,
+    fontFamily: 'SpaceMono-Bold',
+    fontSize: 12.5,
+    fontWeight: '700',
+    // -0.01em @ 12.5px = -0.125 (RN's letterSpacing is absolute points, not
+    // em -- code review finding: this was dropped from the mockup's
+    // .coord-text transcription).
+    letterSpacing: -0.125,
+  },
+  markerTooltipCoordActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing['1'] + 2,
+  },
+  markerTooltipCopyButton: {
+    width: 26,
+    height: 26,
+    // 8, not Rounded.sm's 10 -- literal mockup value (.copy-btn, .nav-btn
+    // { border-radius: 8px }), distinct from the coord row's own 10px.
+    borderRadius: 8,
+    backgroundColor: WayfinderColors.surfacePrimary,
+    borderWidth: 1,
+    borderColor: WayfinderColors.borderHairline,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  markerTooltipCopyButtonActive: {
+    backgroundColor: WayfinderColors.success,
+    borderColor: WayfinderColors.success,
+  },
+  markerTooltipCopyIcon: {
+    color: WayfinderColors.inkSecondary,
+    fontSize: 13,
+  },
+  markerTooltipCopyIconActive: {
+    color: '#FFFFFF',
+  },
+  // Stacked directly on top of the clipboard icon -- centers for free via
+  // markerTooltipCopyButton's own alignItems/justifyContent, same technique
+  // markerPulse/markerReduceMotionRing already use.
+  markerTooltipCopyIconOverlay: {
+    position: 'absolute',
+  },
+  markerTooltipNavButton: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    backgroundColor: WayfinderColors.accentPrimary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  markerTooltipNavIcon: {
+    color: '#FFFFFF',
+    fontSize: 12,
   },
   markerTooltipSelfNote: {
     marginTop: 3,
     color: WayfinderColors.inkDisabled,
     fontFamily: Typography.body.fontFamily,
     fontSize: 11,
+  },
+  // HUD scoreboard stat pair (Story 4.6) -- side-by-side, divided by a
+  // hairline. 18px/700, not Typography.statNumeral's 32px scale step --
+  // literal mockup value, same "don't force an existing scale step"
+  // convention as the coordinate row above.
+  markerTooltipStatPair: {
+    marginTop: Spacing['2'] + 2,
+    paddingTop: Spacing['2'] + 2,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F2F6',
+    flexDirection: 'row',
+  },
+  markerTooltipStatCell: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  markerTooltipStatCellBordered: {
+    borderLeftWidth: 1,
+    borderLeftColor: '#F0F2F6',
+  },
+  markerTooltipStatNum: {
+    fontFamily: 'SpaceMono-Bold',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  markerTooltipStatCap: {
+    marginTop: 2,
+    color: WayfinderColors.inkSecondary,
+    fontFamily: 'GeneralSans-Bold',
+    fontSize: 10.5,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
   },
   // Speech-bubble tail pointing down at the marker -- a 45deg-rotated
   // square, top-left corner hidden, matching the mockup's own literal

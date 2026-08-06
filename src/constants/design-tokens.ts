@@ -389,6 +389,39 @@ export const CutToGameplayMotion = {
 };
 
 /**
+ * marker-peek-card component spec (DESIGN.md#components, Story 4.5/4.6 --
+ * "Pop & Bounce"). Deliberately bigger/more playful than Wayfinder's usual
+ * restraint -- a contained exception in the same family as
+ * CutToGameplayMotion above, not a palette-wide change. See
+ * EXPERIENCE.md#Motion & Transitions for the full binding spec this mirrors.
+ * cardScaleKeyframeStops/cardScaleStops and hopKeyframeStops/hopTranslateY
+ * both drive their own progress `.interpolate()`, same technique
+ * CutToGameplayMotion's flashKeyframeStops/flashScaleStops already uses --
+ * a single bezier-eased Animated.timing genuinely cannot reproduce a curve
+ * that overshoots past 1 and then dips back below it before settling (code
+ * review finding, Story 4.6: verified by evaluating the actual
+ * cubic-bezier(.22,1.5,.36,1) curve numerically -- it peaks once around
+ * ~1.08 then decays monotonically to 1.0, never reaching 1.12 or dipping to
+ * 0.94). Disabled entirely under Reduce Motion.
+ */
+export const MarkerPeekCardMotion = {
+  openDurationMs: 420,
+  openEasing: [0.22, 1.5, 0.36, 1] as const,
+  cardScaleKeyframeStops: [0, 0.55, 0.78, 1] as const,
+  cardScaleStops: [0.3, 1.12, 0.94, 1] as const,
+  closeDurationMs: 180,
+  closeEasing: [0.5, 0, 0.9, 0] as const,
+  cardScaleFrom: 0.3,
+  markerHopDurationMs: 420,
+  markerHopEasing: [0.34, 1.56, 0.64, 1] as const,
+  hopKeyframeStops: [0, 0.35, 0.6, 1] as const,
+  hopTranslateY: [0, -10, 2, 0] as const,
+  sparkCount: 6,
+  sparkBurstDurationMs: 480,
+  sparkColor: WayfinderColors.accentAmber,
+};
+
+/**
  * button-ignition component spec (DESIGN.md#components, Wayfinder v2 --
  * Story 4.4). `Wayfinder`-prefixed to avoid colliding with the legacy
  * (Night Drive) `ButtonIgnition` above, which stays untouched until nothing

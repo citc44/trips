@@ -1,14 +1,15 @@
 import { beforeEach, expect, jest, test } from '@jest/globals';
 import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
-import { AccessibilityInfo } from 'react-native';
+import { AccessibilityInfo, Linking, Platform } from 'react-native';
 import mockSafeAreaContext from 'react-native-safe-area-context/jest/mock';
 
+import { WayfinderColors } from '@/constants/design-tokens';
 import { voyageRepository } from '@/repositories/voyage-repository';
 import { useActiveVoyage } from '@/shared/hooks/use-active-voyage';
 import { useAuth } from '@/shared/hooks/use-auth';
 import { useLiveLocations } from '@/shared/hooks/use-live-locations';
 import { usePendingEntryTransition } from '@/shared/hooks/use-pending-entry-transition';
-import { formatDistanceMiles, haversineMiles } from '@/shared/lib/geo';
+import { formatCoordinate, formatDistanceMiles, haversineMiles } from '@/shared/lib/geo';
 import { outbox } from '@/shared/services/outbox/outbox';
 
 import ActiveVoyageScreen from '../active-voyage';
@@ -20,6 +21,15 @@ jest.mock('expo-router', () => ({
 }));
 
 jest.mock('@/lib/mapbox', () => ({ initMapbox: jest.fn() }));
+
+// Mirrors join-code.test.tsx's own expo-clipboard mock shape exactly.
+const mockSetStringAsync = jest.fn<(...args: any[]) => Promise<any>>().mockResolvedValue(undefined);
+jest.mock('expo-clipboard', () => ({
+  setStringAsync: (...args: unknown[]) => mockSetStringAsync(...args),
+}));
+
+// Mirrors location-permission.test.tsx's own Linking spy pattern.
+jest.spyOn(Linking, 'openURL').mockImplementation(() => Promise.resolve(true));
 
 // Official RNSAC mock -- useSafeAreaInsets() (skyStrip's height) throws
 // without a real <SafeAreaProvider> ancestor, which this test harness
@@ -141,14 +151,19 @@ const locationsFixture = {
   'user-2': { userId: 'user-2', lat: 39.2, lng: -120.1, heading: null, updatedAt: '2026-07-26T00:05:00Z' },
 };
 
-function mockActiveVoyage(role: 'organizer' | 'voyager') {
+function mockActiveVoyage(
+  role: 'organizer' | 'voyager',
+  // Story 4.6: defaults to null/null (no destination coordinates), matching
+  // this fixture's pre-4.6 shape -- individual distance-to-destination tests
+  // override these.
+  destinationCoords: { destinationLat: number | null; destinationLng: number | null } = { destinationLat: null, destinationLng: null },
+) {
   mockUseActiveVoyage.mockReturnValue({
     activeVoyage: {
       voyage: {
         id: 'voyage-1',
         destination: 'Lake Tahoe',
-        destinationLat: null,
-        destinationLng: null,
+        ...destinationCoords,
         status: 'active',
         createdBy: 'user-1',
         createdAt: '2026-07-26T00:00:00Z',
@@ -673,7 +688,11 @@ test('tapping a marker opens the peek tooltip with that Voyager, and closing it 
     fireEvent.press(getByTestId('marker-peek-close-button'));
   });
 
-  expect(queryByTestId('marker-peek-card')).toBeNull();
+  // Story 4.6: the card no longer unmounts the instant it's closed -- it
+  // stays rendered for its own "Pop & Bounce" close animation (real timers
+  // are in play in this file, not fake ones, so waitFor -- not a
+  // synchronous assertion -- is what actually lets that real delay elapse).
+  await waitFor(() => expect(queryByTestId('marker-peek-card')).toBeNull());
 });
 
 test('tapping the already-open marker again closes its tooltip (toggle), same as the explicit close button', async () => {
@@ -690,13 +709,13 @@ test('tapping the already-open marker again closes its tooltip (toggle), same as
   await act(async () => {
     fireEvent.press(getByTestId('voyager-marker-user-2'));
   });
-  expect(queryByTestId('marker-peek-card')).toBeNull();
+  await waitFor(() => expect(queryByTestId('marker-peek-card')).toBeNull());
 });
 
-test('tapping a different marker while one tooltip is open switches straight to the new one', async () => {
+test('tapping a different marker while one tooltip is open switches to the new one, once the old one finishes closing', async () => {
   mockActiveVoyage('organizer');
 
-  const { getByTestId } = await render(<ActiveVoyageScreen />);
+  const { getByTestId, queryAllByTestId } = await render(<ActiveVoyageScreen />);
   await waitFor(() => expect(getByTestId('voyager-marker-user-2')).toBeTruthy());
 
   await act(async () => {
@@ -707,10 +726,14 @@ test('tapping a different marker while one tooltip is open switches straight to 
   await act(async () => {
     fireEvent.press(getByTestId('voyager-marker-user-1'));
   });
+  // Meera's card is animating closed while Chintan's opens -- both can be
+  // mounted simultaneously for a moment, so this waits for exactly one to
+  // remain before asserting on its content.
+  await waitFor(() => expect(queryAllByTestId('marker-peek-card')).toHaveLength(1));
   expect(within(getByTestId('marker-peek-card')).getByText('Chintan')).toBeTruthy();
 });
 
-test('marker peek tooltip shows the selected Voyager\'s distance from your own live position, not the destination (user-reported change)', async () => {
+test('marker peek card shows the selected Voyager\'s distance from your own live position in its own stat cell (user-reported change)', async () => {
   mockActiveVoyage('organizer');
 
   const { getByTestId } = await render(<ActiveVoyageScreen />);
@@ -723,12 +746,12 @@ test('marker peek tooltip shows the selected Voyager\'s distance from your own l
   // session user is user-1 (Chintan) -- distance is from user-1's own
   // location, not from any destination coordinate.
   const expectedLabel = formatDistanceMiles(haversineMiles(locationsFixture['user-2'], locationsFixture['user-1']));
-  const distanceChildren = getByTestId('marker-peek-distance').props.children as unknown[];
-  expect(distanceChildren[0]).toBe(`${expectedLabel} `);
-  expect(within(getByTestId('marker-peek-card')).getByText('from you')).toBeTruthy();
+  const youCell = within(getByTestId('marker-peek-distance-you'));
+  expect(youCell.getByText(expectedLabel)).toBeTruthy();
+  expect(youCell.getByText('From you')).toBeTruthy();
 });
 
-test('marker peek tooltip omits the distance readout when this device does not have its own live location yet', async () => {
+test('marker peek card omits the "from you" stat cell when this device does not have its own live location yet', async () => {
   mockActiveVoyage('organizer');
   // Only user-2 has a live location -- the signed-in user (user-1) doesn't,
   // so there's no "from you" to compute against.
@@ -748,7 +771,42 @@ test('marker peek tooltip omits the distance readout when this device does not h
     fireEvent.press(getByTestId('voyager-marker-user-2'));
   });
 
-  expect(queryByTestId('marker-peek-distance')).toBeNull();
+  expect(queryByTestId('marker-peek-distance-you')).toBeNull();
+  // Default fixture has no destination coordinates either, so the whole
+  // stat-pair row has nothing to show.
+  expect(queryByTestId('marker-peek-distance-destination')).toBeNull();
+});
+
+test('marker peek card shows a "to [destination]" stat cell for every Voyager, including yourself, when the Voyage has destination coordinates', async () => {
+  // Same real-world SF/Tahoe coordinates geo.test.ts already uses.
+  mockActiveVoyage('organizer', { destinationLat: 39.0968, destinationLng: -120.0324 });
+
+  const { getByTestId, queryByTestId } = await render(<ActiveVoyageScreen />);
+  await waitFor(() => expect(getByTestId('voyager-marker-user-2')).toBeTruthy());
+
+  await act(async () => {
+    fireEvent.press(getByTestId('voyager-marker-user-2'));
+  });
+  const expectedOtherLabel = formatDistanceMiles(
+    haversineMiles(locationsFixture['user-2'], { lat: 39.0968, lng: -120.0324 }),
+  );
+  const otherDestCell = within(getByTestId('marker-peek-distance-destination'));
+  expect(otherDestCell.getByText(expectedOtherLabel)).toBeTruthy();
+  expect(otherDestCell.getByText('To Lake Tahoe')).toBeTruthy();
+
+  await act(async () => {
+    fireEvent.press(getByTestId('marker-peek-close-button'));
+  });
+  await waitFor(() => expect(queryByTestId('marker-peek-card')).toBeNull());
+
+  await act(async () => {
+    fireEvent.press(getByTestId('voyager-marker-user-1'));
+  });
+  const expectedSelfLabel = formatDistanceMiles(haversineMiles(locationsFixture['user-1'], { lat: 39.0968, lng: -120.0324 }));
+  const selfDestCell = within(getByTestId('marker-peek-distance-destination'));
+  expect(selfDestCell.getByText(expectedSelfLabel)).toBeTruthy();
+  // Self card has no distance-from-you cell to divide against.
+  expect(within(getByTestId('marker-peek-card')).queryByTestId('marker-peek-distance-you')).toBeNull();
 });
 
 test('marker peek tooltip shows Driving for a Driving-role Voyager instead of the old hardcoded Riding', async () => {
@@ -768,7 +826,7 @@ test('marker peek tooltip shows Driving for a Driving-role Voyager instead of th
   expect(within(getByTestId('marker-peek-card')).getByText('Driving')).toBeTruthy();
 });
 
-test('tapping your own marker shows only your name in the tooltip -- no role, no distance (user-reported change)', async () => {
+test('tapping your own marker shows only your name and coordinates in the tooltip -- no role, no distance-from-you, no Get Directions (user-reported change)', async () => {
   mockActiveVoyage('organizer');
 
   const { getByTestId, queryByTestId } = await render(<ActiveVoyageScreen />);
@@ -780,8 +838,160 @@ test('tapping your own marker shows only your name in the tooltip -- no role, no
 
   expect(within(getByTestId('marker-peek-card')).getByText('Chintan')).toBeTruthy();
   expect(within(getByTestId('marker-peek-card')).getByText('This is you.')).toBeTruthy();
-  expect(queryByTestId('marker-peek-distance')).toBeNull();
+  expect(queryByTestId('marker-peek-distance-you')).toBeNull();
   expect(within(getByTestId('marker-peek-card')).queryByText('Organizer')).toBeNull();
+  expect(getByTestId('marker-peek-coordinates')).toBeTruthy();
+  expect(queryByTestId('marker-peek-navigate-button')).toBeNull();
+});
+
+test('marker peek card shows live coordinates in decimal-degrees-with-direction format, sourced from the same smoothed position driving the marker', async () => {
+  mockActiveVoyage('organizer');
+
+  const { getByTestId } = await render(<ActiveVoyageScreen />);
+  await waitFor(() => expect(getByTestId('voyager-marker-user-2')).toBeTruthy());
+
+  await act(async () => {
+    fireEvent.press(getByTestId('voyager-marker-user-2'));
+  });
+
+  expect(getByTestId('marker-peek-coordinates').props.children).toBe(
+    formatCoordinate(locationsFixture['user-2'].lat, locationsFixture['user-2'].lng),
+  );
+});
+
+test('the copy control copies the formatted coordinate string, morphs to a checkmark, announces "Copied", then reverts', async () => {
+  mockActiveVoyage('organizer');
+  const announceSpy = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
+
+  const { getByTestId } = await render(<ActiveVoyageScreen />);
+  await waitFor(() => expect(getByTestId('voyager-marker-user-2')).toBeTruthy());
+
+  await act(async () => {
+    fireEvent.press(getByTestId('voyager-marker-user-2'));
+  });
+
+  await act(async () => {
+    fireEvent.press(getByTestId('marker-peek-copy-button'));
+  });
+
+  expect(mockSetStringAsync).toHaveBeenCalledWith(formatCoordinate(locationsFixture['user-2'].lat, locationsFixture['user-2'].lng));
+  expect(announceSpy).toHaveBeenCalledWith('Copied');
+  // Both the clipboard and checkmark glyphs stay mounted throughout (Story
+  // 4.6 code review: crossfaded via an Animated.Value, not instantly
+  // swapped) -- the button's own background flip is driven by plain `copied`
+  // boolean state instead (not the Animated crossfade, which RNTL's fake
+  // JS environment doesn't actually progress in real time), so that's the
+  // reliable "did it copy" signal to assert on here.
+  const copyButtonStyles = () => [getByTestId('marker-peek-copy-button').props.style].flat();
+  expect(copyButtonStyles().some((style) => style && style.backgroundColor === WayfinderColors.success)).toBe(true);
+
+  await waitFor(() => expect(copyButtonStyles().some((style) => style && style.backgroundColor === WayfinderColors.success)).toBe(false), {
+    timeout: 2000,
+  });
+});
+
+test('the copy control fails silently -- no confirmation shown -- when the clipboard write rejects', async () => {
+  mockActiveVoyage('organizer');
+  mockSetStringAsync.mockRejectedValueOnce(new Error('clipboard unavailable'));
+
+  const { getByTestId } = await render(<ActiveVoyageScreen />);
+  await waitFor(() => expect(getByTestId('voyager-marker-user-2')).toBeTruthy());
+
+  await act(async () => {
+    fireEvent.press(getByTestId('voyager-marker-user-2'));
+  });
+  await act(async () => {
+    fireEvent.press(getByTestId('marker-peek-copy-button'));
+  });
+
+  const copyButtonStyles = [getByTestId('marker-peek-copy-button').props.style].flat();
+  expect(copyButtonStyles.some((style) => style && style.backgroundColor === WayfinderColors.success)).toBe(false);
+});
+
+test('the Get Directions control opens the device maps app with driving directions to that Voyager\'s live coordinates', async () => {
+  mockActiveVoyage('organizer');
+  const mockOpenURL = Linking.openURL as jest.MockedFunction<typeof Linking.openURL>;
+
+  const { getByTestId } = await render(<ActiveVoyageScreen />);
+  await waitFor(() => expect(getByTestId('voyager-marker-user-2')).toBeTruthy());
+
+  await act(async () => {
+    fireEvent.press(getByTestId('voyager-marker-user-2'));
+  });
+  await act(async () => {
+    fireEvent.press(getByTestId('marker-peek-navigate-button'));
+  });
+
+  // Default test-environment Platform.OS is 'ios'.
+  expect(mockOpenURL).toHaveBeenCalledWith(`maps://?daddr=${locationsFixture['user-2'].lat},${locationsFixture['user-2'].lng}&dirflg=d`);
+});
+
+test('the Get Directions control uses the Android URL scheme on Android', async () => {
+  mockActiveVoyage('organizer');
+  const mockOpenURL = Linking.openURL as jest.MockedFunction<typeof Linking.openURL>;
+  const originalOS = Platform.OS;
+  Platform.OS = 'android';
+
+  try {
+    const { getByTestId } = await render(<ActiveVoyageScreen />);
+    await waitFor(() => expect(getByTestId('voyager-marker-user-2')).toBeTruthy());
+
+    await act(async () => {
+      fireEvent.press(getByTestId('voyager-marker-user-2'));
+    });
+    await act(async () => {
+      fireEvent.press(getByTestId('marker-peek-navigate-button'));
+    });
+
+    expect(mockOpenURL).toHaveBeenCalledWith(`google.navigation:q=${locationsFixture['user-2'].lat},${locationsFixture['user-2'].lng}`);
+  } finally {
+    Platform.OS = originalOS;
+  }
+});
+
+test('under Reduce Motion, the peek card appears and disappears instantly -- no animation delay', async () => {
+  mockActiveVoyage('organizer');
+  jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(true);
+
+  const { getByTestId, queryByTestId } = await render(<ActiveVoyageScreen />);
+  await waitFor(() => expect(getByTestId('voyager-marker-user-2')).toBeTruthy());
+
+  await act(async () => {
+    fireEvent.press(getByTestId('voyager-marker-user-2'));
+  });
+  // reduceMotion resolves asynchronously -- waitFor absorbs that, same
+  // pattern this file already uses for the cut-to-gameplay Reduce Motion
+  // tests above.
+  await waitFor(() => expect(getByTestId('marker-peek-card')).toBeTruthy());
+
+  await act(async () => {
+    fireEvent.press(getByTestId('marker-peek-close-button'));
+  });
+  // Reduce Motion's unmount is deferred only by a microtask, not the real
+  // close-duration timer -- waitFor still absorbs that microtask hop rather
+  // than asserting synchronously (code review finding: the prior comment
+  // here claimed no waitFor was needed, contradicting the line right below
+  // it).
+  await waitFor(() => expect(queryByTestId('marker-peek-card')).toBeNull());
+});
+
+test('the peek card announces its full content on open, including coordinates', async () => {
+  mockActiveVoyage('organizer');
+  const announceSpy = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
+
+  const { getByTestId } = await render(<ActiveVoyageScreen />);
+  await waitFor(() => expect(getByTestId('voyager-marker-user-2')).toBeTruthy());
+
+  await act(async () => {
+    fireEvent.press(getByTestId('voyager-marker-user-2'));
+  });
+
+  const announcement = announceSpy.mock.calls.map((call) => call[0]).find((text) => typeof text === 'string' && text.includes('Meera'));
+  expect(announcement).toContain('Meera');
+  // membersFixture[1] (Meera) defaults to travelRole: 'riding'.
+  expect(announcement).toContain('Riding');
+  expect(announcement).toContain(formatDistanceMiles(haversineMiles(locationsFixture['user-2'], locationsFixture['user-1'])));
+  expect(announcement).toContain('coordinates');
 });
 
 test('your own marker always shows a "this is you" ring, even before it is tapped', async () => {
