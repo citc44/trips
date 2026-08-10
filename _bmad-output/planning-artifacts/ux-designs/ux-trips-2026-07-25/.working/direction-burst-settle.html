@@ -1,0 +1,178 @@
+<title>Voylo — Marker Peek Card Direction: Burst &amp; Settle</title>
+<style>
+/* Story 4.5 direction exploration. Wayfinder tokens (DESIGN.md), unchanged.
+   Font stand-ins per key-marker-peek-card.html convention: Segoe UI Semibold
+   (Clash Display), Segoe UI (General Sans), Consolas (Space Mono). */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #EDEFF3; color: #101828; font-family: "Segoe UI", Arial, sans-serif; padding: 32px; }
+.rationale { max-width: 900px; margin: 0 auto 28px; background: #fff; border: 1px solid #DCE1EA; border-radius: 20px; padding: 20px 24px; box-shadow: 0 2px 0 #DCE1EA; }
+.rationale h1 { font-size: 20px; font-weight: 700; margin-bottom: 8px; color: #0B6FFF; }
+.rationale p { font-size: 14.5px; line-height: 1.55; color: #344054; margin-bottom: 8px; }
+.rationale p:last-child { margin-bottom: 0; }
+.rationale b { color: #101828; }
+.stage { display: flex; gap: 32px; justify-content: center; flex-wrap: wrap; }
+.frame-block { text-align: center; }
+.frame-label { font-weight: 700; font-size: 12.5px; letter-spacing: 1.2px; text-transform: uppercase; margin-bottom: 12px; }
+.phone { width: 360px; height: 720px; border-radius: 40px; border: 8px solid #101828; background: #101828; position: relative; overflow: hidden; }
+.screen { position: absolute; inset: 0; border-radius: 32px; overflow: hidden; background: linear-gradient(180deg, #EAF2E4 0%, #DCEBD3 100%); }
+.controls { margin-top: 14px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+button.ctl { font-family: inherit; font-size: 12.5px; font-weight: 700; padding: 8px 14px; border-radius: 9999px; border: 1px solid #DCE1EA; background: #fff; color: #101828; cursor: pointer; }
+button.ctl.primary { background: #0B6FFF; color: #fff; border-color: #0B6FFF; }
+button.ctl.active { background: #101828; color: #fff; border-color: #101828; }
+
+.marker { position: absolute; top: 380px; left: 170px; z-index: 4; text-align: center; }
+.avatar { width: 44px; height: 44px; border-radius: 50%; border: 3px solid #fff; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 16px; font-weight: 700; box-shadow: 0 2px 4px 0 #10182833; background: #00C2A8; position: relative; z-index: 3; }
+
+/* one-shot radiating ring burst, echoes the existing live-marker pulse and
+   the "cut to gameplay" flash's own radiating language (EXPERIENCE.md) */
+.burst-ring { position: absolute; top: 22px; left: 22px; width: 44px; height: 44px; border-radius: 50%; border: 3px solid #FFB020; transform: translate(-50%,-50%) scale(1); opacity: 0; z-index: 1; pointer-events: none; }
+.burst-ring.fire { animation: burst 520ms cubic-bezier(.2,.7,.3,1) both; }
+@keyframes burst { 0% { transform: translate(-50%,-50%) scale(1); opacity: .9; } 100% { transform: translate(-50%,-50%) scale(3.4); opacity: 0; } }
+
+/* ---- Peek card: springs up and settles ---- */
+.tooltip-wrap { position: absolute; bottom: 58px; left: 50%; transform: translateX(-50%) translateY(24px) scale(0.85); z-index: 5; display: flex; flex-direction: column; align-items: center; opacity: 0; }
+.tooltip-wrap.open { animation: burstOpen 360ms cubic-bezier(.18,.9,.32,1.12) forwards; }
+.tooltip-wrap.closing { animation: burstClose 200ms cubic-bezier(.6,0,.9,0) forwards; }
+@keyframes burstOpen {
+  0%   { transform: translateX(-50%) translateY(24px) scale(0.85); opacity: 0; }
+  50%  { transform: translateX(-50%) translateY(-6px) scale(1.05); opacity: 1; }
+  75%  { transform: translateX(-50%) translateY(2px) scale(0.98); }
+  100% { transform: translateX(-50%) translateY(0) scale(1); opacity: 1; }
+}
+@keyframes burstClose { from { transform: translateX(-50%) translateY(0) scale(1); opacity: 1; } to { transform: translateX(-50%) translateY(16px) scale(0.6); opacity: 0; } }
+.tooltip { background: #fff; border: 1px solid #DCE1EA; border-radius: 18px; padding: 14px 16px; box-shadow: 0 8px 20px 0 #10182833; min-width: 220px; }
+.tooltip-header { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.tooltip-name-row { display: flex; align-items: center; gap: 7px; }
+.tooltip-swatch { width: 10px; height: 10px; border-radius: 5px; flex-shrink: 0; background: #00C2A8; }
+.tooltip-name { font-size: 16px; font-weight: 700; font-family: "Segoe UI Semibold", "Segoe UI", sans-serif; }
+.tooltip-close { color: #98A2B3; font-size: 13px; padding: 2px; }
+.tooltip-role { margin-top: 2px; font-size: 11.5px; color: #667085; font-weight: 600; }
+.tooltip-tail { width: 12px; height: 12px; background: #fff; border-right: 1px solid #DCE1EA; border-bottom: 1px solid #DCE1EA; transform: rotate(45deg); margin-top: -7px; }
+
+.coord-row { margin-top: 10px; padding: 8px 10px; background: #F4F6FA; border-radius: 10px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.coord-text { font-family: Consolas, "SF Mono", monospace; font-size: 12.5px; font-weight: 700; letter-spacing: -0.01em; }
+.copy-btn, .nav-btn { width: 26px; height: 26px; border-radius: 8px; background: #fff; border: 1px solid #DCE1EA; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; }
+.copy-btn svg, .nav-btn svg { width: 13px; height: 13px; }
+.copy-btn.copied { background: #1F9D6E; border-color: #1F9D6E; }
+.copy-btn .check { display: none; }
+.copy-btn.copied .icon { display: none; }
+.copy-btn.copied .check { display: block; }
+.coord-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.nav-btn { background: #0B6FFF; border-color: #0B6FFF; }
+.nav-btn:active { transform: scale(0.92); }
+
+/* bolder graphic chips behind each stat icon -- more "game token" than
+   Direction A's subtle tint chips */
+.stat-row { margin-top: 8px; display: flex; align-items: center; gap: 9px; }
+.stat-icon { width: 24px; height: 24px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 12.5px; flex-shrink: 0; color: #fff; }
+.stat-icon.you { background: #00C2A8; }
+.stat-icon.dest { background: #FFB020; }
+.stat-text { font-size: 13.5px; font-weight: 600; color: #101828; }
+.stat-text b { color: #0B6FFF; }
+
+.self-note { margin-top: 8px; font-size: 11px; color: #98A2B3; }
+</style>
+
+<div class="rationale">
+  <h1>Direction C — "Burst &amp; Settle"</h1>
+  <p><b>Motion:</b> tapping the marker fires a one-shot amber ring that radiates outward from the marker itself and fades (distinct from the marker's own continuous live-pulse — this one fires once, on tap). The card springs up from behind the marker with a soft overshoot-then-settle, landing with a little weight to it. Closing drops the card back down and shrinks it away quickly. Deliberately reuses the same "radiating ring" motion vocabulary already established for the Destination Picker → Live Map "cut to gameplay" flash, so this reads as a small sibling of that bigger moment rather than an unrelated new idea.</p>
+  <p><b>Layout:</b> stacked rows like Direction A, but each stat icon sits on a solid, bold color chip (teal / amber) rather than a soft tint — reads more like a game token/badge than a subtle utility icon.</p>
+  <p><b>Try it:</b> tap "Open Card", then "Close", then switch between Meera/Yourself. Tap the copy icon to see the checkmark morph. The filled blue arrow beside it is the new "Get Directions" control (added per user request) — opens the OS maps app with driving directions to that Voyager. Other-Voyager cards only; omitted on your own card, same rationale as distance-from-you.</p>
+</div>
+
+<div class="stage">
+  <div class="frame-block">
+    <div class="frame-label">Marker Peek Card — Burst &amp; Settle</div>
+    <div class="phone"><div class="screen" id="screen">
+      <div class="marker" id="marker">
+        <div class="burst-ring" id="burstRing"></div>
+        <div class="tooltip-wrap" id="wrap">
+          <div class="tooltip">
+            <div class="tooltip-header">
+              <div class="tooltip-name-row">
+                <div class="tooltip-swatch"></div>
+                <div class="tooltip-name" id="name">Meera</div>
+              </div>
+              <div class="tooltip-close">&#10005;</div>
+            </div>
+            <div class="tooltip-role" id="role">Driving</div>
+
+            <div class="coord-row">
+              <div class="coord-text">36.5054&deg; N, 121.9018&deg; W</div>
+              <div class="coord-actions">
+                <div class="copy-btn" id="copyBtn" onclick="doCopy(this)">
+                  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#667085" stroke-width="2.2"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+                  <svg class="check" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg>
+                </div>
+                <div class="nav-btn" id="navBtn" title="Get directions">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+                </div>
+              </div>
+            </div>
+
+            <div id="statBlock">
+              <div class="stat-row"><div class="stat-icon you">&#128100;</div><div class="stat-text">2.3 mi <b>from you</b></div></div>
+              <div class="stat-row"><div class="stat-icon dest">&#127937;</div><div class="stat-text">14.1 mi <b>to Lake Tahoe</b></div></div>
+            </div>
+            <div class="self-note" id="selfNote" style="display:none;">This is you.</div>
+          </div>
+          <div class="tooltip-tail"></div>
+        </div>
+        <div class="avatar" id="avatar">M</div>
+      </div>
+    </div></div>
+    <div class="controls">
+      <button class="ctl primary" onclick="openCard()">Open Card</button>
+      <button class="ctl" onclick="closeCard()">Close</button>
+      <button class="ctl active" id="btnMeera" onclick="setVoyager('meera')">Meera</button>
+      <button class="ctl" id="btnSelf" onclick="setVoyager('self')">Yourself</button>
+    </div>
+  </div>
+</div>
+
+<script>
+function openCard(){
+  const wrap = document.getElementById('wrap');
+  const ring = document.getElementById('burstRing');
+  wrap.classList.remove('closing');
+  wrap.style.opacity = 0;
+  void wrap.offsetWidth;
+  wrap.classList.add('open');
+  ring.classList.remove('fire');
+  void ring.offsetWidth;
+  ring.classList.add('fire');
+}
+function closeCard(){
+  const wrap = document.getElementById('wrap');
+  wrap.classList.remove('open');
+  wrap.classList.add('closing');
+}
+function doCopy(btn){
+  btn.classList.add('copied');
+  setTimeout(()=>btn.classList.remove('copied'), 1100);
+}
+function setVoyager(who){
+  document.getElementById('btnMeera').classList.toggle('active', who==='meera');
+  document.getElementById('btnSelf').classList.toggle('active', who==='self');
+  const name = document.getElementById('name');
+  const role = document.getElementById('role');
+  const statBlock = document.getElementById('statBlock');
+  const selfNote = document.getElementById('selfNote');
+  const avatar = document.getElementById('avatar');
+  const navBtn = document.getElementById('navBtn');
+  if(who==='meera'){
+    name.textContent='Meera'; role.style.display='block'; role.textContent='Driving';
+    statBlock.innerHTML = '<div class="stat-row"><div class="stat-icon you">&#128100;</div><div class="stat-text">2.3 mi <b>from you</b></div></div><div class="stat-row"><div class="stat-icon dest">&#127937;</div><div class="stat-text">14.1 mi <b>to Lake Tahoe</b></div></div>';
+    selfNote.style.display='none';
+    avatar.style.background='#00C2A8'; avatar.textContent='M';
+    navBtn.style.display='flex';
+  } else {
+    name.textContent='Chintan'; role.style.display='none';
+    statBlock.innerHTML = '<div class="stat-row"><div class="stat-icon dest">&#127937;</div><div class="stat-text">16.0 mi <b>to Lake Tahoe</b></div></div>';
+    selfNote.style.display='block';
+    avatar.style.background='#FF5A5F'; avatar.textContent='C';
+    navBtn.style.display='none';
+  }
+  openCard();
+}
+</script>

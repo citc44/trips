@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Voylo — Home Direction C: Gathering Dots</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #EDEFF3; color: #101828; font-family: "Segoe UI", Arial, sans-serif; padding: 32px; }
+.rationale { max-width: 920px; margin: 0 auto 28px; background: #fff; border: 1px solid #DCE1EA; border-radius: 20px; padding: 20px 24px; box-shadow: 0 2px 0 #DCE1EA; }
+.rationale h1 { font-size: 20px; font-weight: 700; margin-bottom: 8px; color: #0B6FFF; }
+.rationale p { font-size: 14.5px; line-height: 1.55; color: #344054; margin-bottom: 8px; }
+.rationale p:last-child { margin-bottom: 0; }
+.rationale b { color: #101828; }
+.stage { display: flex; gap: 32px; justify-content: center; flex-wrap: wrap; }
+.frame-block { text-align: center; }
+.frame-label { font-weight: 700; font-size: 12.5px; letter-spacing: 1.2px; text-transform: uppercase; margin-bottom: 12px; }
+.phone { width: 375px; height: 812px; border-radius: 44px; border: 9px solid #101828; background: #101828; position: relative; overflow: hidden; }
+.screen { position: absolute; inset: 0; border-radius: 36px; overflow: hidden; background: #F4F6FA; }
+
+.content { position: absolute; inset: 0; display: flex; flex-direction: column; z-index: 3; }
+.top-bar { padding: 56px 28px 0; }
+.wordmark { font-family: "Segoe UI Semibold", "Helvetica Neue", system-ui, sans-serif; font-size: 19px; font-weight: 700; color: #101828; letter-spacing: 0.3px; }
+
+.mid { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0 32px; text-align: center; gap: 10px; }
+.tagline { font-family: "Segoe UI Semibold", "Helvetica Neue", system-ui, sans-serif; font-size: 24px; font-weight: 700; line-height: 1.28; color: #101828; }
+.tagline-sub { font-size: 14.5px; color: #667085; line-height: 1.5; max-width: 280px; }
+
+.cta-zone { padding: 0 32px 64px; text-align: center; }
+.btn-primary { display: inline-block; background: #0B6FFF; color: #fff; border: none; border-radius: 999px; padding: 18px 44px; font-size: 16.5px; font-weight: 700; box-shadow: 0 6px 0 #0653C7; }
+.cta-caption { margin-top: 14px; font-size: 13px; color: #98A2B3; }
+
+/* ---- Gathering Dots: echoes the Splash sequence's own "three player-
+   color dots, apart but connected" story (app-icon, splash-thread) in a
+   quiet, ambient register -- three soft glowing dots drift slowly, never
+   quite meeting, a wordless nod to "friends scattered, about to converge
+   on a shared trip." Reuses the brand's own established visual vocabulary
+   instead of inventing a new motif for Home specifically. ---- */
+.dot-field { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
+.dot { position: absolute; border-radius: 50%; filter: blur(0.5px); opacity: 0.55; }
+.dot-coral { width: 86px; height: 86px; background: radial-gradient(circle, #FF5A5F 0%, rgba(255,90,95,0) 72%); left: 14%; top: 20%; animation: floatA 9s ease-in-out infinite; }
+.dot-teal { width: 100px; height: 100px; background: radial-gradient(circle, #00C2A8 0%, rgba(0,194,168,0) 72%); right: 10%; top: 38%; animation: floatB 11s ease-in-out infinite; }
+.dot-amber { width: 74px; height: 74px; background: radial-gradient(circle, #FFB020 0%, rgba(255,176,32,0) 72%); left: 28%; bottom: 22%; animation: floatC 10s ease-in-out infinite; }
+@keyframes floatA { 0%,100% { transform: translate(0,0); } 50% { transform: translate(14px, 18px); } }
+@keyframes floatB { 0%,100% { transform: translate(0,0); } 50% { transform: translate(-16px, -12px); } }
+@keyframes floatC { 0%,100% { transform: translate(0,0); } 50% { transform: translate(10px, -16px); } }
+
+.controls { margin-top: 14px; display: flex; gap: 8px; justify-content: center; }
+button.ctl { font-family: inherit; font-size: 12.5px; font-weight: 700; padding: 8px 14px; border-radius: 9999px; border: 1px solid #DCE1EA; background: #fff; color: #101828; cursor: pointer; }
+</style>
+</head>
+<body>
+
+<div class="rationale">
+  <h1>Direction C — "Gathering Dots"</h1>
+  <p><b>Concept:</b> the quietest, most conceptual of the three. Rather than a road motif, this borrows the Splash sequence's own established visual language -- three soft, glowing player-color orbs (coral/teal/amber, the same three colors app-icon and splash-thread already use) drifting slowly in the background, apart but never quite meeting. It's a wordless echo of the brand's first-principle idea: "let people experience a journey together, even when physically apart" -- the dots aren't connected yet because the Voyage hasn't started yet.</p>
+  <p><b>Copy:</b> same tagline placement as Direction A, in the quiet middle zone.</p>
+  <p><b>Motion:</b> each dot drifts on its own slow, independent loop (9-11s, gentle ease-in-out) -- ambient and continuous, never converging or bursting (that payoff is reserved for Splash's own "Thread" sequence and the "cut to gameplay" transition). Freezes to a static frame under Reduce Motion.</p>
+  <p><b>Tradeoff to weigh:</b> most subtle of the three -- reads as sophisticated/branded on close inspection, but is the lightest-touch option if what you want is something more immediately, obviously "road trip."</p>
+</div>
+
+<div class="stage">
+  <div class="frame-block">
+    <div class="frame-label">Home — Gathering Dots</div>
+    <div class="phone"><div class="screen">
+      <div class="dot-field" id="dotField">
+        <div class="dot dot-coral"></div>
+        <div class="dot dot-teal"></div>
+        <div class="dot dot-amber"></div>
+      </div>
+      <div class="content">
+        <div class="top-bar"><div class="wordmark">Voylo</div></div>
+        <div class="mid">
+          <div class="tagline">Every journey tells a story.</div>
+          <div class="tagline-sub">We make sure you never miss it.</div>
+        </div>
+        <div class="cta-zone">
+          <div class="btn-primary">Start a Voyage</div>
+          <div class="cta-caption">Gather your crew and hit the road.</div>
+        </div>
+      </div>
+    </div></div>
+    <div class="controls">
+      <button class="ctl" onclick="var el=document.getElementById('dotField'); el.style.animationPlayState = el.style.animationPlayState === 'paused' ? 'running' : 'paused'; document.querySelectorAll('.dot').forEach(function(d){ d.style.animationPlayState = d.style.animationPlayState === 'paused' ? 'running' : 'paused'; })">Toggle motion (Reduce Motion preview)</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

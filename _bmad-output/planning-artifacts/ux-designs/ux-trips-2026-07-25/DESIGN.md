@@ -1,12 +1,13 @@
 ---
 status: final
 created: 2026-07-25
-updated: 2026-08-04
+updated: 2026-08-06
 sources:
   - _bmad-output/planning-artifacts/prds/prd-trips-2026-07-25/prd.md
   - _bmad-output/brainstorming/brainstorm-group-road-trip-tracker-2026-07-21/brainstorm.html
   - _bmad-output/planning-artifacts/research/market-group-road-trip-coordination-and-travel-social-app-market-voylo-research-2026-07-24.md
   - _bmad-output/planning-artifacts/sprint-change-proposal-2026-08-02.md
+  - _bmad-output/planning-artifacts/sprint-change-proposal-2026-08-06.md
 ---
 
 name: Voylo
@@ -210,6 +211,62 @@ components:
     chevronColor: '{colors.ink-primary}'
     trailFadeDuration: 600ms
     trailLength: 8s
+  # marker-peek-card — NEW 2026-08-06 (Sprint Change Proposal 2026-08-06,
+  # Story 4.5). The per-Voyager card opened by tapping map-marker. Content
+  # expanded from v1's name/role/distance-from-you to add live coordinates,
+  # distance-from-destination, a copy control, and a Get Directions control.
+  # Motion spec ("Pop & Bounce") lives in EXPERIENCE.md's Motion &
+  # Transitions section. mockups/key-marker-peek-card.html is the
+  # pixel-exact reference, promoted from .working/direction-combo-final.html.
+  marker-peek-card:
+    background: '{colors.surface-primary}'
+    border: '1px solid {colors.border-hairline}'
+    radius: '{rounded.md}'
+    minWidth: 230px
+    shadow: '0 8px 20px 0 #10182833'
+    openDuration: 420ms
+    openEasing: 'cubic-bezier(.22,1.5,.36,1)'
+    openPeakScale: 1.12
+    closeDuration: 180ms
+    closeEasing: 'cubic-bezier(.5,0,.9,0)'
+    markerHopDuration: 420ms
+    markerHopEasing: 'cubic-bezier(.34,1.56,.64,1)'
+    sparkBurstColor: '{colors.accent-amber}'
+    sparkBurstDuration: 480ms
+    sparkCount: 6
+    coordRow:
+      background: '{colors.surface-secondary}'
+      radius: '{rounded.sm}'
+      text: 'monospace, 12.5px/700, letter-spacing -0.01em (Space Mono stand-in at reduced size — no dedicated token yet)'
+      format: 'decimal degrees + cardinal direction, e.g. "36.5054° N, 121.9018° W"; copies as that same string'
+    copyButton:
+      size: 26px
+      hitRegion: 44px
+      radius: '{rounded.sm}'
+      background: '{colors.surface-primary}'
+      border: '1px solid {colors.border-hairline}'
+      copiedBackground: '{colors.success}'
+      copiedIconMorph: 'clipboard icon → checkmark, ~250ms crossfade, holds 1.1s then reverts'
+    navigateButton:
+      size: 26px
+      hitRegion: 44px
+      radius: '{rounded.sm}'
+      background: '{colors.accent-primary}'
+      icon: 'filled arrow, white'
+      visibility: 'other-Voyager cards only — omitted entirely on the self card, same rationale as distance-from-you'
+      action: "opens the device's default maps app (Apple Maps on iOS / Google Maps on Android) with driving directions from the tapping Voyager to the tapped Voyager"
+    statPair:
+      layout: 'side-by-side, divided by 1px {colors.border-hairline}, below the coordinate row'
+      numeralTypography: '{typography.stat-numeral-sm}'
+      captionTypography: '{typography.caption}'
+      fromYouColor: '{colors.accent-teal}'
+      toDestinationColor: '{colors.warning}'
+      # `[ASSUMPTION: accent-teal/warning at stat-numeral-sm's 18px/700 weight
+      # sit right at the WCAG large-text boundary (18.66px bold) — needs an
+      # on-device contrast pass, same open item already flagged for
+      # button-ignition above; darken toward success/error-strength values if
+      # it fails in practice.]`
+    reducedMotion: 'card and marker appear/disappear instantly — no scale, hop, or spark; see EXPERIENCE.md Accessibility Floor'
   # status-pill: unchanged mechanism from v1 (Riding/Driving role switch, the single
   # most safety-critical control) — re-skinned to solid Wayfinder tokens, glow
   # replaced with a flat fill since Wayfinder has no glow treatment at all (see
@@ -315,6 +372,33 @@ components:
     taglineColor: '{colors.ink-secondary}'
     totalDuration: '~2.6s to idle hold'
     reducedMotion: 'settled end-state, single crossfade, no draw/pop/ripple'
+  # home-journey — NEW 2026-08-06 (Sprint Change Proposal 2026-08-06,
+  # Story 4.7, "Memory Sparks"). Full description lives once in Screens
+  # below (Home entry) and EXPERIENCE.md's Motion & Transitions "Home
+  # Journey" subsection — not restated here (code review finding, Story
+  # 4.7: this block was triple-narrating itself, the same issue already
+  # fixed for marker-peek-card in Story 4.5).
+  home-journey:
+    roadHeightPercent: 58
+    # #E8EAEE, not '{colors.map-road}' (#FFFFFF) -- literal, deliberately
+    # muted value (code review finding, Story 4.7: the token originally
+    # pointed at map-road but the approved mockup, key-home.html, never
+    # used that color). A perspective road read at dusk/atmosphere reads
+    # better slightly grayed than Live Map's flat top-down white road.
+    roadSurfaceColor: '#E8EAEE'
+    landGradient: 'linear-gradient(180deg, {colors.map-land-top} 0%, {colors.map-land-bottom} 55%, #C9E0BC 100%)'
+    centerlineColor: '{colors.map-road-centerline}'
+    centerlineDriftDurationMs: 900
+    crewDots: ['{colors.player-teal}', '{colors.player-coral}', '{colors.player-amber}']
+    crewDotBobDurationMs: 2400
+    crewDotStaggerMs: 600
+    revealGlowColor: '{colors.accent-amber}'
+    revealGlowHeartbeatDurationMs: 2600
+    memorySparkDurationMs: 5000
+    memorySparkStaggerMs: 1600
+    wordmarkGlowColor: '{colors.accent-amber}'
+    wordmarkGlowDurationMs: 4000
+    reducedMotion: 'road, crew dots, glow, and sparks all appear as a single static frame -- no drift, bob, pulse, or rise'
 
 ---
 
@@ -380,9 +464,9 @@ Map markers stay circles (a Voyager's avatar in a colored ring), never pins — 
 
 **Splash Screen** *(Ships: v1)* [mockup](mockups/key-splash-screen.html) — "The Thread." Cold-launch-only, plays once automatically before the app resolves to OTP Entry, Home, or a resumed Live Map. Three player-color dots appear apart, an `accent-amber` thread draws itself between them with sparks marking collected moments, resolves to the Voylo wordmark and "Every journey tells a story." Built to answer two rejected directions: a gentle drift on a dark-navy field read as too calm and broke Wayfinder's no-dark-surfaces rule, and a flash/comet-collision treatment read as exciting but conceptually disconnected from what Voylo actually is. This one is grounded directly in the brand promise — see Brand & Style — and the product's actual mechanic (separate Voyagers, one connected Voyage, quietly collected moments). Full phase timing in `EXPERIENCE.md` Motion & Transitions.
 
-**OTP Sign-In / Verify** *(Ships: v1)* [mockup](mockups/key-otp-signin.html) — Still plumbing, not a brand moment: `surface-primary` white canvas, no color-blocking on the content itself. The one change from v1: a `horizon-strip` now closes out the bottom of the screen so it never reads as flatly, silently white — this was direct user feedback on the first Wayfinder pass ("every screen that has only and just white background looks very unprofessional").
+**OTP Sign-In / Verify** *(Ships: v1)* [mockup](mockups/key-otp-signin.html) — Still plumbing, not a brand moment: `surface-primary` white canvas, no color-blocking on the content itself. The one change from v1: a `horizon-strip` now closes out the bottom of the screen so it never reads as flatly, silently white — this was direct user feedback on the first Wayfinder pass ("every screen that has only and just white background looks very unprofessional"). `[RECONSIDERED 2026-08-06, Story 4.7]` User feedback named this screen as part of a "dead" front door alongside Home — deliberately kept low-friction and copy-unchanged on reconsideration (OTP's speed is a real virtue, not an oversight), but `horizon-strip` itself is the answer here: its amber dash color already matches Home's new road motif below, giving OTP a quiet, restrained echo of the same world at zero added cost or risk to the auth flow's speed.
 
-**Home (no active Voyage)** *(Ships: v1 base — a Past Voyages list is v1.1)* [mockup](mockups/key-home.html) — Unchanged structure from v1: `surface-secondary` fog canvas, a small wordmark for orientation, one dominant `button-ignition` ("Start a Voyage") anchored low in generous whitespace. Left without a `horizon-strip` — it already has enough visual weight (the button's flat offset shadow) not to read as flat; revisit if feedback says otherwise.
+**Home (no active Voyage)** *(Ships: v1 base — a Past Voyages list is v1.1)* [mockup](mockups/key-home.html) — `[REDESIGNED 2026-08-06, Story 4.7 — supersedes the "unchanged structure... revisit if feedback says otherwise" note this entry originally carried]` Home is the app's actual front door for a first-time Voyager, and the prior "quiet resting state" read as empty rather than anticipatory. New treatment, "Memory Sparks": a stylized perspective road fills the bottom ~58% of the screen (same road-in-perspective language as the map's own `map-road-centerline`), three small player-color dots (teal/coral/amber) bob gently in place partway up the road — an illustrative preview of "your crew," not real data — and a warm amber glow pulses at the road's vanishing point like a heartbeat, with matching-color sparks continuously lifting off each dot and drifting up toward the wordmark before fading. The tagline's first half ("Every journey tells a story.") appears as real on-screen copy for the first time on this screen — no subhead; the `home-journey` visual carries the rest of the promise instead of more words — and the wordmark itself carries a slow breathing glow so it reads as a little alive, not a static label. `button-ignition` ("Start a Voyage") and its caption ("Gather your crew and hit the road.") are unchanged in position and copy from v1.
 
 **Trust Moment** *(Ships: v1)* [mockup](mockups/key-trust-moment.html) — Full-bleed `surface-ink-navy`, a teal icon badge, `display`-weight headline, one `button-ignition`. The exception to Wayfinder's all-light palette (see Colors) — deliberately low-drama and serious, distinct from every other screen's white/fog canvas.
 
@@ -394,7 +478,7 @@ Map markers stay circles (a Voyager's avatar in a colored ring), never pins — 
 
 **Join Invitation** *(Ships: v1)* [mockup](mockups/key-join-invitation.html) — Shares Voyage Intro's full-bleed `accent-primary` hero and `button-ignition-inverse` so the two cinematic moments read as one family. The one new motif: an overlapping three-avatar stack in player colors (coral/teal/amber), a wordless "people are already here" signal before any names are known. Canonical copy unchanged from v1.
 
-**Live Map (Voyage View)** *(Ships: v1 base)* [mockup](mockups/key-live-map.html) — Restructured from v1's full-bleed map with floating top/bottom `hud-card` docking to a solid, non-floating `map-banner` (destination name, always visible) with the full map rendered below it. Each Voyager renders as the unchanged `map-marker` mechanism, re-skinned to the new player-color tokens. The organizer entry point moves from a bottom-docked button to the `hamburger` icon inside the `map-banner`, opening `action-drawer`.
+**Live Map (Voyage View)** *(Ships: v1 base)* [mockup](mockups/key-live-map.html) — Restructured from v1's full-bleed map with floating top/bottom `hud-card` docking to a solid, non-floating `map-banner` (destination name, always visible) with the full map rendered below it. Each Voyager renders as the unchanged `map-marker` mechanism, re-skinned to the new player-color tokens. The organizer entry point moves from a bottom-docked button to the `hamburger` icon inside the `map-banner`, opening `action-drawer`. Tapping a marker opens `marker-peek-card` — see Components below.
 
 **Voyage Ended** *(Ships: v1 — this is v1's actual terminal state)* [mockup](mockups/key-voyage-ended.html) — Deliberately understated next to Voyage Intro/Join Invitation, unchanged in intent from v1: `surface-secondary` fog canvas, one `card` summary panel (destination, duration, Voyager count in `stat-numeral`), one `button-secondary` back to Home.
 
@@ -404,9 +488,13 @@ Map markers stay circles (a Voyager's avatar in a colored ring), never pins — 
 
 **Role-switch pill (Driving / Riding)** *(Ships: v1)* — `status-pill` token, unchanged mechanism from v1, re-skinned: Riding renders as a neutral white pill with a hairline border; Driving renders as a solid `accent-teal` fill with white text — no glow, since Wayfinder has none, but still the same "unmissable at a glance" intent via flat, saturated color contrast against the neutral Riding state.
 
+**Marker peek card** *(Ships: v1)* [mockup](mockups/key-marker-peek-card.html) — `marker-peek-card` token. The card opened by tapping any `map-marker`. Shows name, role, live coordinates (with copy and Get Directions controls), distance-from-you, and distance-from-destination in a side-by-side stat pair; the self-marker case drops role, distance-from-you, and Get Directions (unmeaningful readings for yourself), keeping only name, coordinates, and distance-from-destination. Opens/closes with "Pop & Bounce" — see Motion & Transitions, `EXPERIENCE.md`.
+
 **Action drawer** *(Ships: v1)* [mockup](mockups/key-live-map.html) (drawer-open state) — `action-drawer` token. Replaces `organizer-sheet` entirely (see `sprint-change-proposal-2026-08-02.md`). Slides in from the right over the Live Map, `surface-primary` white fill, houses End Voyage / Grant Organizer Status / Remove Voyager. Row tap swaps the drawer's own content into a confirm step — same modal-depth rule `organizer-sheet` used, never a stacked second dialog. Opened via the hamburger icon in `map-banner`. Motion spec lives in `EXPERIENCE.md`'s Motion & Transitions section.
 
-**Horizon-strip** *(Ships: v1)* [mockup](mockups/key-otp-signin.html) — `horizon-strip` token. A 96px ambient footer band with a soft sky gradient and a slow-scrolling dashed amber lane-line. Purely decorative — no tap target, no behavioral entry needed in `EXPERIENCE.md`. Used on OTP Sign-In/Verify and Destination Picker; freezes to a static frame under Reduce Motion.
+**Horizon-strip** *(Ships: v1)* [mockup](mockups/key-otp-signin.html) — `horizon-strip` token. A 96px ambient footer band with a soft sky gradient and a slow-scrolling dashed amber lane-line. Purely decorative — no tap target, no behavioral entry needed in `EXPERIENCE.md`. Used on OTP Sign-In/Verify and Destination Picker; freezes to a static frame under Reduce Motion. `[NOTE 2026-08-06, Story 4.7]` Deliberately left as OTP's only atmospheric treatment — its amber dash already shares `home-journey`'s own centerline color below, giving OTP a quiet family resemblance to Home at no added cost to the auth flow's speed.
+
+**Home journey** *(Ships: v1)* [mockup](mockups/key-home.html) — `home-journey` token. See the Home entry under Screens above for what it shows; motion timing lives in `EXPERIENCE.md`'s Motion & Transitions, "Home Journey" subsection. Purely decorative — no tap target.
 
 **Map banner** *(Ships: v1)* [mockup](mockups/key-live-map.html) — `map-banner` token. Solid `accent-primary` band docked to the top of Live Map, replacing the floating top `hud-card`. Displays the Voyage destination at all times and hosts the hamburger icon that opens `action-drawer`.
 

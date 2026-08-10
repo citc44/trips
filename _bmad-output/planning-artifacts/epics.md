@@ -439,7 +439,7 @@ So that a temporary signal drop doesn't corrupt the trip or make me look like I 
 
 ## Epic 4: Visual Design System v2 (Cross-Cutting Redesign)
 
-Replaces the shipped "Night Drive" dark/glass system with a solid-color, high-saturation game-map aesthetic and a breadcrumb-icon action drawer, across all built screens. Re-skin only — no FR/behavior change. Added via Sprint Change Proposal 2026-08-02 (see `sprint-change-proposal-2026-08-02.md`), triggered by user feedback that the shipped dark/glass UI and organizer bottom-sheet navigation read as unclear and hard to use.
+Replaces the shipped "Night Drive" dark/glass system with a solid-color, high-saturation game-map aesthetic and a breadcrumb-icon action drawer, across all built screens. Originally re-skin only — no FR/behavior change. Added via Sprint Change Proposal 2026-08-02 (see `sprint-change-proposal-2026-08-02.md`), triggered by user feedback that the shipped dark/glass UI and organizer bottom-sheet navigation read as unclear and hard to use. Extended via Sprint Change Proposal 2026-08-06 (see `sprint-change-proposal-2026-08-06.md`) to add a game-like, motion-driven redesign of the marker peek card plus new FR-9 content (live coordinates, distance-from-destination, Get Directions) — Stories 4.5/4.6. Extended a second time the same day (see the same file's addendum) to bring brand warmth and purposeful motion to OTP Sign-In and Home — Story 4.1's original brief had deliberately kept both "quiet," but user feedback identified them as the app's actual front door for a first-time Voyager who has no other context for what Voylo does — Stories 4.7/4.8.
 
 ### Story 4.1: UX Design System v2
 
@@ -516,3 +516,80 @@ So that the app feels consistent app-wide instead of having one redesigned scree
 **And** each built screen matches its linked mockup exactly (colors, spacing, radii, component treatment) — verified side-by-side against the mockup file during code review, not approved on "close enough"
 
 *(Fulfills app-wide scope of Story 4.1's design output across Epics 1-2's screens.)*
+
+### Story 4.5: Marker Peek Card Redesign (UX)
+
+As a UX Designer,
+I want to redesign the Voyager marker peek card's content and motion into a deliberately game-like, polished interaction,
+So that inspecting a fellow Voyager feels like a rewarding, fun beat in the drive rather than a plain utility tooltip.
+
+**Acceptance Criteria:**
+
+**Given** the expanded content requirements in FR-9 (per Sprint Change Proposal 2026-08-06) and the existing Motion & Transitions precedent in EXPERIENCE.md
+**When** this story is executed via a dedicated `bmad-ux` session
+**Then** `DESIGN.md` gains a first-class `marker-peek-card` component spec (promoted from its current single-row mention in EXPERIENCE.md's Interaction Design table) covering layout, typography, and visual treatment for: name, role, latitude/longitude (with a tap-to-copy control and a Get Directions control), distance-from-you, and distance-from-destination
+**And** `EXPERIENCE.md`'s Motion & Transitions section gains a new dated subsection specifying the peek card's open and close animation with exact timing/easing parameters (matching the precedent set by "cut to gameplay" and the Splash Screen entries), designed to read as a fun, game-like reveal rather than a plain fade
+**And** the Accessibility Floor section is updated: a Reduce-Motion fallback for the new animation, and updated VoiceOver/TalkBack announcement text covering the new fields
+**And** a new mockup revision of `key-marker-peek-card.html` is produced as the pixel-exact normative reference for Story 4.6, showing both the "tap another Voyager" and "tap yourself" states with all new fields
+**And** the self-marker case continues to omit role, distance-from-you, and the Get Directions control (unchanged/extended rationale — neither "how far from yourself" nor "navigate to yourself" is a meaningful reading), but now includes distance-from-destination and coordinates
+**This story is design-only — no app code changes.**
+
+*(Extends Story 4.1's Live Map respec and FR-9; added via Sprint Change Proposal 2026-08-06.)*
+
+### Story 4.6: Build Marker Peek Card Redesign
+
+As a Voyager,
+I want tapping a marker to show a richer, more delightful peek card with live coordinates, distance to both my fellow Voyager and the destination, and a way to navigate straight to them,
+So that checking in on the group feels fun and gives me the detail — and the option — I actually want.
+
+**Acceptance Criteria:**
+
+**Given** Story 4.5's `marker-peek-card` spec and mockup
+**When** I tap a Voyager's marker on Live Map
+**Then** the peek card opens and closes using the exact motion spec from Story 4.5 (not a default fade or instant cut)
+**And** the card shows name, role, live latitude/longitude (updating in real time from the same smoothed position driving the marker itself), a tap-to-copy control for the coordinates, live distance from my own position, and live distance from the shared destination
+**And** a "Get Directions" control sits beside the copy control on other-Voyager cards; tapping it opens the device's default maps app (Apple Maps on iOS, Google Maps on Android) with driving directions already routing from my current position to that Voyager's live coordinates
+**And** tapping my own marker shows name, coordinates, and distance-from-destination only — no role, distance-from-me, or Get Directions control, per FR-9
+**And** the built card matches Story 4.5's mockup exactly (colors, spacing, radii, motion) — verified side-by-side during code review, not approved on "close enough"
+**And** this work is implemented on a dedicated feature branch, not directly on main, per explicit user instruction
+**And** existing peek-card test coverage (`marker-peek-card`, `marker-peek-distance`, etc.) is extended to cover the new fields, the copy control, and the Get Directions control
+
+*(Implements Story 4.5's spec; added via Sprint Change Proposal 2026-08-06.)*
+
+### Story 4.7: Welcome & Sign-In Warmth (UX)
+
+As a UX Designer,
+I want to redesign OTP Sign-In/Verify and Home's copy, visual tone, and motion so a first-time Voyager immediately feels the brand and understands what happens next,
+So that the app's actual front door stops reading as generic auth/utility screens next to the emotional payoff already built into Voyage Intro and Join Invitation.
+
+**Acceptance Criteria:**
+
+**Given** the brand core captured in the original brainstorming session (`_bmad-output/brainstorming/brainstorm-group-road-trip-tracker-2026-07-21/brainstorm.html` — the "send me your Voylo" throughline, the tagline, "let people experience a journey together, even when physically apart") and PRD §4.5's now-updated discoverability note (Sprint Change Proposal 2026-08-06)
+**When** this story is executed via a dedicated `bmad-ux` session
+**Then** `DESIGN.md`'s OTP Sign-In/Verify and Home Screens entries are rewritten, dropping the "still plumbing, not a brand moment" / "unchanged structure" framing in favor of a deliberate content and tone treatment for each — explicitly weighted differently: OTP stays fast and low-friction (no added steps, no delay to code entry), Home gets the larger swing since it's the literal first "what is this app" moment for a brand-new Voyager
+**And** `EXPERIENCE.md`'s Voice and Tone table gains real Do/Don't rows for OTP Sign-In and Home — both currently have zero entries, unlike every other screen already in that table
+**And** a new dated subsection is added to `EXPERIENCE.md`'s Motion & Transitions section specifying purposeful motion for at least Home (and OTP if the chosen direction calls for it) that reflects Voylo's actual premise — a shared journey, a road-trip game world — not generic decorative animation; consider (not mandate) extending existing motion building blocks already in this codebase (`horizon-strip`'s ambient road drift, the `road-motif` component shared by Voyage Intro/Join Invitation) before inventing a new pattern
+**And** at least 2-3 concrete directions (copy + visual + motion) are rendered for user review before any single approach is locked in, per explicit user request during this story's own Sprint Change Proposal discussion
+**And** new mockup revisions of `key-otp-signin.html` and `key-home.html` are produced as the pixel-exact normative reference for Story 4.8
+**And** the OTP field's existing behavioral contract (auto-advance, auto-submit at 6 digits, 30s resend cooldown, shake-on-error) is unchanged — this story touches tone and motion, not the auth flow itself
+**This story is design-only — no app code changes.**
+
+*(Extends Story 4.1's original design brief for OTP/Home; added via Sprint Change Proposal 2026-08-06.)*
+
+### Story 4.8: Build Welcome & Sign-In Warmth
+
+As a first-time Voyager,
+I want OTP Sign-In and Home to feel like the start of something exciting instead of a generic login screen and a bare button,
+So that I understand what Voylo is and want to tap "Start a Voyage" before I've even used the app once.
+
+**Acceptance Criteria:**
+
+**Given** Story 4.7's approved copy, visual, and motion spec and mockups
+**When** I open the app for the first time (or return with no active Voyage)
+**Then** OTP Sign-In/Verify (`sign-in.tsx`) and Home (`index.tsx`) render the new copy, visual tone, and motion exactly as spec'd — verified side-by-side against the mockups during code review, not approved on "close enough"
+**And** OTP's existing behavioral contract (auto-advance, auto-submit, 30s resend cooldown, shake-on-error, join-code link) is unchanged and every existing `sign-in.test.tsx` assertion on that behavior still passes — this story changes tone/motion, not the flow
+**And** `index.tsx`'s existing `join-voyage-button`/`settings-link` behavior is unchanged
+**And** `sign-in.test.tsx`/`index.test.tsx`'s copy-string assertions are updated to match the new copy — an expected, sanctioned test update, not a regression
+**And** this work is implemented on a dedicated feature branch, not directly on main, matching this project's established convention for UX-driven build stories
+
+*(Implements Story 4.7's spec; added via Sprint Change Proposal 2026-08-06.)*

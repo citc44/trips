@@ -2,36 +2,23 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Voylo — Home / No Active Voyage ("Memory Sparks")</title>
+<title>Voylo — Home, Final Direction: Memory Sparks</title>
 <style>
-/*
-  Story 4.7 (Sprint Change Proposal 2026-08-06, addendum). Supersedes the
-  prior "quiet resting state" Home mockup -- this is the pixel-exact,
-  normative reference for Story 4.8. See DESIGN.md's home-journey token
-  block and EXPERIENCE.md's Motion & Transitions "Home Journey ('Memory
-  Sparks')" subsection for the full spec this mock illustrates.
-  palette: Wayfinder -- primary blue #0B6FFF, accent teal #00C2A8, coral
-  #FF5A5F, amber #FFB020, ink #101828, ink secondary #667085, hairline
-  #DCE1EA, map-land-top #EAF2E4, map-land-bottom #DCEBD3.
-  Font substitutions (web-safe stand-ins for the brand type system):
-  display -> "Segoe UI Semibold", "Helvetica Neue", system-ui, sans-serif  (stand-in for Clash Display)
-  body    -> "Segoe UI", "Helvetica Neue", Arial, sans-serif               (stand-in for General Sans)
-*/
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { background: #EDEFF3; color: #101828; font-family: "Segoe UI", Arial, sans-serif; padding: 32px; }
-.rationale { max-width: 920px; margin: 0 auto 32px; background: #fff; border: 1px solid #DCE1EA; border-radius: 20px; padding: 20px 24px; box-shadow: 0 2px 0 #DCE1EA; }
-.rationale h1 { font-size: 21px; font-weight: 700; margin-bottom: 8px; color: #0B6FFF; }
-.rationale p { font-size: 15px; line-height: 1.5; color: #344054; margin-bottom: 10px; }
+.rationale { max-width: 920px; margin: 0 auto 28px; background: #fff; border: 1px solid #DCE1EA; border-radius: 20px; padding: 20px 24px; box-shadow: 0 2px 0 #DCE1EA; }
+.rationale h1 { font-size: 20px; font-weight: 700; margin-bottom: 8px; color: #0B6FFF; }
+.rationale p { font-size: 14.5px; line-height: 1.55; color: #344054; margin-bottom: 8px; }
 .rationale p:last-child { margin-bottom: 0; }
 .rationale b { color: #101828; }
-.stage { display: flex; gap: 40px; justify-content: center; flex-wrap: wrap; align-items: flex-start; }
+.stage { display: flex; gap: 32px; justify-content: center; flex-wrap: wrap; }
 .frame-block { text-align: center; }
-.frame-label { color: #101828; font-weight: 700; font-size: 13px; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 14px; }
-.phone { width: 390px; height: 844px; border-radius: 44px; border: 9px solid #101828; background: #101828; position: relative; overflow: hidden; }
+.frame-label { font-weight: 700; font-size: 12.5px; letter-spacing: 1.2px; text-transform: uppercase; margin-bottom: 12px; }
+.phone { width: 375px; height: 812px; border-radius: 44px; border: 9px solid #101828; background: #101828; position: relative; overflow: hidden; }
 .screen { position: absolute; inset: 0; border-radius: 36px; overflow: hidden; background: linear-gradient(180deg, #EAF2E4 0%, #DCEBD3 55%, #C9E0BC 100%); }
 
 .content { position: absolute; inset: 0; display: flex; flex-direction: column; }
-.top-bar { padding: 64px 28px 0; position: relative; z-index: 6; }
+.top-bar { padding: 56px 28px 0; position: relative; z-index: 6; }
 .wordmark { font-family: "Segoe UI Semibold", "Helvetica Neue", system-ui, sans-serif; font-size: 21px; font-weight: 700; color: #101828; letter-spacing: 0.3px; position: relative; display: inline-block; }
 .wordmark::before { content: ''; position: absolute; left: -10px; top: -6px; right: -10px; bottom: -6px; border-radius: 14px; background: radial-gradient(ellipse, rgba(255,176,32,0.22) 0%, rgba(255,176,32,0) 70%); animation: wordGlow 4s ease-in-out infinite; }
 @keyframes wordGlow { 0%,100% { opacity: 0.5; transform: scale(0.94); } 50% { opacity: 1; transform: scale(1.05); } }
@@ -55,29 +42,28 @@ body { background: #EDEFF3; color: #101828; font-family: "Segoe UI", Arial, sans
 .reveal-glow { position: absolute; left: 50%; bottom: 42%; width: 46px; height: 46px; margin-left: -23px; border-radius: 50%; background: radial-gradient(circle, rgba(255,176,32,0.7) 0%, rgba(255,176,32,0) 72%); animation: heartbeat 2.6s ease-in-out infinite; }
 @keyframes heartbeat { 0%,100% { transform: scale(0.85); opacity: 0.5; } 45% { transform: scale(1.3); opacity: 0.9; } }
 
-.mid { position: relative; z-index: 6; flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: 22px 32px 0; text-align: center; }
+.mid { position: relative; z-index: 6; flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: 20px 32px 0; text-align: center; }
 .tagline { font-family: "Segoe UI Semibold", "Helvetica Neue", system-ui, sans-serif; font-size: 27px; font-weight: 700; line-height: 1.2; color: #101828; text-shadow: 0 2px 12px rgba(255,255,255,0.65); }
 
-.cta-zone { position: relative; z-index: 6; padding: 0 32px 52px; text-align: center; margin-top: auto; }
+.cta-zone { position: relative; z-index: 6; padding: 0 32px 46px; text-align: center; margin-top: auto; }
 .btn-primary { display: inline-block; background: #0B6FFF; color: #fff; border: none; border-radius: 999px; padding: 18px 44px; font-size: 16.5px; font-weight: 700; box-shadow: 0 6px 0 #0653C7; }
 .cta-caption { margin-top: 14px; font-size: 13px; color: #344054; text-shadow: 0 1px 6px rgba(255,255,255,0.55); }
 
-.controls { margin-top: 16px; display: flex; gap: 8px; justify-content: center; }
+.controls { margin-top: 14px; display: flex; gap: 8px; justify-content: center; }
 button.ctl { font-family: inherit; font-size: 12.5px; font-weight: 700; padding: 8px 14px; border-radius: 9999px; border: 1px solid #DCE1EA; background: #fff; color: #101828; cursor: pointer; }
 </style>
 </head>
 <body>
 
 <div class="rationale">
-  <h1>Home — "Memory Sparks"</h1>
-  <p><b>Motion:</b> a stylized perspective road fills the bottom ~58% of the screen. Centerline dashes drift continuously (900ms linear loop). Three illustrative player-color dots (not real data) bob independently along the road, each on its own 2.4s loop. A warm amber glow pulses at the road's vanishing point like a heartbeat (2.6s). A spark in each dot's own color lifts off it and drifts up toward the wordmark before fading (5s per spark, staggered 1.6s apart) — a wordless nod to Memory Lane's own eventual payoff. The wordmark itself carries a slow breathing glow (4s loop). All ambient and looping — Home is a resting state, not an entrance sequence.</p>
-  <p><b>Content:</b> the tagline appears as real on-screen copy for the first time on this screen ("Every journey tells a story.") — no subhead, the visual carries the rest. Button and caption unchanged from v1.</p>
-  <p><b>Try it:</b> use the toggle below to preview the Reduce Motion fallback (a single static frame, no drift/bob/pulse/rise).</p>
+  <h1>Home — FINAL: "Memory Sparks"</h1>
+  <p><b>Locked by user (2026-08-06).</b> Wordmark keeps its quiet breathing glow. Tagline stays the only headline copy -- no subhead. Button caption "Gather your crew and hit the road." is restored underneath the button. The road, the three player-color crew dots bobbing in place, the heartbeat glow at the vanishing point, and the sparks rising off each crew dot toward the wordmark are unchanged from the winning Memory Sparks direction -- the "share your Voylo" payoff tease explored in a later pass was explicitly dropped, not carried into final.</p>
+  <p><b>Copy, top to bottom:</b> "Voylo" (wordmark) → "Every journey tells a story." (tagline) → "Start a Voyage" (button) → "Gather your crew and hit the road." (caption).</p>
 </div>
 
 <div class="stage">
   <div class="frame-block">
-    <div class="frame-label">Home — No Active Voyage</div>
+    <div class="frame-label">Home — Final</div>
     <div class="phone"><div class="screen">
       <div class="content">
         <div class="top-bar"><div class="wordmark">Voylo</div></div>

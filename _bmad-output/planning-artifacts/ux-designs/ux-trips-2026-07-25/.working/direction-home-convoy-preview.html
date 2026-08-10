@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Voylo — Home Direction E: Convoy Preview</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #EDEFF3; color: #101828; font-family: "Segoe UI", Arial, sans-serif; padding: 32px; }
+.rationale { max-width: 920px; margin: 0 auto 28px; background: #fff; border: 1px solid #DCE1EA; border-radius: 20px; padding: 20px 24px; box-shadow: 0 2px 0 #DCE1EA; }
+.rationale h1 { font-size: 20px; font-weight: 700; margin-bottom: 8px; color: #0B6FFF; }
+.rationale p { font-size: 14.5px; line-height: 1.55; color: #344054; margin-bottom: 8px; }
+.rationale p:last-child { margin-bottom: 0; }
+.rationale b { color: #101828; }
+.stage { display: flex; gap: 32px; justify-content: center; flex-wrap: wrap; }
+.frame-block { text-align: center; }
+.frame-label { font-weight: 700; font-size: 12.5px; letter-spacing: 1.2px; text-transform: uppercase; margin-bottom: 12px; }
+.phone { width: 375px; height: 812px; border-radius: 44px; border: 9px solid #101828; background: #101828; position: relative; overflow: hidden; }
+.screen { position: absolute; inset: 0; border-radius: 36px; overflow: hidden; background: linear-gradient(180deg, #EAF2E4 0%, #DCEBD3 55%, #C9E0BC 100%); }
+
+.content { position: absolute; inset: 0; display: flex; flex-direction: column; }
+.top-bar { padding: 56px 28px 0; position: relative; z-index: 6; }
+.wordmark { font-family: "Segoe UI Semibold", "Helvetica Neue", system-ui, sans-serif; font-size: 19px; font-weight: 700; color: #101828; letter-spacing: 0.3px; }
+
+.road-wrap { position: absolute; left: 0; right: 0; bottom: 0; height: 58%; overflow: hidden; }
+.road-surface { position: absolute; left: 50%; bottom: 0; width: 480px; height: 100%; margin-left: -240px; background: #E8EAEE; clip-path: polygon(42% 0%, 58% 0%, 100% 100%, 0% 100%); }
+.centerline { position: absolute; left: 50%; bottom: 0; width: 10px; height: 100%; margin-left: -5px; clip-path: polygon(46% 0%, 54% 0%, 62% 100%, 38% 100%); overflow: hidden; }
+.centerline-dashes { position: absolute; inset: 0; display: flex; flex-direction: column; animation: roadDrift 900ms linear infinite; }
+.dash-seg { height: 46px; background: #FFB020; margin-bottom: 46px; }
+@keyframes roadDrift { from { transform: translateY(-92px); } to { transform: translateY(0); } }
+
+/* ---- The idea unique to this direction: tiny map-marker-style dots
+   (same player-color language as Live Map's own markers) placed along the
+   road ahead, gently bobbing -- "your crew is already out there, waiting
+   for you to catch up." Directly previews the actual Live Map visual
+   vocabulary from Home, instead of an abstract road. ---- */
+.crew-dot { position: absolute; border-radius: 50%; border: 2.5px solid #fff; box-shadow: 0 2px 4px 0 rgba(16,24,40,0.35); animation: bob 2.4s ease-in-out infinite; }
+.crew-1 { width: 20px; height: 20px; background: #00C2A8; left: 46%; bottom: 46%; animation-delay: 0s; }
+.crew-2 { width: 15px; height: 15px; background: #FF5A5F; left: 58%; bottom: 40%; animation-delay: 0.6s; }
+.crew-3 { width: 12px; height: 12px; background: #FFB020; left: 40%; bottom: 36%; animation-delay: 1.2s; }
+@keyframes bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+.crew-caption { position: absolute; left: 0; right: 0; bottom: 30%; text-align: center; font-size: 11.5px; font-weight: 700; color: #101828; text-shadow: 0 1px 6px rgba(255,255,255,0.7); letter-spacing: 0.2px; }
+
+.mid { position: relative; z-index: 6; flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: 14px 32px 0; text-align: center; gap: 8px; }
+.tagline { font-family: "Segoe UI Semibold", "Helvetica Neue", system-ui, sans-serif; font-size: 26px; font-weight: 700; line-height: 1.25; color: #101828; text-shadow: 0 2px 12px rgba(255,255,255,0.6); }
+.tagline-sub { font-size: 14.5px; color: #344054; line-height: 1.5; max-width: 270px; text-shadow: 0 2px 8px rgba(255,255,255,0.5); }
+
+.cta-zone { position: relative; z-index: 6; padding: 0 32px 66px; text-align: center; margin-top: auto; }
+.btn-primary { display: inline-block; background: #0B6FFF; color: #fff; border: none; border-radius: 999px; padding: 18px 44px; font-size: 16.5px; font-weight: 700; box-shadow: 0 6px 0 #0653C7; }
+.cta-caption { margin-top: 14px; font-size: 13px; color: #344054; text-shadow: 0 1px 6px rgba(255,255,255,0.5); }
+
+.controls { margin-top: 14px; display: flex; gap: 8px; justify-content: center; }
+button.ctl { font-family: inherit; font-size: 12.5px; font-weight: 700; padding: 8px 14px; border-radius: 9999px; border: 1px solid #DCE1EA; background: #fff; color: #101828; cursor: pointer; }
+</style>
+</head>
+<body>
+
+<div class="rationale">
+  <h1>Direction E — "Convoy Preview"</h1>
+  <p><b>Builds on Direction B</b> by populating the road with tiny map-marker-style dots in the exact same player-color palette Live Map itself uses (teal/coral/amber) -- gently bobbing in place up the road. The idea: Home isn't just showing you a generic road, it's previewing the actual game-world map vocabulary you'll see the instant you start a Voyage. It's illustrative only here (no real data, no names) -- but it plants the "you're about to join others on a living map" idea before you've even tapped anything.</p>
+  <p><b>Richer because:</b> it's not just atmosphere, it's a literal, wordless preview of the app's core mechanic (a shared live map) -- ties Home's fantasy directly to what actually happens next, rather than a mood-only visual.</p>
+  <p><b>Tradeoff to weigh:</b> illustrative dots with no real people could feel slightly staged/misleading on a completely solo first launch (no crew has joined yet) -- worth deciding whether that's a fun tease or a small trust wrinkle.</p>
+</div>
+
+<div class="stage">
+  <div class="frame-block">
+    <div class="frame-label">Home — Convoy Preview</div>
+    <div class="phone"><div class="screen">
+      <div class="content">
+        <div class="top-bar"><div class="wordmark">Voylo</div></div>
+        <div class="mid">
+          <div class="tagline">Every journey tells a story.</div>
+          <div class="tagline-sub">We make sure you never miss it.</div>
+        </div>
+        <div class="cta-zone">
+          <div class="btn-primary">Start a Voyage</div>
+          <div class="cta-caption">Gather your crew and hit the road.</div>
+        </div>
+        <div class="road-wrap" id="motionZone">
+          <div class="road-surface"></div>
+          <div class="centerline"><div class="centerline-dashes"><div class="dash-seg"></div><div class="dash-seg"></div><div class="dash-seg"></div><div class="dash-seg"></div><div class="dash-seg"></div><div class="dash-seg"></div><div class="dash-seg"></div><div class="dash-seg"></div></div></div>
+          <div class="crew-dot crew-1"></div>
+          <div class="crew-dot crew-2"></div>
+          <div class="crew-dot crew-3"></div>
+        </div>
+      </div>
+    </div></div>
+    <div class="controls">
+      <button class="ctl" onclick="document.querySelectorAll('#motionZone, #motionZone *').forEach(function(el){ el.style.animationPlayState = el.style.animationPlayState === 'paused' ? 'running' : 'paused'; })">Toggle motion (Reduce Motion preview)</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

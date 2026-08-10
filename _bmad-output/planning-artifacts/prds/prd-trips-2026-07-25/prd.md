@@ -197,7 +197,7 @@ Any Voyager can view all Voyagers' live locations on one shared map for the acti
 - The map reflects each Voyager's position with a near-real-time refresh. `[ASSUMPTION: exact refresh interval TBD — trades off battery cost vs. live-feel, needs engineering input]`
 - The map's visual treatment is stylized/game-like rather than a standard turn-by-turn navigation map. `[NOTE FOR PM: see Open Question 3]`
 - The map and the Voyagers on it are visible only to Voyagers on that specific Voyage.
-- Tapping a Voyager's marker opens a lightweight peek tooltip anchored to that marker (Waze-style callout, not a full-screen sheet) showing their name, role, and live distance from the *tapping* Voyager's own current position — not from the shared destination. Tapping your own marker shows only your name, with no role or distance shown, since distance-from-yourself isn't a meaningful reading.
+- Tapping a Voyager's marker opens a peek card anchored to that marker, presented with a deliberate, game-like open/close treatment (exact motion parameters specified in EXPERIENCE.md's Motion & Transitions, per Story 4.5). It shows their name, role, live coordinates (latitude/longitude, updating in real time with their marker position, with a tap-to-copy control and a "Get Directions" control that opens the device's default maps app with driving directions to that Voyager), live distance from the *tapping* Voyager's own current position, and live distance from the shared destination. Tapping your own marker shows only your name, coordinates, and distance-from-destination, with no role, distance-from-you, or Get Directions control, since neither "how far from yourself" nor "navigate to yourself" is a meaningful reading; distance-from-destination is still shown since that is meaningful even for your own marker.
 
 **Feature-specific NFRs:**
 - Battery impact of continuous location tracking must be actively budgeted and load-tested — flagged as a high-severity risk in market research (Life360's battery-drain complaints are the category's most-cited failure).
@@ -245,7 +245,7 @@ Any Voyager can attach a photo to a moment (such as a detected stop) during the 
 
 ### 4.5 Onboarding Nudges
 
-**Description:** Because Voylo's value isn't self-evident the way GPS navigation's is, first-time Voyagers need to discover what they can do — solved with one-time, contextual nudges tied to real moments rather than an upfront tutorial. Realizes UJ-3 (discoverability).
+**Description:** Because Voylo's value isn't self-evident the way GPS navigation's is, first-time Voyagers need to discover what they can do. Mid-trip, this is solved with one-time, contextual nudges tied to real moments rather than an upfront tutorial (v1.1). Before the trip even starts, the same not-self-evident problem exists at the front door — OTP Sign-In and Home (FR-1, §5.1) carry the discoverability burden for v1, via warmer copy and visual tone rather than a nudge mechanism, since there's no in-app moment to attach a nudge to yet. Realizes UJ-3 (discoverability).
 
 **Functional Requirements:**
 

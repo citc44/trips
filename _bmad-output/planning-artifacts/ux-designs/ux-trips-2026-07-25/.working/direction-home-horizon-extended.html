@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Voylo — Home Direction A: Horizon Extended</title>
+<style>
+/* Story 4.7 direction exploration. Wayfinder tokens (DESIGN.md), unchanged
+   palette. Font stand-ins: Segoe UI Semibold (Clash Display), Segoe UI
+   (General Sans). */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #EDEFF3; color: #101828; font-family: "Segoe UI", Arial, sans-serif; padding: 32px; }
+.rationale { max-width: 920px; margin: 0 auto 28px; background: #fff; border: 1px solid #DCE1EA; border-radius: 20px; padding: 20px 24px; box-shadow: 0 2px 0 #DCE1EA; }
+.rationale h1 { font-size: 20px; font-weight: 700; margin-bottom: 8px; color: #0B6FFF; }
+.rationale p { font-size: 14.5px; line-height: 1.55; color: #344054; margin-bottom: 8px; }
+.rationale p:last-child { margin-bottom: 0; }
+.rationale b { color: #101828; }
+.stage { display: flex; gap: 32px; justify-content: center; flex-wrap: wrap; }
+.frame-block { text-align: center; }
+.frame-label { font-weight: 700; font-size: 12.5px; letter-spacing: 1.2px; text-transform: uppercase; margin-bottom: 12px; }
+.phone { width: 375px; height: 812px; border-radius: 44px; border: 9px solid #101828; background: #101828; position: relative; overflow: hidden; }
+.screen { position: absolute; inset: 0; border-radius: 36px; overflow: hidden; background: #F4F6FA; }
+
+.content { position: absolute; inset: 0; display: flex; flex-direction: column; }
+.top-bar { padding: 56px 28px 0; }
+.wordmark { font-family: "Segoe UI Semibold", "Helvetica Neue", system-ui, sans-serif; font-size: 19px; font-weight: 700; color: #101828; letter-spacing: 0.3px; }
+
+.mid { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0 32px; text-align: center; gap: 10px; }
+.tagline { font-family: "Segoe UI Semibold", "Helvetica Neue", system-ui, sans-serif; font-size: 24px; font-weight: 700; line-height: 1.28; color: #101828; }
+.tagline-sub { font-size: 14.5px; color: #667085; line-height: 1.5; max-width: 280px; }
+
+.cta-zone { padding: 0 32px 28px; text-align: center; position: relative; z-index: 3; }
+.btn-primary { display: inline-block; background: #0B6FFF; color: #fff; border: none; border-radius: 999px; padding: 18px 44px; font-size: 16.5px; font-weight: 700; box-shadow: 0 6px 0 #0653C7; }
+.cta-caption { margin-top: 14px; font-size: 13px; color: #98A2B3; }
+
+/* ---- Extended horizon: a much larger version of the existing
+   horizon-strip ambient footer, taking up the bottom third instead of a
+   thin 96px band, so Home finally reads as "the road is right there,
+   waiting" instead of empty whitespace. Same dashed-amber-lane-line /
+   sky-gradient language already established on OTP/Destination Picker --
+   extended in scale, not invented fresh. ---- */
+.horizon-zone { position: relative; height: 34%; overflow: hidden; }
+.sky { position: absolute; inset: 0; background: linear-gradient(180deg, #EDF3FF 0%, #E1EDFF 55%, #D6E6FF 100%); }
+.sun-glow { position: absolute; left: 50%; top: 8%; width: 220px; height: 220px; margin-left: -110px; border-radius: 50%; background: radial-gradient(circle, #FFE9BE 0%, rgba(255,233,190,0) 70%); }
+.road { position: absolute; left: 0; right: 0; bottom: 0; height: 62%; background: #FFFFFF; border-top: 2px solid #C7D6EC; }
+.dash-track { position: absolute; left: 0; right: 0; top: 18px; height: 6px; display: flex; gap: 22px; animation: drift 3.2s linear infinite; }
+.dash { width: 26px; height: 6px; border-radius: 3px; background: #FFB020; flex-shrink: 0; }
+@keyframes drift { from { transform: translateX(0); } to { transform: translateX(-48px); } }
+
+.controls { margin-top: 14px; display: flex; gap: 8px; justify-content: center; }
+button.ctl { font-family: inherit; font-size: 12.5px; font-weight: 700; padding: 8px 14px; border-radius: 9999px; border: 1px solid #DCE1EA; background: #fff; color: #101828; cursor: pointer; }
+</style>
+</head>
+<body>
+
+<div class="rationale">
+  <h1>Direction A — "Horizon Extended"</h1>
+  <p><b>Concept:</b> Home already has a rejected idea sitting right there in DESIGN.md -- horizon-strip was deliberately left off Home as "already has enough visual weight," with an explicit note to revisit given feedback. This direction takes that exact feedback: the same dashed-amber-lane-line / soft-sky-gradient language already proven on OTP and Destination Picker, but scaled up from a thin 96px footer into a real bottom-third "the open road is right there" zone. Lowest-risk direction -- extends a pattern you already approved, not a new one.</p>
+  <p><b>Copy:</b> tagline promoted to real on-screen text ("Every journey tells a story. We make sure you never miss it."), sitting in the quiet middle third above the road. Button/caption unchanged.</p>
+  <p><b>Motion:</b> the dashed lane-line drifts continuously (3.2s loop, same duration as the existing horizon-strip token) -- ambient, ongoing, not a one-shot animation. Freezes under Reduce Motion, same existing convention.</p>
+</div>
+
+<div class="stage">
+  <div class="frame-block">
+    <div class="frame-label">Home — Horizon Extended</div>
+    <div class="phone"><div class="screen">
+      <div class="content">
+        <div class="top-bar"><div class="wordmark">Voylo</div></div>
+        <div class="mid">
+          <div class="tagline">Every journey tells a story.</div>
+          <div class="tagline-sub">We make sure you never miss it.</div>
+        </div>
+        <div class="cta-zone">
+          <div class="btn-primary">Start a Voyage</div>
+          <div class="cta-caption">Gather your crew and hit the road.</div>
+        </div>
+        <div class="horizon-zone">
+          <div class="sky"></div>
+          <div class="sun-glow"></div>
+          <div class="road">
+            <div class="dash-track" id="dashTrack">
+              <div class="dash"></div><div class="dash"></div><div class="dash"></div><div class="dash"></div><div class="dash"></div><div class="dash"></div><div class="dash"></div><div class="dash"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div></div>
+    <div class="controls">
+      <button class="ctl" onclick="document.getElementById('dashTrack').style.animationPlayState = document.getElementById('dashTrack').style.animationPlayState === 'paused' ? 'running' : 'paused'">Toggle motion (Reduce Motion preview)</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
