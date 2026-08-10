@@ -2,11 +2,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as TaskManager from 'expo-task-manager';
 
 import { locationRepository } from '@/repositories/location-repository';
+import { createMessageId, VOYAGE_PROTOCOL_VERSION, type LocationSignal } from '@/shared/types/voyage-message';
 
 export const BACKGROUND_LOCATION_TASK = 'voylo-background-location';
 
 export type BackgroundLocationContext = {
   voyageId: string;
+  userId?: string;
   // Identifies the native hook effect that owns the shared Expo task. The
   // task callback itself only needs voyageId, but cleanup needs this token so
   // an obsolete effect cannot clear a newer effect's in-memory or persisted
@@ -54,9 +56,7 @@ function enqueueContextStorageMutation(mutation: () => Promise<unknown>): Promis
 
 type PendingLocationFix = {
   voyageId: string;
-  lat: number;
-  lng: number;
-  heading: number | null;
+  signal: LocationSignal;
 };
 
 // At navigation cadence a new GPS fix can arrive while the previous RPC is
@@ -66,6 +66,13 @@ type PendingLocationFix = {
 // known position is the next value sent when connectivity recovers.
 let pendingFix: PendingLocationFix | null = null;
 let drainPromise: Promise<void> | null = null;
+let sequence = 0;
+const senderSessionId = createMessageId();
+let lastSnapshotAt = 0;
+const SNAPSHOT_INTERVAL_MS = 10_000;
+// Operational kill switch: setting this public build/update variable to
+// "false" disables client Broadcast while retaining snapshot recovery.
+const FAST_PATH_ENABLED = process.env.EXPO_PUBLIC_LIVE_JOURNEY_FAST_PATH !== 'false';
 
 export function setBackgroundLocationContext(context: BackgroundLocationContext | null): Promise<void> {
   hasExplicitlyResolvedContext = true;
@@ -103,27 +110,51 @@ export async function reportLocationFix(
   lat: number,
   lng: number,
   heading: number | null,
+  options: { userId?: string; speedMps?: number | null; accuracyM?: number | null; capturedAt?: string } = {},
 ): Promise<void> {
-  pendingFix = { voyageId, lat, lng, heading };
+  const now = new Date().toISOString();
+  const signal: LocationSignal = {
+    protocolVersion: VOYAGE_PROTOCOL_VERSION,
+    messageId: createMessageId(),
+    voyageId,
+    senderUserId: options.userId ?? '',
+    senderSessionId,
+    sequence: ++sequence,
+    type: 'location.updated',
+    capturedAt: options.capturedAt ?? now,
+    sentAt: now,
+    payload: { lat, lng, heading, speedMps: options.speedMps ?? null, accuracyM: options.accuracyM ?? null },
+  };
+
+  const sentLive = FAST_PATH_ENABLED && options.userId && locationRepository.publishLocationSignal
+    ? await locationRepository.publishLocationSignal(voyageId, signal)
+    : false;
+  if (sentLive && Date.now() - lastSnapshotAt < SNAPSHOT_INTERVAL_MS) return;
+
+  pendingFix = { voyageId, signal };
 
   if (!drainPromise) {
     drainPromise = (async () => {
       while (pendingFix) {
-        const fix = pendingFix;
+        const fix: PendingLocationFix = pendingFix;
         pendingFix = null;
 
         try {
           // Repository errors are returned rather than thrown. No special
           // retry loop is needed here: the next GPS callback is itself the
           // retry and pendingFix coalescing ensures it carries fresh data.
-          await locationRepository.upsertLocation(fix.voyageId, {
-            lat: fix.lat,
-            lng: fix.lng,
-            heading: fix.heading,
-          });
+          const result = locationRepository.upsertLocationSnapshot
+            ? await locationRepository.upsertLocationSnapshot(fix.voyageId, fix.signal)
+            : await locationRepository.upsertLocation(fix.voyageId, {
+                lat: fix.signal.payload.lat, lng: fix.signal.payload.lng, heading: fix.signal.payload.heading,
+              });
+          if (!result.error) lastSnapshotAt = Date.now();
+          else pendingFix = fix;
         } catch {
           // A real network exception must not crash Expo's background task.
+          pendingFix = fix;
         }
+        if (pendingFix === fix) break;
       }
     })().finally(() => {
       drainPromise = null;
@@ -133,7 +164,10 @@ export async function reportLocationFix(
   await drainPromise;
 }
 
-type BackgroundLocationCoords = { latitude: number; longitude: number; heading: number | null };
+type BackgroundLocationCoords = {
+  latitude: number; longitude: number; heading: number | null;
+  speed?: number | null; accuracy?: number | null;
+};
 type BackgroundLocationObject = { coords: BackgroundLocationCoords; timestamp: number };
 type BackgroundLocationTaskData = { locations: BackgroundLocationObject[] };
 
@@ -170,7 +204,7 @@ TaskManager.defineTask<BackgroundLocationTaskData>(BACKGROUND_LOCATION_TASK, asy
   const latest = locations[locations.length - 1];
   if (!latest) return;
 
-  const { voyageId } = currentContext;
+  const { voyageId, userId } = currentContext;
   const lat = latest.coords.latitude;
   const lng = latest.coords.longitude;
   // Same platform heading-sentinel normalization the foreground path
@@ -178,5 +212,10 @@ TaskManager.defineTask<BackgroundLocationTaskData>(BACKGROUND_LOCATION_TASK, asy
   // "undetermined" rather than null.
   const rawHeading = latest.coords.heading;
   const heading = rawHeading != null && rawHeading >= 0 ? rawHeading : null;
-  await reportLocationFix(voyageId, lat, lng, heading);
+  await reportLocationFix(voyageId, lat, lng, heading, {
+    userId,
+    speedMps: latest.coords.speed,
+    accuracyM: latest.coords.accuracy,
+    capturedAt: new Date(latest.timestamp).toISOString(),
+  });
 });

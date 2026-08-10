@@ -97,6 +97,7 @@ test('starts navigation-grade tracking with immediate background delivery', asyn
 
   expect(mockSetBackgroundLocationContext).toHaveBeenCalledWith({
     voyageId: 'voyage-1',
+    userId: 'user-1',
     ownerGeneration: expect.any(Number),
   });
   expect(mockStartLocationUpdatesAsync).toHaveBeenCalledWith(
@@ -218,6 +219,7 @@ test('does not re-issue stop when start resolves normally before any cleanup', a
   expect(mockStopLocationUpdatesAsync).not.toHaveBeenCalled();
   expect(mockSetBackgroundLocationContext).toHaveBeenLastCalledWith({
     voyageId: 'voyage-1',
+    userId: 'user-1',
     ownerGeneration: expect.any(Number),
   });
 });
@@ -266,7 +268,10 @@ test('on web, each position update is reported through the same reportLocationFi
 
   // heading -1 normalizes to null, same sentinel-normalization the native
   // task callback applies.
-  expect(mockReportLocationFix).toHaveBeenCalledWith('voyage-1', 39.1, -120.0, null);
+  expect(mockReportLocationFix).toHaveBeenCalledWith('voyage-1', 39.1, -120.0, null, expect.objectContaining({
+    userId: 'user-1',
+    capturedAt: expect.any(String),
+  }));
 });
 
 test('on web, removes the watchPositionAsync subscription on unmount', async () => {

@@ -97,13 +97,13 @@ describe('useSmoothedLocation', () => {
     expect(view.result.current).toMatchObject({ lat: 0, lng: 179, heading: 350 });
 
     await act(async () => {
-      jest.setSystemTime(new Date('2026-08-04T12:00:00.450Z'));
+      jest.setSystemTime(new Date('2026-08-04T12:00:00.150Z'));
       runNextFrame();
     });
     expect(view.result.current).toMatchObject({ lat: 5, lng: -180, heading: 0 });
 
     await act(async () => {
-      jest.setSystemTime(new Date('2026-08-04T12:00:00.900Z'));
+      jest.setSystemTime(new Date('2026-08-04T12:00:00.300Z'));
       runNextFrame();
     });
     expect(view.result.current).toMatchObject({ lat: 10, lng: -179, heading: 10 });

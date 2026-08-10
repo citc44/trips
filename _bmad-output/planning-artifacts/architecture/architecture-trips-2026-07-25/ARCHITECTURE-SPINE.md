@@ -7,7 +7,7 @@ paradigm: 'BaaS-centric layered architecture'
 scope: 'Voylo v1 - group road-trip presence app (passwordless auth, Voyage setup/invite, live map)'
 status: final
 created: '2026-07-25'
-updated: '2026-07-25'
+updated: '2026-08-10'
 binds: [FR-1, FR-2, FR-3, FR-4, FR-5, FR-6, FR-7, FR-8, FR-9]
 sources:
   - _bmad-output/planning-artifacts/prds/prd-trips-2026-07-25/prd.md
@@ -46,17 +46,17 @@ graph LR
 - **Prevents:** two independently-built features implementing inconsistent authorization checks in application code, leaking one Voyage's data to non-members.
 - **Rule:** authorization is enforced via Postgres Row-Level Security policies keyed on `voyage_members` membership — never via application-layer checks alone. All such RLS policies call one shared Postgres function/predicate (e.g. `is_active_voyage_member(voyage_id, user_id)`), defined once, that requires both `removed_at IS NULL` on the membership row AND the parent Voyage's `status = 'active'` — rather than each policy re-deriving its own membership check, which could leave removed members or ended-Voyage data readable under a technically-different-but-non-compliant policy. Matches the PRD's hard privacy requirement that Voyage data never leaves that Voyage's own Voyagers.
 
-### AD-2 — Single real-time delivery mechanism
+### AD-2 — Single Voyage real-time message bus `[REVISED 2026-08-10]`
 
 - **Binds:** Live Map (FR-9); future Fun Fact notifications (FR-10/FR-11, v1.1).
 - **Prevents:** divergent polling or ad hoc WebSocket schemes across features; a separate ad hoc Realtime channel being opened per feature instead of sharing one channel per Voyage.
-- **Rule:** Supabase Realtime (Postgres change subscriptions + broadcast channels) is the sole mechanism for live/near-real-time delivery to clients. Each active Voyage has exactly one Realtime channel, subscribed to and managed through the repository layer (AD-5) — not a separate ad hoc channel per feature — so Live Map (v1) and future Fun Fact notifications (v1.1) share one channel lifecycle.
+- **Rule:** Supabase Realtime is the sole live relay. Each active Voyage has one private, repository-managed channel carrying a versioned union of location, presence, lifecycle, journey-event, alert, reaction, and future game messages. Healthy foreground location uses client WebSocket Broadcast; authoritative database changes and durable journey events use server/database Broadcast. Features register typed handlers on the shared channel instead of opening competing channels.
 
-### AD-3 — Location persistence model
+### AD-3 — Hybrid live-location model `[REVISED 2026-08-10]`
 
 - **Binds:** Live Map (FR-9).
-- **Prevents:** forged client broadcast identities, divergence between the live message and reconnect snapshot, unbounded location history, and an outbound backlog on slow mobile networks.
-- **Rule:** every accepted navigation-grade fix goes through one authenticated `upsert_location()` RPC. The client coalesces pending fixes to the newest value; the RPC derives `user_id` from `auth.uid()`, overwrites that Voyager's single latest-known row, and emits the matching private `realtime.send()` broadcast in the same transaction. No location history is appended. This shared server-stamped value is the source for both live delivery and cold-load/reconnect freshness comparisons.
+- **Prevents:** database latency on every marker frame, forged identities, stale timestamps appearing current, unbounded history/backlogs, packet reordering, and reconnect divergence.
+- **Rule:** location has two paths. The fast path sends a versioned, authenticated `location.updated` signal over the shared Voyage channel and updates the sender's self marker locally. The durable path coalesces to the newest fix and periodically overwrites one `voyage_member_locations` snapshot through an authenticated RPC. Each fix preserves GPS capture time, speed, heading, accuracy, sender-session id, and monotonic sequence. Receivers reject duplicate/out-of-order state and merge snapshots without regressing newer signals. Background/socket-unavailable publication may use the snapshot RPC's server broadcast. No location queue is replayed as live movement and no unbounded history is appended.
 
 ### AD-4 — Single auth session source of truth `[ADOPTED]`
 
@@ -81,13 +81,13 @@ graph LR
 
 - **Binds:** all Voyage lifecycle writes (start/join/end/grant/remove) and future Fun Fact/photo writes (v1.1).
 - **Prevents:** a write attempted through a cellular dead zone silently failing or corrupting Voyage state — a real risk on multi-hour highway drives (PRD Cross-Cutting NFR: Reliability).
-- **Rule:** the client persists a local write-outbox for any mutation attempted while offline; the outbox flushes and reconciles against server state on reconnect. Flushing is per-item, not strict FIFO-blocking — one failed or conflicting item does not block the rest of the queue. Each queued write carries a precondition snapshot (e.g. the Voyage/membership state it assumed when queued); if that precondition no longer holds at flush time (e.g. the user's membership was revoked while offline), the write is dropped and a typed conflict event is surfaced to the user via the shared auth/session hook (AD-4) — never silently discarded or silently retried forever. Location pings are explicitly **out of scope** for AD-7 — they're governed by AD-3/AD-8 instead (ephemeral, latest-only) and are never queued in the offline write-outbox.
+- **Rule:** the client persists durable commands/events in an idempotent outbox and separately retains only the newest unsent location. On reconnect it authenticates, reconciles Voyage/membership, restores server snapshots, publishes the newest local fix, then flushes durable items. One conflict does not block unrelated items. Historical GPS fixes are never replayed as current movement; route-history collection, if introduced for Memory Lane, is a separate data product.
 
 ### AD-8 — Background location capability
 
 - **Binds:** Live Map (FR-9).
 - **Prevents:** location updates silently stopping when a Voyager's phone is locked or the app is backgrounded — the normal state for a passenger on a long drive.
-- **Rule:** the client uses `expo-location` in background permission mode plus `expo-task-manager` to keep sending location upserts (AD-3) while backgrounded (iOS background location mode; Android foreground service). On Android 14+, the foreground service must declare an explicit `location` foreground-service-type, or background location silently stops working under the OS's stricter foreground-service enforcement. A backgrounded Voyager's own client does not need an active Realtime subscription to contribute — the upsert write itself triggers the Postgres Realtime broadcast that other connected clients receive.
+- **Rule:** the client uses `expo-location` plus `expo-task-manager` while backgrounded (iOS location mode; Android location foreground service). It must not assume a JavaScript WebSocket survives suspension: when the shared channel is unavailable, the authenticated snapshot RPC persists and broadcasts the newest fix. A force-killed app, revoked permission, OS/vendor suppression, or dead battery may stop tracking; receivers age that location to last-known rather than claiming it remains live.
 - **Note:** background location and Mapbox's native modules require an EAS development build for testing — neither works in Expo Go. Mapbox's native SDK should be pinned to v11 (not the deprecated v10) via the `RNMapboxMapsVersion` build config, so no one accidentally locks an old default.
 
 ### AD-9 — One active Voyage per user
@@ -109,6 +109,26 @@ graph LR
 - **Rule:** Supabase Auth's **Send Email** HTTP Hook is wired to a Supabase Edge Function (`supabase/functions/send-otp-email`) instead of Supabase's built-in emailer. Auth calls the hook with the OTP payload (recipient, the numeric code, email action type); the function verifies the hook's signing secret, renders a branded HTML template (Night Drive identity, per `DESIGN.md`) with the code, and sends it via Resend's API. No screen or repository sends email directly — this hook is the single OTP-email send path.
 - **Sending domain:** `voyloapp.com`, verified in Resend (DKIM/SPF/DMARC records added at the registrar) — sends from `noreply@voyloapp.com`. `[ADOPTED, updated post-launch-prep]` Originally shipped against Resend's shared test domain (`onboarding@resend.dev`), which only delivers to the Resend account owner's own address; swapped once a real domain was purchased and verified, confirming the original design's own prediction that this would be a Resend/config change (from-address + domain verification), not a code change.
 - **Secrets:** `RESEND_API_KEY` and the hook's signing secret are Supabase Edge Function secrets (`supabase secrets set`), set per environment (dev/prod) — never client-exposed, never `EXPO_PUBLIC_`-prefixed.
+
+### AD-12 — Versioned Voyage message envelope `[ADOPTED 2026-08-10]`
+
+- **Binds:** every AD-2 message.
+- **Rule:** messages carry `protocolVersion`, `messageId`, `voyageId`, authenticated sender identity, sender-session id, monotonic sequence, type, capture time, send time, and a typed payload. Unknown versions/types are ignored safely. Precise coordinates never enter general diagnostic logs.
+
+### AD-13 — Freshness, presence, and rendering `[ADOPTED 2026-08-10]`
+
+- **Binds:** Live Map status and marker motion.
+- **Rule:** Presence means a connected Realtime session only; it is not proof of GPS, background execution, or physical reachability. Per-Voyager status combines Presence, last GPS capture time, and explicit location health. The self marker is immediate. Remote markers use a short jitter buffer, accuracy-aware interpolation and at most two seconds of bounded prediction; prediction stops for stale/poor fixes and long gaps snap.
+
+### AD-14 — Durable journey-event authority `[ADOPTED 2026-08-10]`
+
+- **Binds:** Fun Facts, detected stops, sightings, alerts, games, and Memory Lane inputs.
+- **Rule:** consequential journey events are idempotent `journey_events` rows created by authenticated server logic and broadcast on the shared channel. Disposable reactions may remain ephemeral. Offline events retain `occurred_at`, queue locally, and reconcile after reconnect. Automated stop detection uses an accuracy-aware hysteresis state machine; a client may propose a candidate, but the server deduplicates and owns the event.
+
+### AD-15 — Operability and safe activation `[ADOPTED 2026-08-10]`
+
+- **Binds:** deployment and production tuning.
+- **Rule:** fast Broadcast and durable snapshots are independently controllable so disabling the fast path cannot remove recovery. Migrations remain compatible through the mobile adoption window. Production activation requires two-car passing tests, 2/4/8-member load tests, capture-to-render p50/p95, background/force-kill/dead-zone tests, Supabase quota verification, and multi-hour battery measurements.
 
 ## Consistency Conventions
 
@@ -164,6 +184,7 @@ erDiagram
   USERS ||--o{ PUSH_TOKENS : has
   VOYAGES ||--o{ VOYAGE_MEMBERS : has
   VOYAGE_MEMBERS ||--o| VOYAGE_MEMBER_LOCATIONS : has
+  VOYAGES ||--o{ JOURNEY_EVENTS : contains
 
   USERS {
     uuid id
@@ -202,9 +223,17 @@ erDiagram
     float lng
     timestamptz updated_at
   }
+  JOURNEY_EVENTS {
+    uuid id
+    uuid voyage_id
+    uuid actor_user_id
+    text event_type
+    timestamptz occurred_at
+    jsonb metadata
+  }
 ```
 
-`role` on `voyage_members` is `organizer` or `voyager`; a Voyage may have more than one `organizer` row (AD supporting PRD FR-7, Grant Organizer Status). `removed_at` supports PRD FR-8 (Remove Voyager) without deleting history. `is_active` is the denormalized, trigger-maintained flag that backs the AD-9 partial unique index (one active Voyage per user, globally). `profiles` makes the Trust Moment and Driver Attention Consent screens (EXPERIENCE.md) enforceably "once ever." `push_tokens` backs notification delivery; dispatch runs through a Supabase Edge Function.
+`role` on `voyage_members` is `organizer` or `voyager`; a Voyage may have more than one `organizer` row (AD supporting PRD FR-7, Grant Organizer Status). `removed_at` supports PRD FR-8 (Remove Voyager) without deleting history. `is_active` is the denormalized, trigger-maintained flag that backs the AD-9 partial unique index (one active Voyage per user, globally). `voyage_member_locations` remains latest-only and stores capture/quality/ordering metadata under AD-3. `journey_events` is the idempotent durable timeline under AD-14. `profiles` makes the Trust Moment and Driver Attention Consent screens (EXPERIENCE.md) enforceably "once ever." `push_tokens` backs notification delivery; dispatch runs through a Supabase Edge Function.
 
 ### Environments
 

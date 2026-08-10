@@ -80,6 +80,8 @@ test('subscribes to the Voyage channel after mounting', async () => {
       expect.any(Function),
       expect.any(Function),
       expect.any(Function),
+      null,
+      expect.any(Function),
     ),
   );
 });
@@ -458,6 +460,8 @@ test('re-subscribes when voyageId changes, unsubscribing from the previous chann
       expect.any(Function),
       expect.any(Function),
       expect.any(Function),
+      null,
+      expect.any(Function),
     ),
   );
 
@@ -473,6 +477,8 @@ test('re-subscribes when voyageId changes, unsubscribing from the previous chann
       expect.any(Function),
       expect.any(Function),
       expect.any(Function),
+      expect.any(Function),
+      null,
       expect.any(Function),
     ),
   );

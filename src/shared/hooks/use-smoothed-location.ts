@@ -6,6 +6,9 @@ const DEFAULT_ANIMATION_MS = 900;
 const MIN_ANIMATION_MS = 250;
 const MAX_ANIMATION_MS = 1800;
 const SNAP_AFTER_GAP_MS = 10000;
+const MAX_PREDICTION_MS = 2000;
+const MAX_PREDICTION_ACCURACY_M = 100;
+const RECONCILE_MS = 300;
 
 function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, value));
@@ -32,6 +35,32 @@ export function getLocationAnimationDuration(previousUpdatedAt: string, nextUpda
   return clamp(gap * 0.9, MIN_ANIMATION_MS, MAX_ANIMATION_MS);
 }
 
+export function predictCurrentLocation(location: LiveLocation, nowMs = Date.now()): LiveLocation {
+  const capturedAt = new Date(location.capturedAt ?? location.updatedAt).getTime();
+  const ageMs = clamp(nowMs - capturedAt, 0, MAX_PREDICTION_MS);
+  const speed = location.speedMps;
+  const accuracy = location.accuracyM;
+  const heading = location.heading;
+  if (ageMs <= 0 || speed == null || speed < 1 || heading == null || (accuracy != null && accuracy > MAX_PREDICTION_ACCURACY_M)) {
+    return location;
+  }
+
+  const distanceM = speed * (ageMs / 1000);
+  const bearing = (heading * Math.PI) / 180;
+  const earthRadiusM = 6_371_000;
+  const lat1 = (location.lat * Math.PI) / 180;
+  const lng1 = (location.lng * Math.PI) / 180;
+  const angularDistance = distanceM / earthRadiusM;
+  const lat2 = Math.asin(
+    Math.sin(lat1) * Math.cos(angularDistance) + Math.cos(lat1) * Math.sin(angularDistance) * Math.cos(bearing),
+  );
+  const lng2 = lng1 + Math.atan2(
+    Math.sin(bearing) * Math.sin(angularDistance) * Math.cos(lat1),
+    Math.cos(angularDistance) - Math.sin(lat1) * Math.sin(lat2),
+  );
+  return { ...location, lat: (lat2 * 180) / Math.PI, lng: ((lng2 * 180) / Math.PI + 540) % 360 - 180 };
+}
+
 // Keeps raw locations authoritative in useLiveLocations while rendering a
 // marker through intermediate geographic coordinates at the display frame
 // rate. A new packet starts from the point currently on screen, so network
@@ -46,40 +75,41 @@ export function useSmoothedLocation(location: LiveLocation, reduceMotion: boolea
   useEffect(() => {
     const previousTarget = previousTargetRef.current;
     previousTargetRef.current = location;
+    const target = predictCurrentLocation(location);
 
     let frameId: number | null = null;
 
     if (reduceMotion) {
-      displayedRef.current = location;
-      frameId = requestAnimationFrame(() => setDisplayedLocation(location));
+      displayedRef.current = target;
+      frameId = requestAnimationFrame(() => setDisplayedLocation(target));
       return () => cancelAnimationFrame(frameId!);
     }
 
     const timestampGap = new Date(location.updatedAt).getTime() - new Date(previousTarget.updatedAt).getTime();
     if (timestampGap > SNAP_AFTER_GAP_MS) {
-      displayedRef.current = location;
-      frameId = requestAnimationFrame(() => setDisplayedLocation(location));
+      displayedRef.current = target;
+      frameId = requestAnimationFrame(() => setDisplayedLocation(target));
       return () => cancelAnimationFrame(frameId!);
     }
 
     const from = displayedRef.current;
-    if (from.lat === location.lat && from.lng === location.lng && from.heading === location.heading) {
+    if (from.lat === target.lat && from.lng === target.lng && from.heading === target.heading) {
       // Common while stopped and also true on the initial mount. Keep the
       // freshest metadata without running a no-op animation every second.
-      displayedRef.current = location;
+      displayedRef.current = target;
       return;
     }
 
-    const duration = getLocationAnimationDuration(previousTarget.updatedAt, location.updatedAt);
+    const duration = RECONCILE_MS;
     const startedAt = Date.now();
 
     const animate = () => {
       const progress = clamp((Date.now() - startedAt) / duration, 0, 1);
       const next: LiveLocation = {
-        ...location,
-        lat: from.lat + (location.lat - from.lat) * progress,
-        lng: interpolateLongitude(from.lng, location.lng, progress),
-        heading: interpolateHeading(from.heading, location.heading, progress),
+        ...target,
+        lat: from.lat + (target.lat - from.lat) * progress,
+        lng: interpolateLongitude(from.lng, target.lng, progress),
+        heading: interpolateHeading(from.heading, target.heading, progress),
       };
       displayedRef.current = next;
       setDisplayedLocation(next);

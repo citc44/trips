@@ -61,6 +61,7 @@ function normalizeHeading(rawHeading: number | null | undefined): number | null 
 type NativeTrackingLease = {
   generation: number;
   voyageId: string;
+  userId: string;
 };
 
 let nextNativeTrackingGeneration = 0;
@@ -118,6 +119,7 @@ async function activateNativeTracking(lease: NativeTrackingLease): Promise<void>
 
   await setBackgroundLocationContext({
     voyageId: lease.voyageId,
+    userId: lease.userId,
     ownerGeneration: lease.generation,
   });
 
@@ -162,10 +164,11 @@ async function activateNativeTracking(lease: NativeTrackingLease): Promise<void>
   }
 }
 
-function acquireNativeTracking(voyageId: string): () => void {
+function acquireNativeTracking(voyageId: string, userId: string): () => void {
   const lease: NativeTrackingLease = {
     generation: ++nextNativeTrackingGeneration,
     voyageId,
+    userId,
   };
   desiredNativeTrackingLease = lease;
   enqueueNativeTrackingLifecycle(() => activateNativeTracking(lease));
@@ -198,8 +201,13 @@ export function useLocationTracking(voyageId: string | null): void {
           distanceInterval: WATCH_DISTANCE_INTERVAL_M,
         },
         (position) => {
-          const { latitude, longitude, heading } = position.coords;
-          void reportLocationFix(voyageId, latitude, longitude, normalizeHeading(heading));
+          const { latitude, longitude, heading, speed, accuracy } = position.coords;
+          void reportLocationFix(voyageId, latitude, longitude, normalizeHeading(heading), {
+            userId,
+            speedMps: speed,
+            accuracyM: accuracy,
+            capturedAt: new Date(position.timestamp).toISOString(),
+          });
         },
       )
         .then((sub) => {
@@ -219,6 +227,6 @@ export function useLocationTracking(voyageId: string | null): void {
       };
     }
 
-    return acquireNativeTracking(voyageId);
+    return acquireNativeTracking(voyageId, userId);
   }, [voyageId, userId, status]);
 }

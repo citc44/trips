@@ -1,6 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { voyageRepository } from '@/repositories/voyage-repository';
+import { journeyEventRepository } from '@/repositories/journey-event-repository';
+import type { JourneyEventType } from '@/shared/types/voyage-message';
 
 // AD-7's offline write-outbox. Deliberately scoped to only the three Voyage
 // lifecycle writes that happen from *within* an already-active Voyage
@@ -13,7 +15,13 @@ import { voyageRepository } from '@/repositories/voyage-repository';
 export type OutboxItem =
   | { id: string; kind: 'end_voyage'; payload: { voyageId: string }; queuedAt: string }
   | { id: string; kind: 'grant_organizer_status'; payload: { voyageId: string; targetUserId: string }; queuedAt: string }
-  | { id: string; kind: 'remove_voyager'; payload: { voyageId: string; targetUserId: string }; queuedAt: string };
+  | { id: string; kind: 'remove_voyager'; payload: { voyageId: string; targetUserId: string }; queuedAt: string }
+  | {
+      id: string;
+      kind: 'journey_event';
+      payload: { voyageId: string; eventId: string; eventType: JourneyEventType; occurredAt: string; metadata: Record<string, unknown> };
+      queuedAt: string;
+    };
 
 const STORAGE_KEY = 'voylo:offline-write-outbox';
 
@@ -69,6 +77,13 @@ function callForKind(item: OutboxItem): Promise<{ data?: unknown; error: { code:
       return voyageRepository.grantOrganizerStatus(item.payload.voyageId, item.payload.targetUserId);
     case 'remove_voyager':
       return voyageRepository.removeVoyager(item.payload.voyageId, item.payload.targetUserId);
+    case 'journey_event':
+      return journeyEventRepository.createEvent(item.payload.voyageId, {
+        id: item.payload.eventId,
+        type: item.payload.eventType,
+        occurredAt: item.payload.occurredAt,
+        metadata: item.payload.metadata,
+      });
   }
 }
 

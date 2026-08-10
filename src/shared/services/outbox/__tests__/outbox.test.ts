@@ -21,6 +21,10 @@ jest.mock('@/repositories/voyage-repository', () => ({
   },
 }));
 
+jest.mock('@/repositories/journey-event-repository', () => ({
+  journeyEventRepository: { createEvent: jest.fn() },
+}));
+
 const STORAGE_KEY = 'voylo:offline-write-outbox';
 
 beforeEach(() => {

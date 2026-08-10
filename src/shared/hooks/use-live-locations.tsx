@@ -3,6 +3,7 @@ import { AppState } from 'react-native';
 
 import { MapMarker } from '@/constants/design-tokens';
 import { locationRepository, type LiveLocation } from '@/repositories/location-repository';
+import { getLocationFreshness, type VoyagerFreshness } from '@/shared/lib/location-freshness';
 
 export type TrailPoint = { lat: number; lng: number; updatedAt: string };
 
@@ -28,6 +29,7 @@ type LiveLocationsState = {
   // Incremented when this device must reconcile its own membership or the
   // parent Voyage lifecycle, rather than only refreshing marker metadata.
   lifecycleRevision?: number;
+  freshness?: Record<string, VoyagerFreshness>;
 };
 
 // Not a Context/Provider like use-active-voyage.tsx/use-profile.tsx -- this
@@ -41,6 +43,8 @@ export function useLiveLocations(voyageId: string | null, currentUserId: string 
   const [isConnected, setIsConnected] = useState(true);
   const [rosterRevision, setRosterRevision] = useState(0);
   const [lifecycleRevision, setLifecycleRevision] = useState(0);
+  const [presentUserIds, setPresentUserIds] = useState<Set<string>>(new Set());
+  const [freshnessNow, setFreshnessNow] = useState(() => Date.now());
   // Derived isLoading (compared against the live voyageId), same pattern
   // use-active-voyage.tsx/use-profile.tsx established -- avoids ever needing
   // a synchronous setIsLoading(true) reset at the top of the effect body,
@@ -63,6 +67,7 @@ export function useLiveLocations(voyageId: string | null, currentUserId: string 
         setIsConnected(true);
         setRosterRevision(0);
         setLifecycleRevision(0);
+        setPresentUserIds(new Set());
         setResolvedForVoyageId(null);
       });
       return () => {
@@ -110,13 +115,20 @@ export function useLiveLocations(voyageId: string | null, currentUserId: string 
       const existing = current[location.userId];
       // A stale/delayed value can't regress a fresher one already rendered
       // -- same conditional-upsert discipline the DB itself applies (AD-3).
-      if (existing && existing.updatedAt >= location.updatedAt) return;
+      if (existing) {
+        const sameSession = existing.senderSessionId && existing.senderSessionId === location.senderSessionId;
+        if (sameSession && existing.sequence != null && location.sequence != null && existing.sequence >= location.sequence) return;
+        const existingCapturedAt = existing.capturedAt ?? existing.updatedAt;
+        const nextCapturedAt = location.capturedAt ?? location.updatedAt;
+        if (!sameSession && existingCapturedAt >= nextCapturedAt) return;
+      }
       current = { ...current, [location.userId]: location };
       setLocations(current);
 
-      const cutoff = new Date(location.updatedAt).getTime() - MapMarker.trailLengthMs;
+      const pointTime = location.capturedAt ?? location.updatedAt;
+      const cutoff = new Date(pointTime).getTime() - MapMarker.trailLengthMs;
       const priorTrail = currentTrails[location.userId] ?? [];
-      const nextTrail = [...priorTrail, { lat: location.lat, lng: location.lng, updatedAt: location.updatedAt }].filter(
+      const nextTrail = [...priorTrail, { lat: location.lat, lng: location.lng, updatedAt: pointTime }].filter(
         (point) => new Date(point.updatedAt).getTime() >= cutoff,
       );
       currentTrails = { ...currentTrails, [location.userId]: nextTrail };
@@ -166,6 +178,13 @@ export function useLiveLocations(voyageId: string | null, currentUserId: string 
 
     void refreshLocations();
 
+    // The sender's own marker must never wait for a network round trip.
+    // reportLocationFix publishes every accepted GPS fix to this process-local
+    // listener before attempting WebSocket/snapshot delivery.
+    const unsubscribeLocal = locationRepository.subscribeToLocalLocations?.(activeVoyageId, (location) => {
+      if (isMounted) mergeIn(location);
+    }) ?? (() => {});
+
     const { unsubscribe } = locationRepository.subscribeToLocations(
       voyageId,
       (location) => {
@@ -206,7 +225,11 @@ export function useLiveLocations(voyageId: string | null, currentUserId: string 
         if (!isMounted || change.status !== 'ended') return;
         setLifecycleRevision((revision) => revision + 1);
       },
+      currentUserId,
+      setPresentUserIds,
     );
+
+    const freshnessTimer = setInterval(() => setFreshnessNow(Date.now()), 1000);
 
     let previousAppState = AppState.currentState;
     const appStateSubscription = AppState.addEventListener('change', (nextAppState) => {
@@ -221,9 +244,14 @@ export function useLiveLocations(voyageId: string | null, currentUserId: string 
     return () => {
       isMounted = false;
       appStateSubscription.remove();
+      clearInterval(freshnessTimer);
+      unsubscribeLocal();
       unsubscribe();
     };
   }, [voyageId, currentUserId]);
 
-  return { locations, trails, isLoading, hasError, isConnected, rosterRevision, lifecycleRevision };
+  const freshness = Object.fromEntries(
+    Object.entries(locations).map(([userId, location]) => [userId, getLocationFreshness(location, presentUserIds.has(userId), freshnessNow)]),
+  );
+  return { locations, trails, isLoading, hasError, isConnected, rosterRevision, lifecycleRevision, freshness };
 }

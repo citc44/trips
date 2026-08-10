@@ -101,22 +101,30 @@ test('subscribeToLocations creates a private, receive-only channel scoped to the
   locationRepository.subscribeToLocations('voyage-1', jest.fn());
 
   expect(mockChannel).toHaveBeenCalledWith('voyage:voyage-1', { config: { private: true } });
-  expect(mockOn).toHaveBeenCalledWith('broadcast', { event: 'location' }, expect.any(Function));
+  expect(mockOn).toHaveBeenCalledWith('broadcast', { event: 'voyage_message' }, expect.any(Function));
   expect(mockOn).toHaveBeenCalledWith('broadcast', { event: 'roster_changed' }, expect.any(Function));
   expect(mockOn).toHaveBeenCalledWith('broadcast', { event: 'voyage_status_changed' }, expect.any(Function));
   expect(mockSubscribe).toHaveBeenCalledTimes(1);
 });
 
-test('subscribeToLocations invokes the callback with a mapped location on each location broadcast', () => {
+test('subscribeToLocations invokes the callback with a mapped v1 location signal', () => {
   const onLocation = jest.fn();
   locationRepository.subscribeToLocations('voyage-1', onLocation);
 
-  const locationHandler = mockOn.mock.calls.find((call) => call[1]?.event === 'location')?.[2] as (message: {
+  const locationHandler = mockOn.mock.calls.find((call) => call[1]?.event === 'voyage_message')?.[2] as (message: {
     payload: unknown;
   }) => void;
-  locationHandler({ payload: { user_id: 'user-1', lat: 39.1, lng: -120.0, heading: 90, updated_at: '2026-07-26T00:00:00Z' } });
+  locationHandler({ payload: {
+    protocolVersion: 1, messageId: 'message-1', voyageId: 'voyage-1', senderUserId: 'user-1',
+    senderSessionId: 'session-1', sequence: 1, type: 'location.updated',
+    capturedAt: '2026-07-26T00:00:00Z', sentAt: '2026-07-26T00:00:00Z',
+    payload: { lat: 39.1, lng: -120.0, heading: 90, speedMps: null, accuracyM: null },
+  } });
 
-  expect(onLocation).toHaveBeenCalledWith({ userId: 'user-1', lat: 39.1, lng: -120.0, heading: 90, updatedAt: '2026-07-26T00:00:00Z' });
+  expect(onLocation).toHaveBeenCalledWith(expect.objectContaining({
+    userId: 'user-1', lat: 39.1, lng: -120.0, heading: 90,
+    capturedAt: '2026-07-26T00:00:00Z', senderSessionId: 'session-1', sequence: 1,
+  }));
 });
 
 test('subscribeToLocations invokes onRosterChange with the changed membership', () => {
