@@ -586,3 +586,70 @@ export const SplashThread = {
   reducedCrossfadeDurationMs: 400,
   reducedHoldMs: 600,
 } as const;
+
+/**
+ * home-journey component spec (DESIGN.md#components `home-journey`,
+ * EXPERIENCE.md Motion & Transitions "Home Journey ('Memory Sparks')" --
+ * Story 4.7/4.8, 2026-08-06). Home's resting state: a perspective road with
+ * three illustrative player-color crew dots bobbing on it, a heartbeat glow
+ * at the vanishing point, matching-color sparks lifting toward the
+ * wordmark, and the wordmark's own breathing glow. Purely ambient and
+ * looping -- unlike SplashThread above, nothing here ever "finishes."
+ * `roadSurfaceColor`/`landGradient` are literal hex, not `WayfinderColors.*`
+ * -- DESIGN.md's own `home-journey` token block deliberately doesn't reuse
+ * Live Map's map-road tokens (see that block's own comment). Keyframe
+ * stops/value arrays below are transcribed directly from
+ * mockups/key-home.html's `@keyframes` rules (`bob`, `heartbeat`, `rise`,
+ * `wordGlow`) -- several are non-monotonic (heartbeat, wordGlow) and need
+ * the progress+`.interpolate()` keyframe technique, not a single
+ * Easing.bezier `Animated.timing` (same limitation as MarkerPeekCardMotion
+ * above).
+ */
+export const HomeJourneyMotion = {
+  roadHeightPercent: 58,
+  roadSurfaceColor: '#E8EAEE',
+  landGradient: ['#EAF2E4', '#DCEBD3', '#C9E0BC'] as const,
+  landGradientLocations: [0, 0.55, 1] as const,
+  centerlineColor: WayfinderColors.accentAmber,
+  centerlineDriftDurationMs: 900,
+  crewDots: [
+    { color: PlayerColors.teal, left: '46%', bottom: '46%', size: 20 },
+    { color: PlayerColors.coral, left: '58%', bottom: '40%', size: 15 },
+    { color: PlayerColors.gold, left: '40%', bottom: '36%', size: 12 },
+  ] as const,
+  crewDotBobDurationMs: 2400,
+  crewDotStaggerMs: 600,
+  crewDotBobKeyframeStops: [0, 0.5, 1] as const,
+  crewDotBobTranslateY: [0, -5, 0] as const,
+  revealGlowColor: WayfinderColors.accentAmber,
+  revealGlowHeartbeatDurationMs: 2600,
+  revealGlowKeyframeStops: [0, 0.45, 1] as const,
+  revealGlowScaleStops: [0.85, 1.3, 0.85] as const,
+  revealGlowOpacityStops: [0.5, 0.9, 0.5] as const,
+  memorySparks: [
+    { color: PlayerColors.teal, left: '47%', bottom: '48%' },
+    { color: PlayerColors.coral, left: '59%', bottom: '42%' },
+    { color: PlayerColors.gold, left: '41%', bottom: '38%' },
+  ] as const,
+  memorySparkDurationMs: 5000,
+  memorySparkStaggerMs: 1600,
+  // Mockup's `rise` keyframes only set `transform` (which carries scale) at
+  // 0%/100% -- 12%/80% only set opacity -- so CSS interpolates scale
+  // continuously across the full span. `memorySparkKeyframeStops` below is
+  // for opacity only; scale uses its own plain [0, 1] range (code review
+  // finding, Story 4.8: an earlier pass wrongly reused the opacity stops for
+  // scale too, fabricating a false hold at 1.0 between 12%-80%).
+  memorySparkKeyframeStops: [0, 0.12, 0.8, 1] as const,
+  memorySparkOpacityStops: [0, 1, 0.9, 0] as const,
+  memorySparkScaleStops: [0.6, 1.1] as const,
+  // Fraction of screen height the spark rises, not a literal px -- mirrors
+  // SplashThread's own reference-frame scaling above (mockup's -360px on an
+  // 844px-tall preview frame).
+  memorySparkRiseFraction: 360 / 844,
+  wordmarkGlowColor: WayfinderColors.accentAmber,
+  wordmarkGlowDurationMs: 4000,
+  wordmarkGlowKeyframeStops: [0, 0.5, 1] as const,
+  wordmarkGlowScaleStops: [0.94, 1.05, 0.94] as const,
+  wordmarkGlowOpacityStops: [0.5, 1, 0.5] as const,
+  tagline: 'Every journey tells a story.',
+} as const;

@@ -55,6 +55,16 @@ test('renders the email entry step initially', async () => {
   expect(queryByTestId('code-input')).toBeNull();
 });
 
+test('renders the "Sign in to Voylo" headline on the entry step', async () => {
+  const { getByText } = await render(<SignInScreen />);
+  expect(getByText('Sign in to Voylo')).toBeTruthy();
+});
+
+test('renders the "Enter your code" headline on the verify step', async () => {
+  const utils = await getToVerifyStep();
+  expect(utils.getByText('Enter your code')).toBeTruthy();
+});
+
 test('tapping "Have a join code?" navigates to /join -- for someone who received a code with no link to tap', async () => {
   const { getByTestId } = await render(<SignInScreen />);
 

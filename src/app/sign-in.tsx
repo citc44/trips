@@ -125,7 +125,7 @@ export default function SignInScreen() {
         <View style={styles.content}>
           {step === 'entry' ? (
             <>
-              <Text style={styles.headline}>Enter your email</Text>
+              <Text style={styles.headline}>Sign in to Voylo</Text>
               <Text style={styles.subtext}>Enter your email and we&apos;ll send you a one-time code — no password to remember.</Text>
               <Text style={styles.fieldLabel}>Email</Text>
               <TextInput
@@ -168,7 +168,7 @@ export default function SignInScreen() {
               >
                 <Text style={styles.backArrowLabel}>{'‹'}</Text>
               </Pressable>
-              <Text style={styles.headline}>Enter the code</Text>
+              <Text style={styles.headline}>Enter your code</Text>
               <Text style={styles.subtext}>We sent an {CODE_LENGTH}-digit code to {email}</Text>
               <Animated.View style={[styles.codeBoxRow, { transform: [{ translateX: shakeX }] }]}>
                 {Array.from({ length: CODE_LENGTH }, (_, index) => {
