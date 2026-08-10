@@ -1,6 +1,6 @@
 # Voylo Stop Intelligence Architecture
 
-**Status:** Proposed for review; no implementation authorized
+**Status:** Approved 2026-08-10; foundation implemented in shadow mode
 
 **Date:** 2026-08-10
 **Companion:** `VOYLO-LIVE-JOURNEY-ARCHITECTURE.md`
@@ -13,6 +13,15 @@ Voylo must not infer a venue from stationary GPS alone. Stop intelligence is a t
 2. For a venue stop, rank nearby places and map provider categories into a stable Voylo taxonomy.
 
 Mapbox is the primary provider for road matching, traffic context, and POI search because Voylo already uses Mapbox. The classifier is provider-neutral; a secondary place-snap provider may be queried only when primary evidence is ambiguous. Exact names are announced only at high confidence. Unknown is a valid, preferred result over a confident error.
+
+### Implementation status
+
+- Generic, accuracy-aware candidate detection and bounded pre-stop/dwell/exit traces are implemented.
+- Candidate state and up to ten pending completed traces survive process restart and network loss.
+- Supabase owns idempotent `stop_events`; clients cannot write the table directly.
+- The authenticated `classify-stop` Edge Function uses a server-only Mapbox token for map matching and place candidates, normalizes provider output, stores versioned evidence, and removes its temporary raw trace after classification or provider failure.
+- Rollout defaults to `STOP_INTELLIGENCE_MODE=shadow`. No automatic stop notification is published until the field-data precision gates below are met and a later server-side release explicitly enables publication.
+- Live traffic-provider enrichment, adaptive secondary-provider lookup, companion grouping, user correction UI, calibrated production thresholds, and public automatic notifications remain rollout work.
 
 ## System context
 

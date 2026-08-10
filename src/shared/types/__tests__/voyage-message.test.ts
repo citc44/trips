@@ -10,5 +10,5 @@ test('accepts complete v1 location signals and rejects unknown versions', () => 
 });
 
 test('recognizes durable journey-event signals independently', () => {
-  expect(isJourneyEventSignal({ ...base, type: 'journey.event.created', payload: { eventId: 'e1', eventType: 'coffee_stop', occurredAt: base.capturedAt, actorUserId: 'u1', metadata: {} } })).toBe(true);
+  expect(isJourneyEventSignal({ ...base, type: 'journey.event.created', payload: { eventId: 'e1', eventType: 'stop', occurredAt: base.capturedAt, actorUserId: 'u1', metadata: { primaryCategory: 'coffee' } } })).toBe(true);
 });

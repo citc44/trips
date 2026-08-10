@@ -8,7 +8,10 @@ export type LocationSignalPayload = {
   accuracyM: number | null;
 };
 
-export type JourneyEventType = 'coffee_stop' | 'police' | 'deer' | 'construction' | 'custom';
+// `coffee_stop` remains accepted during the mobile compatibility window. New
+// automatic classification always emits one generic `stop` lifecycle event;
+// coffee/fuel/rest-area are metadata categories, never event types.
+export type JourneyEventType = 'stop' | 'traffic_delay' | 'coffee_stop' | 'police' | 'deer' | 'construction' | 'custom';
 
 export type JourneyEventPayload = {
   eventId: string;

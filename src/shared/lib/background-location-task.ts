@@ -3,6 +3,7 @@ import * as TaskManager from 'expo-task-manager';
 
 import { locationRepository } from '@/repositories/location-repository';
 import { createMessageId, VOYAGE_PROTOCOL_VERSION, type LocationSignal } from '@/shared/types/voyage-message';
+import { clearStopMonitor, observeStopSample } from '@/shared/services/journey-events/stop-monitor';
 
 export const BACKGROUND_LOCATION_TASK = 'voylo-background-location';
 
@@ -75,13 +76,17 @@ const SNAPSHOT_INTERVAL_MS = 10_000;
 const FAST_PATH_ENABLED = process.env.EXPO_PUBLIC_LIVE_JOURNEY_FAST_PATH !== 'false';
 
 export function setBackgroundLocationContext(context: BackgroundLocationContext | null): Promise<void> {
+  const priorVoyageId = currentContext?.voyageId;
   hasExplicitlyResolvedContext = true;
   currentContext = context;
   if (context) {
     return enqueueContextStorageMutation(() => AsyncStorage.setItem(CONTEXT_STORAGE_KEY, JSON.stringify(context)));
   } else {
     pendingFix = null;
-    return enqueueContextStorageMutation(() => AsyncStorage.removeItem(CONTEXT_STORAGE_KEY));
+    return enqueueContextStorageMutation(async () => {
+      await AsyncStorage.removeItem(CONTEXT_STORAGE_KEY);
+      if (priorVoyageId) await clearStopMonitor(priorVoyageId);
+    });
   }
 }
 
@@ -94,10 +99,14 @@ export function setBackgroundLocationContext(context: BackgroundLocationContext 
 export function clearBackgroundLocationContext(ownerGeneration: number): Promise<boolean> {
   if (currentContext?.ownerGeneration !== ownerGeneration) return Promise.resolve(false);
 
+  const priorVoyageId = currentContext.voyageId;
   hasExplicitlyResolvedContext = true;
   currentContext = null;
   pendingFix = null;
-  return enqueueContextStorageMutation(() => AsyncStorage.removeItem(CONTEXT_STORAGE_KEY)).then(() => true);
+  return enqueueContextStorageMutation(async () => {
+    await AsyncStorage.removeItem(CONTEXT_STORAGE_KEY);
+    await clearStopMonitor(priorVoyageId);
+  }).then(() => true);
 }
 
 // Shared by both the native background-task callback below and web's
@@ -125,6 +134,14 @@ export async function reportLocationFix(
     sentAt: now,
     payload: { lat, lng, heading, speedMps: options.speedMps ?? null, accuracyM: options.accuracyM ?? null },
   };
+
+  // Detection is deliberately local and generic. Completed compact traces are
+  // persisted and submitted to the server's shadow classifier independently
+  // of live-location delivery; a classifier outage cannot delay the map.
+  void observeStopSample(voyageId, {
+    lat, lng, heading, capturedAtMs: Date.parse(signal.capturedAt),
+    speedMps: signal.payload.speedMps, accuracyM: signal.payload.accuracyM,
+  });
 
   const sentLive = FAST_PATH_ENABLED && options.userId && locationRepository.publishLocationSignal
     ? await locationRepository.publishLocationSignal(voyageId, signal)

@@ -3,7 +3,7 @@ name: 'Voylo Stop Intelligence'
 type: architecture-extension
 purpose: reviewable-design
 altitude: capability
-status: proposed
+status: approved-shadow-foundation
 created: '2026-08-10'
 updated: '2026-08-10'
 parent: ARCHITECTURE-SPINE.md
@@ -12,7 +12,7 @@ companion: ../../../../../docs/VOYLO-STOP-INTELLIGENCE-ARCHITECTURE.md
 
 # Architecture Extension — Stop Intelligence
 
-This capability extends AD-2/AD-14 but is not yet authorized for implementation. The complete technical narrative, diagrams, failure matrix, provider research, domain contract, and validation plan live in `docs/VOYLO-STOP-INTELLIGENCE-ARCHITECTURE.md`.
+This capability extends AD-2/AD-14. Its foundation was approved and implemented in shadow mode on 2026-08-10. The complete technical narrative, diagrams, failure matrix, provider research, domain contract, rollout state, and validation plan live in `docs/VOYLO-STOP-INTELLIGENCE-ARCHITECTURE.md`.
 
 ## Binding proposal
 
@@ -42,6 +42,6 @@ flowchart LR
   Fusion --> Suppress[Suppress]
 ```
 
-## Gate
+## Production gate
 
-No application code, schema, provider account, or automated notification should be created from this extension until the review decisions in the full document are resolved.
+The detector, schema, durable submission, and Mapbox-primary shadow worker are implemented. Automatic notifications, exact-name Memory Lane persistence, adaptive secondary providers, and companion deduplication remain gated by the field validation, licensing, and product decisions in the full document.

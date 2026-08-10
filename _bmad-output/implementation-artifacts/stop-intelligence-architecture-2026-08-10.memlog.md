@@ -2,11 +2,13 @@
 topic: Voylo automatic stop, traffic, and place classification
 goal: Preserve reviewed intent and guardrails for future AI implementation
 mode: architecture-memory
-status: proposed-not-authorized
+status: approved-shadow-foundation
 updated: 2026-08-10T00:00:00-04:00
 ---
 
-- (status) Documentation/research only. Do not implement until the user explicitly approves this architecture.
+- (status) Approved 2026-08-10. Generic detector, durable candidate submission, schema, and Mapbox-primary Edge Function are implemented in shadow mode; automatic notifications remain gated.
+- (implementation) Device state retains bounded pre-stop/dwell/60-second exit evidence and up to ten idempotent pending candidates in AsyncStorage. Unknown speed or poor/unknown accuracy cannot start a candidate.
+- (implementation) `stop_events` is RLS-protected and written through `submit_stop_candidate`; `classify-stop` verifies ownership, uses server-only credentials, stores normalized scores/version, and clears temporary trace data after classification.
 - (decision-proposal) Replace coffee-specific detection with a generic stop candidate detector. Coffee/fuel/rest-area are classification results, never detector assumptions.
 - (invariant) A nearby POI does not prove a visit. Exact-place classification requires trajectory, road, traffic, dwell, accuracy, entry/exit, and place evidence.
 - (invariant) Traffic classification happens before venue classification. Traffic beside a POI must not create a venue event.
