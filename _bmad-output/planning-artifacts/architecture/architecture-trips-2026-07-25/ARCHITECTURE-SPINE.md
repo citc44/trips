@@ -13,7 +13,10 @@ sources:
   - _bmad-output/planning-artifacts/prds/prd-trips-2026-07-25/prd.md
   - _bmad-output/planning-artifacts/ux-designs/ux-trips-2026-07-25/DESIGN.md
   - _bmad-output/planning-artifacts/ux-designs/ux-trips-2026-07-25/EXPERIENCE.md
-companions: []
+companions:
+  - STOP-INTELLIGENCE-ARCHITECTURE.md
+  - ../../../../../docs/VOYLO-LIVE-JOURNEY-ARCHITECTURE.md
+  - ../../../../../docs/VOYLO-STOP-INTELLIGENCE-ARCHITECTURE.md
 ---
 
 # Architecture Spine — Voylo
@@ -129,6 +132,13 @@ graph LR
 
 - **Binds:** deployment and production tuning.
 - **Rule:** fast Broadcast and durable snapshots are independently controllable so disabling the fast path cannot remove recovery. Migrations remain compatible through the mobile adoption window. Production activation requires two-car passing tests, 2/4/8-member load tests, capture-to-render p50/p95, background/force-kill/dead-zone tests, Supabase quota verification, and multi-hour battery measurements.
+
+### AD-16 — Stop intelligence boundary `[PROPOSED 2026-08-10 — NOT IMPLEMENTED]`
+
+- **Binds:** future automated stop events, notifications, Memory Lane, and place-derived Fun Facts.
+- **Prevents:** treating stationary GPS as proof of a venue visit; confusing traffic with a stop; coupling the domain to one place provider; publishing an incorrect exact venue with false confidence.
+- **Proposed rule:** candidate detection, stop-versus-traffic classification, and place classification are separate stages. A generic on-device detector submits a bounded trace; server-side evidence fusion combines motion, GPS quality, road matching, traffic, convoy corroboration, nearby-place candidates, dwell, and entry/exit geometry. Mapbox is the primary provider because it matches the existing stack, while a provider-neutral interface permits an adaptive secondary lookup. Exact venue names require calibrated high confidence; medium confidence produces category-only output; low confidence becomes a generic stop or is suppressed. The durable record is one idempotent `stop` journey event whose classification can be corrected rather than separate coffee/fuel/rest-area event types.
+- **Review gate:** this decision does not authorize application code, schema, provider enrollment, or automatic notifications. See `STOP-INTELLIGENCE-ARCHITECTURE.md` and `docs/VOYLO-STOP-INTELLIGENCE-ARCHITECTURE.md` for diagrams, algorithms, failure handling, privacy, provider research, validation, and unresolved decisions.
 
 ## Consistency Conventions
 
