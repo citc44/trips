@@ -17,6 +17,7 @@ companions:
   - STOP-INTELLIGENCE-ARCHITECTURE.md
   - ../../../../../docs/VOYLO-LIVE-JOURNEY-ARCHITECTURE.md
   - ../../../../../docs/VOYLO-STOP-INTELLIGENCE-ARCHITECTURE.md
+  - ../../../../../docs/VOYLO-LIVING-VOYLO-FEATURE-CONCEPT.md
 ---
 
 # Architecture Spine — Voylo
@@ -139,6 +140,13 @@ graph LR
 - **Prevents:** treating stationary GPS as proof of a venue visit; confusing traffic with a stop; coupling the domain to one place provider; publishing an incorrect exact venue with false confidence.
 - **Rule:** candidate detection, stop-versus-traffic classification, and place classification are separate stages. A generic on-device detector submits a bounded trace; server-side evidence fusion combines motion, GPS quality, road matching, nearby-place candidates, dwell, and entry/exit geometry. Mapbox is the primary provider because it matches the existing stack, while provider-neutral domain interfaces permit adaptive secondary lookup. Exact venue names require calibrated high confidence; medium confidence produces category-only output; low confidence becomes a generic stop or is suppressed. The durable record is one idempotent stop lifecycle whose classification can be corrected rather than separate coffee/fuel/rest-area event types.
 - **Rollout gate:** the foundation operates in shadow mode and publishes no automatic journey notification. Traffic-provider enrichment, convoy corroboration, adaptive secondary lookup, user correction, exact-name persistence, and visible rollout require their documented field precision, privacy/licensing, and product gates. See `STOP-INTELLIGENCE-ARCHITECTURE.md` and `docs/VOYLO-STOP-INTELLIGENCE-ARCHITECTURE.md`.
+
+### AD-17 — One canonical journey timeline `[PLANNED — NOT IMPLEMENTED]`
+
+- **Binds:** future Live Roadbook, route mile markers, passenger moments/photos, reactions, Memory Lane, and consent-aware sharing.
+- **Prevents:** separate live-feed and recap truth stores; an AI-generated alternative history; duplicated cards after reconnect; media payloads embedded in general events; a post-trip product that cannot explain or correct its source facts.
+- **Planned rule:** The Living Voylo uses one Voyage-scoped, idempotent, versioned journey-event timeline. The live Roadbook, map markers, and Memory Lane are projections of the same durable facts. Realtime provides immediacy and database history provides reconciliation. Media, reactions, sharing consent, and recap projections remain separately owned entities referencing canonical events. Deterministic narration ships first; optional AI may rewrite privacy-filtered verified facts but cannot create canonical events.
+- **Planning gate:** AD-17 records the approved product direction, not implementation authorization for a specific slice. Completed-Voyage authorization, media retention/deletion, sharing consent, companion grouping, classifier validation, and rollout metrics must be resolved as described in `docs/VOYLO-LIVING-VOYLO-FEATURE-CONCEPT.md`.
 
 ## Consistency Conventions
 
