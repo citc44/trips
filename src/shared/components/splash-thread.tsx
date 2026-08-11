@@ -1,12 +1,21 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { useEffect, useRef, useState } from 'react';
+import { forwardRef, useEffect, useRef, useState, type ComponentProps, type ComponentRef } from 'react';
 import { Animated, Easing, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
 import { SplashThread as SplashThreadTokens } from '@/constants/design-tokens';
 import { useReduceMotion } from '@/shared/hooks/use-reduce-motion';
 
-const AnimatedPath = Animated.createAnimatedComponent(Path);
+// React Native Animated injects the native-only `collapsable={false}` prop.
+// react-native-svg's web Path forwards unknown props to the DOM, where React
+// warns because `collapsable` is not a boolean HTML attribute. Keep Animated's
+// ref behavior while consuming that implementation prop at this boundary.
+const AnimationSafePath = forwardRef<
+  ComponentRef<typeof Path>,
+  ComponentProps<typeof Path> & { collapsable?: boolean }
+>(({ collapsable: _collapsable, ...props }, ref) => <Path ref={ref} {...props} />);
+AnimationSafePath.displayName = 'AnimationSafePath';
+const AnimatedPath = Animated.createAnimatedComponent(AnimationSafePath);
 
 const STAR_D = 'M10 0L12 8L20 10L12 12L10 20L8 12L0 10L8 8Z';
 
