@@ -4,8 +4,18 @@ import { AppState } from 'react-native';
 import { MapMarker } from '@/constants/design-tokens';
 import { locationRepository, type LiveLocation } from '@/repositories/location-repository';
 import { getLocationFreshness, type VoyagerFreshness } from '@/shared/lib/location-freshness';
+import type { JourneyEventSignal } from '@/shared/types/voyage-message';
 
 export type TrailPoint = { lat: number; lng: number; updatedAt: string };
+
+// Code review finding: unlike trails (pruned by MapMarker.trailLengthMs),
+// journeyEvents had no bound at all -- a multi-hour Voyage generating many
+// automatic stop/manual-spotting events would grow this indefinitely. No
+// per-Voyage retention policy is specified yet (that's Epic 6's job once a
+// real consumer exists), so this is a safety cap, not a designed limit --
+// same "keep only the newest N" discipline stop-monitor.ts already applies
+// to its own pending-candidate queue.
+const MAX_JOURNEY_EVENTS = 200;
 
 type LiveLocationsState = {
   locations: Record<string, LiveLocation>;
@@ -30,6 +40,10 @@ type LiveLocationsState = {
   // parent Voyage lifecycle, rather than only refreshing marker metadata.
   lifecycleRevision?: number;
   freshness?: Record<string, VoyagerFreshness>;
+  // Story 5.1 AC2: received journey.event.created broadcasts, deduplicated by
+  // JourneyEventPayload.eventId (stable across a reconnect re-delivery).
+  // Rendering/consuming these is Epic 6's job -- this hook only exposes them.
+  journeyEvents: JourneyEventSignal[];
 };
 
 // Not a Context/Provider like use-active-voyage.tsx/use-profile.tsx -- this
@@ -39,6 +53,7 @@ type LiveLocationsState = {
 export function useLiveLocations(voyageId: string | null, currentUserId: string | null = null): LiveLocationsState {
   const [locations, setLocations] = useState<Record<string, LiveLocation>>({});
   const [trails, setTrails] = useState<Record<string, TrailPoint[]>>({});
+  const [journeyEvents, setJourneyEvents] = useState<JourneyEventSignal[]>([]);
   const [hasError, setHasError] = useState(false);
   const [isConnected, setIsConnected] = useState(true);
   const [rosterRevision, setRosterRevision] = useState(0);
@@ -63,6 +78,7 @@ export function useLiveLocations(voyageId: string | null, currentUserId: string 
         if (!isEffectMounted) return;
         setLocations({});
         setTrails({});
+        setJourneyEvents([]);
         setHasError(false);
         setIsConnected(true);
         setRosterRevision(0);
@@ -85,6 +101,7 @@ export function useLiveLocations(voyageId: string | null, currentUserId: string 
     const activeVoyageId = voyageId;
     let current: Record<string, LiveLocation> = {};
     let currentTrails: Record<string, TrailPoint[]> = {};
+    let currentJourneyEvents: Record<string, JourneyEventSignal> = {};
     let refreshInFlight: Promise<void> | null = null;
     let refreshQueued = false;
     let wasDisconnected = false;
@@ -98,11 +115,27 @@ export function useLiveLocations(voyageId: string | null, currentUserId: string 
       if (!isMounted) return;
       setLocations(current);
       setTrails(currentTrails);
+      setJourneyEvents(Object.values(currentJourneyEvents));
       setHasError(false);
       setIsConnected(true);
       setRosterRevision(0);
       setLifecycleRevision(0);
     });
+
+    // Story 5.1 AC2: keyed by eventId so a reconnect re-delivery of the same
+    // durable journey event (AD-14) merges instead of duplicating -- same
+    // discipline mergeIn already applies to locations.
+    function mergeInJourneyEvent(event: JourneyEventSignal) {
+      const merged = { ...currentJourneyEvents, [event.payload.eventId]: event };
+      const entries = Object.entries(merged);
+      // Object key insertion order is preserved for string keys (eventId is
+      // a UUID, never a numeric-looking string), so slicing from the front
+      // drops the oldest entries -- same intent as stop-monitor.ts's
+      // `pending.slice(-10)`.
+      currentJourneyEvents =
+        entries.length > MAX_JOURNEY_EVENTS ? Object.fromEntries(entries.slice(entries.length - MAX_JOURNEY_EVENTS)) : merged;
+      setJourneyEvents(Object.values(currentJourneyEvents));
+    }
     // Closure-local accumulators, not React state read via a functional
     // setState(prev => ...) updater -- scoped fresh to this exact effect run
     // (i.e. reset on every voyageId change), so they can never leak a
@@ -227,6 +260,10 @@ export function useLiveLocations(voyageId: string | null, currentUserId: string 
       },
       currentUserId,
       setPresentUserIds,
+      (event) => {
+        if (!isMounted) return;
+        mergeInJourneyEvent(event);
+      },
     );
 
     const freshnessTimer = setInterval(() => setFreshnessNow(Date.now()), 1000);
@@ -253,5 +290,5 @@ export function useLiveLocations(voyageId: string | null, currentUserId: string 
   const freshness = Object.fromEntries(
     Object.entries(locations).map(([userId, location]) => [userId, getLocationFreshness(location, presentUserIds.has(userId), freshnessNow)]),
   );
-  return { locations, trails, isLoading, hasError, isConnected, rosterRevision, lifecycleRevision, freshness };
+  return { locations, trails, isLoading, hasError, isConnected, rosterRevision, lifecycleRevision, freshness, journeyEvents };
 }

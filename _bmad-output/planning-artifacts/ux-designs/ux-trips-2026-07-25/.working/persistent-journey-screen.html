@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Voylo — Persistent Journey Screen</title>
+<style>
+/*
+  Story 6.2 discovery pass -- the persistent per-Voyage journey screen.
+  Reached three ways: closing the reveal deck lands here; tapping a row in
+  Voyage History replays the reveal deck, which also closes back to here;
+  and this is the actual entry point for both share formats (the single
+  shareable card and the stitched video). Not yet designed before this pass
+  -- a real gap, since the reveal and Voyage History alone don't cover "come
+  back and revisit/share anytime" per the earlier decision.
+  Confirmed Direction B aurora + card-panel language, at rest (not an
+  entrance moment like the reveal -- this is a page you land ON and return
+  to, so its energy is calmer/more functional, closer to Voyage History's
+  register than the reveal's).
+  palette: Wayfinder -- primary blue #0B6FFF, teal #00C2A8, coral #FF5A5F,
+  amber #FFB020, white #FFFFFF, surface-secondary #F4F6FA, ink #101828,
+  ink-secondary #667085, hairline #DCE1EA.
+  Font stand-ins: display -> "Segoe UI Semibold" (Clash Display); body ->
+  "Segoe UI" (General Sans); stat -> "Consolas", monospace (Space Mono).
+*/
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #EDEFF3; color: #101828; font-family: "Segoe UI", Arial, sans-serif; padding: 32px; }
+.rationale { max-width: 1000px; margin: 0 auto 28px; background: #fff; border: 1px solid #DCE1EA; border-radius: 20px; padding: 18px 24px; box-shadow: 0 2px 0 #DCE1EA; }
+.rationale h1 { font-size: 20px; font-weight: 700; margin-bottom: 6px; color: #0B6FFF; }
+.rationale p { font-size: 14px; line-height: 1.5; color: #344054; margin-bottom: 6px; }
+.rationale p:last-child { margin-bottom: 0; }
+.stage { display: flex; gap: 26px; justify-content: center; flex-wrap: wrap; align-items: flex-start; }
+.frame-block { text-align: center; }
+.frame-label { color: #101828; font-weight: 700; font-size: 12px; letter-spacing: 1.2px; text-transform: uppercase; margin-bottom: 10px; }
+.phone { width: 320px; height: 693px; border-radius: 40px; border: 7px solid #101828; background: #101828; position: relative; overflow: hidden; box-shadow: 0 12px 28px rgba(16,24,40,0.28); }
+.screen { position: absolute; inset: 0; border-radius: 33px; overflow: hidden; background: #F4F6FA; display: flex; flex-direction: column; }
+.aurora { position: absolute; inset: -10%; }
+
+@keyframes fadeUp { 0% { opacity: 0; transform: translateY(12px); } 100% { opacity: 1; transform: translateY(0); } }
+@keyframes shimmer { 0%,100% { opacity: 0.7; } 50% { opacity: 1; } }
+
+.topbar { flex: 0 0 auto; padding: 52px 20px 4px; display: flex; align-items: center; justify-content: space-between; position: relative; z-index: 6; }
+.back-chip { width: 34px; height: 34px; border-radius: 50%; background: #fff; border: 1px solid #DCE1EA; display: flex; align-items: center; justify-content: center; font-size: 15px; color: #101828; }
+.scroll-area { flex: 1 1 auto; min-height: 0; overflow: hidden; position: relative; z-index: 6; padding: 8px 20px 20px; display: flex; flex-direction: column; align-items: center; }
+.stat-num { font-family: "Consolas", "Courier New", monospace; font-weight: 700; }
+.headline { font-family: "Segoe UI Semibold", "Helvetica Neue", system-ui, sans-serif; font-weight: 700; color: #101828; line-height: 1.15; }
+.content-panel { position: relative; background: #FFFFFF; border: 1px solid #DCE1EA; border-radius: 22px; box-shadow: 0 3px 0 #DCE1EA; padding: 18px; width: 100%; }
+</style>
+</head>
+<body>
+
+<div class="rationale">
+  <h1>Persistent Journey Screen</h1>
+  <p>Landed on after closing the reveal deck, or by tapping a row in Voyage History. Calmer/functional register vs. the reveal's full drama -- this is a page you come back to, not an entrance moment. Hosts: a replay hero (tap to watch the full reveal deck again), the trip's core stats, the crew, and both share formats (the single shareable card and the stitched video).</p>
+</div>
+
+<div class="stage">
+  <div class="frame-block"><div class="frame-label">Journey Screen</div><div class="phone"><div class="screen">
+    <svg class="aurora" viewBox="0 0 300 649" preserveAspectRatio="xMidYMid slice">
+      <rect width="300" height="649" fill="#F4F6FA"/>
+      <circle cx="70" cy="100" r="140" fill="#00C2A8" opacity="0.14"/>
+      <circle cx="250" cy="140" r="130" fill="#FF5A5F" opacity="0.12"/>
+      <circle cx="180" cy="60" r="120" fill="#FFB020" opacity="0.14"/>
+    </svg>
+    <div class="topbar">
+      <div class="back-chip">‹</div>
+      <div style="font-size:11px; color:#667085; font-weight:700; text-transform:uppercase; letter-spacing:0.06em;">Aug 11, 2026</div>
+      <div class="back-chip">⋯</div>
+    </div>
+    <div class="scroll-area">
+      <div class="headline" style="font-size:26px; margin-top:2px; animation:fadeUp 500ms ease-out both;">Big Sur</div>
+      <div style="display:flex; margin-top:10px; margin-bottom:16px; animation:fadeUp 500ms 80ms ease-out both;">
+        <div style="width:30px; height:30px; border-radius:50%; background:#00C2A8; border:3px solid #F4F6FA; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:700; font-size:11px; z-index:3;">M</div>
+        <div style="width:30px; height:30px; border-radius:50%; background:#FF5A5F; border:3px solid #F4F6FA; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:700; font-size:11px; margin-left:-10px; z-index:2;">C</div>
+        <div style="width:30px; height:30px; border-radius:50%; background:#FFB020; border:3px solid #F4F6FA; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:700; font-size:11px; margin-left:-10px; z-index:1;">S</div>
+      </div>
+
+      <div class="content-panel" style="padding:0; overflow:hidden; animation:fadeUp 500ms 150ms ease-out both;">
+        <div style="height:150px; position:relative; background:linear-gradient(135deg, #0B6FFF 0%, #2E85FF 100%); display:flex; align-items:center; justify-content:center;">
+          <div style="width:52px; height:52px; border-radius:50%; background:#fff; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 14px rgba(0,0,0,0.2); animation:shimmer 2.4s ease-in-out infinite;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="#0B6FFF"><polygon points="8,5 20,12 8,19"/></svg>
+          </div>
+        </div>
+        <div style="padding:14px 16px;">
+          <div style="font-size:14.5px; font-weight:700; color:#101828;">Watch your Voylo again</div>
+          <div style="font-size:12px; color:#667085; margin-top:2px;">5 cards · 32 sec</div>
+        </div>
+      </div>
+
+      <div class="content-panel" style="margin-top:12px; animation:fadeUp 500ms 220ms ease-out both;">
+        <div style="display:flex; justify-content:space-around; text-align:center;">
+          <div><div class="stat-num" style="font-size:18px; color:#0B6FFF;">6h 42m</div><div style="font-size:9px; color:#98A2B3; text-transform:uppercase; letter-spacing:0.05em;">Duration</div></div>
+          <div><div class="stat-num" style="font-size:18px; color:#0B6FFF;">214mi</div><div style="font-size:9px; color:#98A2B3; text-transform:uppercase; letter-spacing:0.05em;">Distance</div></div>
+          <div><div class="stat-num" style="font-size:18px; color:#0B6FFF;">6</div><div style="font-size:9px; color:#98A2B3; text-transform:uppercase; letter-spacing:0.05em;">Stops</div></div>
+        </div>
+      </div>
+
+      <div style="width:100%; margin-top:14px; display:flex; gap:10px; animation:fadeUp 500ms 300ms ease-out both;">
+        <div style="flex:1; background:#0B6FFF; color:#fff; border-radius:14px; padding:13px 0; text-align:center; font-size:13px; font-weight:700; box-shadow:0 4px 0 #0653C7;">Share the card</div>
+        <div style="flex:1; background:#fff; color:#0B6FFF; border:2px solid #0B6FFF; border-radius:14px; padding:11px 0; text-align:center; font-size:13px; font-weight:700;">Share the video</div>
+      </div>
+    </div>
+  </div></div></div>
+</div>
+
+</body>
+</html>

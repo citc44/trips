@@ -3,10 +3,15 @@ import { beforeEach, expect, jest, test } from '@jest/globals';
 import { voyageRepository } from '@/repositories/voyage-repository';
 
 const mockRpc = jest.fn<(...args: any[]) => Promise<any>>();
+const mockMaybeSingle = jest.fn<(...args: any[]) => Promise<any>>();
+const mockEq = jest.fn(() => ({ maybeSingle: mockMaybeSingle }));
+const mockSelect = jest.fn(() => ({ eq: mockEq }));
+const mockFrom = jest.fn((..._args: unknown[]) => ({ select: mockSelect }));
 
 jest.mock('@/lib/supabase', () => ({
   supabase: {
     rpc: (...args: unknown[]) => mockRpc(...args),
+    from: (...args: unknown[]) => mockFrom(...args),
   },
 }));
 
@@ -636,4 +641,153 @@ test('leaveActiveVoyage calls the idempotent pre-sign-out RPC', async () => {
 
   expect(mockRpc).toHaveBeenCalledWith('leave_active_voyage');
   expect(result).toEqual({ error: null });
+});
+
+test('getVoyageHistory calls the get_voyage_history RPC with a null cursor and the default limit when none are given', async () => {
+  mockRpc.mockResolvedValue({ data: [], error: null });
+
+  await voyageRepository.getVoyageHistory();
+
+  expect(mockRpc).toHaveBeenCalledWith('get_voyage_history', { p_before: null, p_before_id: null, p_limit: 20 });
+});
+
+test('getVoyageHistory passes an explicit cursor, tiebreak id, and limit through to the RPC', async () => {
+  mockRpc.mockResolvedValue({ data: [], error: null });
+
+  await voyageRepository.getVoyageHistory('2026-07-26T05:30:00Z', 'voyage-9', 5);
+
+  expect(mockRpc).toHaveBeenCalledWith('get_voyage_history', {
+    p_before: '2026-07-26T05:30:00Z',
+    p_before_id: 'voyage-9',
+    p_limit: 5,
+  });
+});
+
+test('getVoyageHistory returns { data: [], error: null } (not a crash) when the RPC resolves with data: null', async () => {
+  mockRpc.mockResolvedValue({ data: null, error: null });
+
+  const result = await voyageRepository.getVoyageHistory();
+
+  expect(result).toEqual({ data: [], error: null });
+});
+
+test('getVoyageHistory returns the mapped list of ended Voyages, including the Voyager count', async () => {
+  mockRpc.mockResolvedValue({
+    data: [
+      {
+        id: 'voyage-1',
+        destination: 'Lake Tahoe',
+        destination_lat: 39.0968,
+        destination_lng: -120.0324,
+        status: 'ended',
+        created_by: 'user-1',
+        created_at: '2026-07-26T00:00:00Z',
+        ended_at: '2026-07-26T05:30:00Z',
+        join_code: 'ABCD2345',
+        voyager_count: 3,
+      },
+    ],
+    error: null,
+  });
+
+  const result = await voyageRepository.getVoyageHistory();
+
+  expect(result).toEqual({
+    data: [
+      {
+        id: 'voyage-1',
+        destination: 'Lake Tahoe',
+        destinationLat: 39.0968,
+        destinationLng: -120.0324,
+        status: 'ended',
+        createdBy: 'user-1',
+        createdAt: '2026-07-26T00:00:00Z',
+        endedAt: '2026-07-26T05:30:00Z',
+        joinCode: 'ABCD2345',
+        voyagerCount: 3,
+      },
+    ],
+    error: null,
+  });
+});
+
+test('getVoyageHistory returns an empty array (not an error) when the RPC resolves with no rows', async () => {
+  mockRpc.mockResolvedValue({ data: [], error: null });
+
+  const result = await voyageRepository.getVoyageHistory();
+
+  expect(result).toEqual({ data: [], error: null });
+});
+
+test('getVoyageHistory returns a typed { code, message } error on RPC failure', async () => {
+  mockRpc.mockResolvedValue({ data: null, error: { code: 'unknown', message: 'Network request failed' } });
+
+  const result = await voyageRepository.getVoyageHistory();
+
+  expect(result).toEqual({ data: null, error: { code: 'unknown', message: 'Network request failed' } });
+});
+
+// Story 6.3 AC1/AC4: a single-Voyage-by-id read for the Memory Lane
+// composer/deck (reachable by voyageId, not paginated). voyages_select_members
+// already uses is_voyage_participant (migration 20260728000000_end_voyage.sql),
+// so this is a direct table read, not a new RPC -- same pattern as
+// profile-repository.ts's getProfile.
+test('getVoyage queries the voyages table filtered by id', async () => {
+  mockMaybeSingle.mockResolvedValue({ data: null, error: null });
+
+  await voyageRepository.getVoyage('voyage-1');
+
+  expect(mockFrom).toHaveBeenCalledWith('voyages');
+  expect(mockSelect).toHaveBeenCalledWith('*');
+  expect(mockEq).toHaveBeenCalledWith('id', 'voyage-1');
+});
+
+test('getVoyage returns null data with no error when no row exists (not found / not a participant)', async () => {
+  mockMaybeSingle.mockResolvedValue({ data: null, error: null });
+
+  const result = await voyageRepository.getVoyage('voyage-1');
+
+  expect(result).toEqual({ data: null, error: null });
+});
+
+test('getVoyage returns the mapped Voyage when a row exists', async () => {
+  mockMaybeSingle.mockResolvedValue({
+    data: {
+      id: 'voyage-1',
+      destination: 'Lake Tahoe',
+      destination_lat: null,
+      destination_lng: null,
+      status: 'ended',
+      created_by: 'user-1',
+      created_at: '2026-08-11T10:00:00Z',
+      ended_at: '2026-08-11T16:42:00Z',
+      join_code: 'ABCD2345',
+    },
+    error: null,
+  });
+
+  const result = await voyageRepository.getVoyage('voyage-1');
+
+  expect(result).toEqual({
+    data: {
+      id: 'voyage-1',
+      destination: 'Lake Tahoe',
+      destinationLat: null,
+      destinationLng: null,
+      status: 'ended',
+      createdBy: 'user-1',
+      createdAt: '2026-08-11T10:00:00Z',
+      endedAt: '2026-08-11T16:42:00Z',
+      joinCode: 'ABCD2345',
+    },
+    error: null,
+  });
+});
+
+test('getVoyage returns a typed { code, message } error, never the raw Supabase error object', async () => {
+  mockMaybeSingle.mockResolvedValue({ data: null, error: { code: '42501', message: 'permission denied' } });
+
+  const result = await voyageRepository.getVoyage('voyage-1');
+
+  expect(result).toEqual({ data: null, error: { code: '42501', message: 'permission denied' } });
 });

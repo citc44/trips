@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Voylo — Memory Lane, Direction B: Future Card Types &amp; Layout Variety</title>
+<style>
+/*
+  Story 6.2 discovery pass -- Direction B ("Player Constellation") confirmed
+  as the winning visual direction. This file explores how the deck GROWS as
+  new capture sources come online, plus extra layout variants of existing
+  card types -- both grounded in docs/VOYLO-LIVING-VOYLO-FEATURE-CONCEPT.md's
+  own reveal-content list (classified stops, group split/reunion, photos/
+  captions/reactions, verified personality titles/badges) and epics.md's
+  flagged future Fun Fact ideas (connection-drop counts, border crossings).
+  Same aurora + floating white card-panel DNA as the winning B deck, so
+  these read as "the same family, more members" rather than a new system --
+  demonstrating the earlier 50+ combinatorial-template decision in practice.
+  palette: Wayfinder -- primary blue #0B6FFF, teal #00C2A8, coral #FF5A5F,
+  amber #FFB020, violet #9B6BFF, white #FFFFFF, surface-secondary #F4F6FA,
+  ink #101828, ink-secondary #667085, hairline #DCE1EA.
+  Font stand-ins: display -> "Segoe UI Semibold" (Clash Display); body ->
+  "Segoe UI" (General Sans); stat -> "Consolas", monospace (Space Mono).
+*/
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #EDEFF3; color: #101828; font-family: "Segoe UI", Arial, sans-serif; padding: 32px; }
+.rationale { max-width: 1000px; margin: 0 auto 28px; background: #fff; border: 1px solid #DCE1EA; border-radius: 20px; padding: 18px 24px; box-shadow: 0 2px 0 #DCE1EA; }
+.rationale h1 { font-size: 20px; font-weight: 700; margin-bottom: 6px; color: #0B6FFF; }
+.rationale p { font-size: 14px; line-height: 1.5; color: #344054; margin-bottom: 6px; }
+.rationale p:last-child { margin-bottom: 0; }
+.section-title { max-width: 1000px; margin: 36px auto 16px; font-size: 15px; font-weight: 700; color: #101828; text-transform: uppercase; letter-spacing: 0.06em; text-align: center; }
+.section-sub { max-width: 700px; margin: -10px auto 20px; font-size: 13px; color: #667085; text-align: center; line-height: 1.5; }
+.stage { display: flex; gap: 26px; justify-content: center; flex-wrap: wrap; align-items: flex-start; }
+.frame-block { text-align: center; }
+.frame-label { color: #101828; font-weight: 700; font-size: 12px; letter-spacing: 1.2px; text-transform: uppercase; margin-bottom: 10px; }
+.frame-tag { display: inline-block; background: #E7F0FF; color: #0B6FFF; font-size: 10.5px; font-weight: 700; padding: 3px 10px; border-radius: 999px; margin-bottom: 8px; }
+.phone { width: 300px; height: 649px; border-radius: 38px; border: 7px solid #101828; background: #101828; position: relative; overflow: hidden; box-shadow: 0 12px 28px rgba(16,24,40,0.28); }
+.screen { position: absolute; inset: 0; border-radius: 31px; overflow: hidden; background: #FAFBFD; }
+.aurora { position: absolute; inset: -10%; }
+
+@keyframes fadeUp { 0% { opacity: 0; transform: translateY(14px); } 100% { opacity: 1; transform: translateY(0); } }
+@keyframes cardIn { 0% { opacity: 0; transform: translateY(18px) scale(0.97); } 100% { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes dotPop { 0% { transform: scale(0); } 70% { transform: scale(1.2); } 100% { transform: scale(1); } }
+@keyframes splitApart { 0% { transform: translateX(0); } 100% { transform: translateX(var(--tx)); } }
+@keyframes reuniteIn { 0% { transform: translateX(var(--tx)); opacity: 0.5; } 100% { transform: translateX(0); opacity: 1; } }
+@keyframes ringDraw { from { stroke-dashoffset: var(--len); } to { stroke-dashoffset: var(--end); } }
+@keyframes badgePop { 0% { transform: scale(0) rotate(-10deg); opacity: 0; } 70% { transform: scale(1.15) rotate(4deg); } 100% { transform: scale(1) rotate(0deg); opacity: 1; } }
+@keyframes flagWave { 0%,100% { transform: rotate(-2deg); } 50% { transform: rotate(2deg); } }
+@keyframes pinDrop { 0% { transform: translateY(-20px); opacity: 0; } 100% { transform: translateY(0); opacity: 1; } }
+
+.dots-nav { position: absolute; top: 46px; left: 0; right: 0; display: flex; justify-content: center; gap: 6px; z-index: 6; }
+.dot-nav { width: 5px; height: 5px; border-radius: 50%; background: rgba(16,24,40,0.16); }
+.dot-nav.active { background: #0B6FFF; width: 15px; border-radius: 3px; }
+.dot-nav.onphoto { background: rgba(255,255,255,0.45); }
+.dot-nav.onphoto.active { background: #fff; }
+.headline { font-family: "Segoe UI Semibold", "Helvetica Neue", system-ui, sans-serif; font-weight: 700; color: #101828; line-height: 1.15; }
+.stat-num { font-family: "Consolas", "Courier New", monospace; font-weight: 700; }
+.content-panel { position: relative; z-index: 6; background: #FFFFFF; border: 1px solid #DCE1EA; border-radius: 24px; box-shadow: 0 3px 0 #DCE1EA; padding: 22px; animation: cardIn 550ms 150ms cubic-bezier(.22,1,.36,1) both; }
+.swipehint { position: absolute; bottom: 18px; left: 0; right: 0; text-align: center; color: rgba(16,24,40,0.4); font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; z-index: 6; }
+.swipehint.onphoto { color: rgba(255,255,255,0.75); text-shadow: 0 1px 4px rgba(0,0,0,0.3); }
+</style>
+</head>
+<body>
+
+<div class="rationale">
+  <h1>Direction B — Future Card Types &amp; Layout Variety</h1>
+  <p><b>Confirmed winner:</b> "Player Constellation" — full-bleed player-color aurora + floating white card panels. This file explores two things: (1) new card types for capture sources coming later (passenger photos, personality badges, split/reunion moments, banked automatic milestones), and (2) alternate layout treatments of an existing card type (Stops) — a concrete look at the earlier "50+ combinatorial templates" decision, so a rebuilt deck doesn't feel identical trip after trip.</p>
+</div>
+
+<div class="section-title">New card types — future capture sources</div>
+<div class="section-sub">Each grounded in the Living Voylo doc's own reveal-content list or an already-flagged future Fun Fact idea. Same aurora/panel DNA as the confirmed deck.</div>
+
+<div class="stage">
+
+  <div class="frame-block"><div class="frame-tag">Slice B — passenger photos</div><br><div class="frame-label">Photo Moment</div><div class="phone"><div class="screen">
+    <svg class="aurora" viewBox="0 0 300 649" preserveAspectRatio="xMidYMid slice">
+      <defs><linearGradient id="photoBg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#4A9BFF"/><stop offset="45%" stop-color="#7FBBFF"/><stop offset="70%" stop-color="#FFE9BE"/><stop offset="100%" stop-color="#FFB020"/></linearGradient></defs>
+      <rect width="300" height="649" fill="url(#photoBg)"/>
+      <path d="M0,430 Q80,380 160,415 T300,395 L300,649 L0,649 Z" fill="#2E3B55" opacity="0.55"/>
+      <circle cx="230" cy="150" r="46" fill="#FFF7E0" opacity="0.9"/>
+    </svg>
+    <div class="dots-nav"><div class="dot-nav onphoto"></div><div class="dot-nav onphoto active"></div><div class="dot-nav onphoto"></div><div class="dot-nav onphoto"></div><div class="dot-nav onphoto"></div><div class="dot-nav onphoto"></div></div>
+    <div style="position:absolute; top:78px; left:24px; background:#fff; border-radius:999px; padding:5px 5px 5px 5px; z-index:6; display:flex; align-items:center; box-shadow:0 3px 8px rgba(16,24,40,0.2); animation:fadeUp 600ms 300ms ease-out both;">
+      <div style="width:26px; height:26px; border-radius:50%; background:#00C2A8; border:2px solid #fff; display:flex; align-items:center; justify-content:center; color:#fff; font-size:11px; font-weight:700;">M</div>
+      <div style="font-size:11.5px; font-weight:700; padding:0 10px 0 6px;">Meera captured this</div>
+    </div>
+    <div style="position:relative; z-index:6; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; padding:0 22px 88px;">
+      <div class="content-panel" style="width:100%;">
+        <div style="font-size:14px; color:#101828; line-height:1.5; font-style:italic;">"Pulled over just for this view. Worth every minute."</div>
+        <div style="display:flex; gap:6px; margin-top:12px;">
+          <div style="background:#FFF4E0; color:#B87700; font-size:12px; font-weight:700; border-radius:999px; padding:4px 10px;">😍 2</div>
+          <div style="background:#E7F0FF; color:#0B6FFF; font-size:12px; font-weight:700; border-radius:999px; padding:4px 10px;">🔥 1</div>
+        </div>
+      </div>
+    </div>
+    <div class="swipehint onphoto">← swipe →</div>
+  </div></div></div>
+
+  <div class="frame-block"><div class="frame-tag">Living Voylo — badges</div><br><div class="frame-label">Personality Badges</div><div class="phone"><div class="screen">
+    <svg class="aurora" viewBox="0 0 300 649" preserveAspectRatio="xMidYMid slice">
+      <rect width="300" height="649" fill="#F4F6FA"/>
+      <circle cx="230" cy="160" r="180" fill="#9B6BFF" opacity="0.16"/>
+      <circle cx="70" cy="500" r="190" fill="#FFB020" opacity="0.18"/>
+      <circle cx="200" cy="400" r="140" fill="#00C2A8" opacity="0.14"/>
+    </svg>
+    <div class="dots-nav"><div class="dot-nav"></div><div class="dot-nav"></div><div class="dot-nav active"></div><div class="dot-nav"></div><div class="dot-nav"></div><div class="dot-nav"></div></div>
+    <div style="position:relative; z-index:6; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:0 22px;">
+      <div style="font-size:11px; color:#667085; text-transform:uppercase; letter-spacing:0.08em; font-weight:700; margin-bottom:14px;">This crew's titles</div>
+      <div class="content-panel" style="width:100%; display:flex; flex-direction:column; gap:12px;">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <div style="width:44px; height:44px; border-radius:14px; background:#0B6FFF; display:flex; align-items:center; justify-content:center; font-size:19px; flex-shrink:0; animation:badgePop 500ms 200ms ease-out both;">🧭</div>
+          <div style="text-align:left;"><div style="font-weight:700; font-size:14.5px;">The Navigator</div><div style="font-size:12px; color:#667085;">Meera — never missed a turn</div></div>
+        </div>
+        <div style="display:flex; align-items:center; gap:12px;">
+          <div style="width:44px; height:44px; border-radius:14px; background:#FF5A5F; display:flex; align-items:center; justify-content:center; font-size:19px; flex-shrink:0; animation:badgePop 500ms 400ms ease-out both;">🎵</div>
+          <div style="text-align:left;"><div style="font-weight:700; font-size:14.5px;">The DJ</div><div style="font-size:12px; color:#667085;">Chintan — queued 41 songs</div></div>
+        </div>
+        <div style="display:flex; align-items:center; gap:12px;">
+          <div style="width:44px; height:44px; border-radius:14px; background:#FFB020; display:flex; align-items:center; justify-content:center; font-size:19px; flex-shrink:0; animation:badgePop 500ms 600ms ease-out both;">🍿</div>
+          <div style="text-align:left;"><div style="font-weight:700; font-size:14.5px;">Snack Guardian</div><div style="font-size:12px; color:#667085;">Sam — kept everyone fed</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="swipehint">← swipe →</div>
+  </div></div></div>
+
+  <div class="frame-block"><div class="frame-tag">Living Voylo — split &amp; reunion</div><br><div class="frame-label">Split &amp; Reunion</div><div class="phone"><div class="screen">
+    <svg class="aurora" viewBox="0 0 300 649" preserveAspectRatio="xMidYMid slice">
+      <rect width="300" height="649" fill="#F4F6FA"/>
+      <circle cx="90" cy="230" r="170" fill="#00C2A8" opacity="0.2"/>
+      <circle cx="220" cy="230" r="170" fill="#FF5A5F" opacity="0.2"/>
+      <circle cx="150" cy="460" r="180" fill="#FFB020" opacity="0.16"/>
+    </svg>
+    <div class="dots-nav"><div class="dot-nav"></div><div class="dot-nav"></div><div class="dot-nav"></div><div class="dot-nav active"></div><div class="dot-nav"></div><div class="dot-nav"></div></div>
+    <div style="position:relative; height:170px; margin-top:70px;">
+      <div style="position:absolute; left:50%; top:30px; width:22px; height:22px; margin-left:-11px; border-radius:50%; background:#00C2A8; border:3px solid #fff; box-shadow:0 3px 8px rgba(16,24,40,0.2); --tx:-58px; animation:splitApart 1.2s 300ms ease-in-out both, reuniteIn 1.2s 2.4s ease-in-out both;"></div>
+      <div style="position:absolute; left:50%; top:30px; width:20px; height:20px; margin-left:-10px; border-radius:50%; background:#FF5A5F; border:3px solid #fff; box-shadow:0 3px 8px rgba(16,24,40,0.2); --tx:60px; animation:splitApart 1.2s 300ms ease-in-out both, reuniteIn 1.2s 2.4s ease-in-out both;"></div>
+      <div style="position:absolute; left:50%; top:30px; width:18px; height:18px; margin-left:-9px; border-radius:50%; background:#FFB020; border:3px solid #fff; box-shadow:0 3px 8px rgba(16,24,40,0.2); --tx:2px; animation:splitApart 1.2s 300ms ease-in-out both, reuniteIn 1.2s 2.4s ease-in-out both;"></div>
+    </div>
+    <div style="position:relative; z-index:6; padding:0 22px;">
+      <div class="content-panel">
+        <div class="headline" style="font-size:18px;">The crew split for 26 minutes at the trailhead.</div>
+        <div style="margin-top:7px; color:#667085; font-size:13px;">Chintan wandered off for the view. Everyone found their way back before the next stop.</div>
+      </div>
+    </div>
+    <div class="swipehint">← swipe →</div>
+  </div></div></div>
+
+  <div class="frame-block"><div class="frame-tag">Epics — auto milestones</div><br><div class="frame-label">Banked Milestone</div><div class="phone"><div class="screen">
+    <svg class="aurora" viewBox="0 0 300 649" preserveAspectRatio="xMidYMid slice">
+      <rect width="300" height="649" fill="#F4F6FA"/>
+      <circle cx="150" cy="260" r="210" fill="#0B6FFF" opacity="0.14"/>
+      <circle cx="100" cy="500" r="160" fill="#FFB020" opacity="0.16"/>
+    </svg>
+    <div class="dots-nav"><div class="dot-nav"></div><div class="dot-nav"></div><div class="dot-nav"></div><div class="dot-nav"></div><div class="dot-nav active"></div><div class="dot-nav"></div></div>
+    <div style="position:relative; z-index:6; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:0 26px;">
+      <div style="font-size:44px; margin-bottom:6px; animation:flagWave 2.4s ease-in-out infinite; transform-origin:bottom center;">🏴</div>
+      <div class="content-panel" style="text-align:center; width:100%;">
+        <div style="font-size:11px; color:#667085; text-transform:uppercase; letter-spacing:0.08em; font-weight:700;">Crossed into</div>
+        <div class="headline" style="font-size:24px; margin-top:2px;">California</div>
+        <div style="height:1px; background:#DCE1EA; margin:12px 0;"></div>
+        <div style="display:flex; align-items:center; justify-content:center; gap:8px;">
+          <span style="font-size:16px;">📡</span>
+          <div style="font-size:12.5px; color:#667085;">Went off-grid <b style="color:#101828;">4 times</b> — always found the way back</div>
+        </div>
+      </div>
+    </div>
+    <div class="swipehint">← swipe →</div>
+  </div></div></div>
+
+</div>
+
+<div class="section-title" style="margin-top:48px;">Layout variety — same Stops data, different treatment</div>
+<div class="section-sub">Demonstrating the earlier "50+ combinatorial templates" decision: same underlying data, different card frame, so the deck doesn't repeat itself trip after trip.</div>
+
+<div class="stage">
+
+  <div class="frame-block"><div class="frame-tag">Variant: original (bars)</div><br><div class="frame-label">Stops — Bars</div><div class="phone"><div class="screen">
+    <svg class="aurora" viewBox="0 0 300 649" preserveAspectRatio="xMidYMid slice">
+      <rect width="300" height="649" fill="#F4F6FA"/>
+      <circle cx="70" cy="160" r="170" fill="#00C2A8" opacity="0.18"/>
+      <circle cx="250" cy="500" r="200" fill="#FF5A5F" opacity="0.16"/>
+      <circle cx="150" cy="600" r="170" fill="#FFB020" opacity="0.18"/>
+    </svg>
+    <div class="dots-nav"><div class="dot-nav"></div><div class="dot-nav"></div><div class="dot-nav active"></div><div class="dot-nav"></div><div class="dot-nav"></div></div>
+    <div style="position:relative; z-index:6; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:0 26px;">
+      <div class="content-panel" style="width:100%;">
+        <div style="font-size:11px; color:#667085; text-transform:uppercase; letter-spacing:0.08em; font-weight:700; margin-bottom:12px; text-align:center;">Stops by crew member</div>
+        <div style="display:flex; flex-direction:column; gap:11px;">
+          <div style="display:flex; align-items:center; gap:8px;"><div style="width:10px; height:10px; border-radius:50%; background:#00C2A8; flex-shrink:0;"></div><div style="font-size:12.5px; font-weight:700; width:52px; text-align:left;">Meera</div><div style="flex:1; height:9px; background:#EDEFF3; border-radius:5px; overflow:hidden;"><div style="height:100%; width:80%; background:#00C2A8; border-radius:5px;"></div></div><div class="stat-num" style="font-size:13px; width:16px;">3</div></div>
+          <div style="display:flex; align-items:center; gap:8px;"><div style="width:10px; height:10px; border-radius:50%; background:#FF5A5F; flex-shrink:0;"></div><div style="font-size:12.5px; font-weight:700; width:52px; text-align:left;">Chintan</div><div style="flex:1; height:9px; background:#EDEFF3; border-radius:5px; overflow:hidden;"><div style="height:100%; width:55%; background:#FF5A5F; border-radius:5px;"></div></div><div class="stat-num" style="font-size:13px; width:16px;">2</div></div>
+          <div style="display:flex; align-items:center; gap:8px;"><div style="width:10px; height:10px; border-radius:50%; background:#FFB020; flex-shrink:0;"></div><div style="font-size:12.5px; font-weight:700; width:52px; text-align:left;">Sam</div><div style="flex:1; height:9px; background:#EDEFF3; border-radius:5px; overflow:hidden;"><div style="height:100%; width:30%; background:#FFB020; border-radius:5px;"></div></div><div class="stat-num" style="font-size:13px; width:16px;">1</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="swipehint">← swipe →</div>
+  </div></div></div>
+
+  <div class="frame-block"><div class="frame-tag">Variant: ring</div><br><div class="frame-label">Stops — Ring Chart</div><div class="phone"><div class="screen">
+    <svg class="aurora" viewBox="0 0 300 649" preserveAspectRatio="xMidYMid slice">
+      <rect width="300" height="649" fill="#F4F6FA"/>
+      <circle cx="200" cy="180" r="190" fill="#FFB020" opacity="0.18"/>
+      <circle cx="90" cy="480" r="180" fill="#00C2A8" opacity="0.16"/>
+    </svg>
+    <div class="dots-nav"><div class="dot-nav"></div><div class="dot-nav"></div><div class="dot-nav active"></div><div class="dot-nav"></div><div class="dot-nav"></div></div>
+    <div style="position:relative; z-index:6; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:0 26px;">
+      <div class="content-panel" style="width:100%; display:flex; flex-direction:column; align-items:center;">
+        <svg width="140" height="140" viewBox="0 0 140 140" style="transform:rotate(-90deg);">
+          <circle cx="70" cy="70" r="58" fill="none" stroke="#EDEFF3" stroke-width="14"/>
+          <circle cx="70" cy="70" r="58" fill="none" stroke="#00C2A8" stroke-width="14" stroke-dasharray="364" stroke-dashoffset="219" stroke-linecap="round" style="--len:364; --end:219; animation:ringDraw 900ms 300ms ease-out both;"/>
+          <circle cx="70" cy="70" r="58" fill="none" stroke="#FF5A5F" stroke-width="14" stroke-dasharray="364" stroke-dashoffset="243" stroke-linecap="round" transform="rotate(146 70 70)" style="--len:364; --end:243; animation:ringDraw 900ms 500ms ease-out both;"/>
+          <circle cx="70" cy="70" r="58" fill="none" stroke="#FFB020" stroke-width="14" stroke-dasharray="364" stroke-dashoffset="303" stroke-linecap="round" transform="rotate(255 70 70)" style="--len:364; --end:303; animation:ringDraw 900ms 700ms ease-out both;"/>
+        </svg>
+        <div class="stat-num" style="font-size:30px; color:#0B6FFF; margin-top:-96px;">6</div>
+        <div style="font-size:10px; color:#98A2B3; text-transform:uppercase; letter-spacing:0.06em; margin-top:38px;">total stops</div>
+        <div style="display:flex; gap:14px; margin-top:16px;">
+          <div style="display:flex; align-items:center; gap:5px;"><div style="width:8px; height:8px; border-radius:50%; background:#00C2A8;"></div><span style="font-size:11.5px; font-weight:700;">Meera 3</span></div>
+          <div style="display:flex; align-items:center; gap:5px;"><div style="width:8px; height:8px; border-radius:50%; background:#FF5A5F;"></div><span style="font-size:11.5px; font-weight:700;">Chintan 2</span></div>
+          <div style="display:flex; align-items:center; gap:5px;"><div style="width:8px; height:8px; border-radius:50%; background:#FFB020;"></div><span style="font-size:11.5px; font-weight:700;">Sam 1</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="swipehint">← swipe →</div>
+  </div></div></div>
+
+  <div class="frame-block"><div class="frame-tag">Variant: route pins</div><br><div class="frame-label">Stops — Route Map</div><div class="phone"><div class="screen">
+    <svg class="aurora" viewBox="0 0 300 649" preserveAspectRatio="xMidYMid slice">
+      <rect width="300" height="649" fill="#F4F6FA"/>
+      <circle cx="150" cy="300" r="220" fill="#0B6FFF" opacity="0.1"/>
+    </svg>
+    <div class="dots-nav"><div class="dot-nav"></div><div class="dot-nav"></div><div class="dot-nav active"></div><div class="dot-nav"></div><div class="dot-nav"></div></div>
+    <div style="position:relative; z-index:6; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:0 26px;">
+      <div class="content-panel" style="width:100%;">
+        <svg width="100%" height="150" viewBox="0 0 240 150">
+          <path d="M20,130 Q70,40 120,90 T220,20" fill="none" stroke="#DCE1EA" stroke-width="4" stroke-linecap="round"/>
+          <circle cx="20" cy="130" r="7" fill="#0B6FFF"/>
+          <circle cx="78" cy="76" r="6" fill="#00C2A8" style="animation:pinDrop 400ms 200ms ease-out both;"/>
+          <circle cx="128" cy="92" r="6" fill="#FF5A5F" style="animation:pinDrop 400ms 450ms ease-out both;"/>
+          <circle cx="168" cy="52" r="6" fill="#FFB020" style="animation:pinDrop 400ms 700ms ease-out both;"/>
+          <circle cx="220" cy="20" r="7" fill="#FFB020"/>
+        </svg>
+        <div style="text-align:center; margin-top:6px;">
+          <div class="stat-num" style="font-size:22px; color:#0B6FFF;">6 stops</div>
+          <div style="font-size:12px; color:#667085; margin-top:4px;">plotted along the way to Big Sur</div>
+        </div>
+      </div>
+    </div>
+    <div class="swipehint">← swipe →</div>
+  </div></div></div>
+
+</div>
+
+</body>
+</html>

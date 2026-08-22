@@ -3,6 +3,7 @@ import { act, render, waitFor } from '@testing-library/react-native';
 import { AppState, Text, type AppStateStatus } from 'react-native';
 
 import { useLiveLocations } from '@/shared/hooks/use-live-locations';
+import type { JourneyEventSignal } from '@/shared/types/voyage-message';
 
 const mockGetLiveLocations = jest.fn<(...args: any[]) => Promise<any>>();
 const mockSubscribeToLocations = jest.fn<(...args: any[]) => any>();
@@ -81,6 +82,7 @@ test('subscribes to the Voyage channel after mounting', async () => {
       expect.any(Function),
       expect.any(Function),
       null,
+      expect.any(Function),
       expect.any(Function),
     ),
   );
@@ -324,6 +326,83 @@ test('an ended-Voyage broadcast requests active-Voyage reconciliation', async ()
   expect(getByTestId('lifecycle-probe').props.children).toBe(1);
 });
 
+test('a journey.event.created broadcast is delivered into the hook state, not silently dropped (Story 5.1 AC2)', async () => {
+  mockGetLiveLocations.mockResolvedValue({ data: [], error: null });
+
+  function JourneyEventsProbe({ voyageId }: { voyageId: string }) {
+    const { journeyEvents } = useLiveLocations(voyageId);
+    return <Text testID="journey-events">{JSON.stringify((journeyEvents ?? []).map((event) => event.payload.eventId))}</Text>;
+  }
+
+  const { getByTestId } = await render(<JourneyEventsProbe voyageId="voyage-1" />);
+  await waitFor(() => expect(mockSubscribeToLocations).toHaveBeenCalled());
+
+  // subscribeToLocations(voyageId, onLocation, onStatusChange, onRosterChange,
+  // onVoyageStatusChange, currentUserId, onPresenceChange, onJourneyEvent) --
+  // onJourneyEvent is the 8th positional argument (index 7).
+  const onJourneyEvent = mockSubscribeToLocations.mock.calls[0][7] as (event: JourneyEventSignal) => void;
+  expect(onJourneyEvent).toEqual(expect.any(Function));
+
+  const fixtureEvent: JourneyEventSignal = {
+    protocolVersion: 1,
+    messageId: 'message-1',
+    voyageId: 'voyage-1',
+    senderUserId: 'user-2',
+    senderSessionId: 'server',
+    sequence: 0,
+    type: 'journey.event.created',
+    capturedAt: '2026-08-11T00:00:00Z',
+    sentAt: '2026-08-11T00:00:00Z',
+    payload: { eventId: 'event-1', eventType: 'police', occurredAt: '2026-08-11T00:00:00Z', actorUserId: 'user-2', metadata: {} },
+  };
+
+  await act(async () => {
+    onJourneyEvent(fixtureEvent);
+  });
+
+  await waitFor(() => expect(getByTestId('journey-events').props.children).toBe('["event-1"]'));
+});
+
+test('journeyEvents is bounded to the newest events, not retained unboundedly for a whole multi-hour Voyage (code review finding)', async () => {
+  mockGetLiveLocations.mockResolvedValue({ data: [], error: null });
+
+  function JourneyEventsCountProbe({ voyageId }: { voyageId: string }) {
+    const { journeyEvents } = useLiveLocations(voyageId);
+    return <Text testID="journey-events-count">{(journeyEvents ?? []).length}</Text>;
+  }
+
+  const { getByTestId } = await render(<JourneyEventsCountProbe voyageId="voyage-1" />);
+  await waitFor(() => expect(mockSubscribeToLocations).toHaveBeenCalled());
+  const onJourneyEvent = mockSubscribeToLocations.mock.calls[0][7] as (event: JourneyEventSignal) => void;
+
+  const makeEvent = (n: number): JourneyEventSignal => ({
+    protocolVersion: 1,
+    messageId: `message-${n}`,
+    voyageId: 'voyage-1',
+    senderUserId: 'user-2',
+    senderSessionId: 'server',
+    sequence: n,
+    type: 'journey.event.created',
+    capturedAt: '2026-08-11T00:00:00Z',
+    sentAt: '2026-08-11T00:00:00Z',
+    payload: { eventId: `event-${n}`, eventType: 'police', occurredAt: '2026-08-11T00:00:00Z', actorUserId: 'user-2', metadata: {} },
+  });
+
+  await act(async () => {
+    // One over an assumed 200-event cap -- deliberately not asserting the
+    // exact cap value, just that growth is bounded rather than unbounded.
+    for (let i = 0; i < 201; i++) {
+      onJourneyEvent(makeEvent(i));
+    }
+  });
+
+  await waitFor(() => {
+    const count = Number(getByTestId('journey-events-count').props.children);
+    expect(count).toBeLessThanOrEqual(200);
+    expect(count).toBeGreaterThan(0);
+  });
+});
+
 test('reconnecting after a disconnect refreshes the durable snapshot and increments rosterRevision', async () => {
   const recoveredLocation = { ...locationFixture, lat: 40.0, updatedAt: '2026-07-26T00:05:00Z' };
   mockGetLiveLocations
@@ -462,6 +541,7 @@ test('re-subscribes when voyageId changes, unsubscribing from the previous chann
       expect.any(Function),
       null,
       expect.any(Function),
+      expect.any(Function),
     ),
   );
 
@@ -479,6 +559,7 @@ test('re-subscribes when voyageId changes, unsubscribing from the previous chann
       expect.any(Function),
       expect.any(Function),
       null,
+      expect.any(Function),
       expect.any(Function),
     ),
   );

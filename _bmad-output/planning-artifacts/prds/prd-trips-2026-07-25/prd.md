@@ -295,6 +295,18 @@ Any Voyager can share their Voyage's Memory Lane to external platforms. Realizes
 **Feature-specific NFRs:**
 - Share-asset generation should be fast enough not to break the emotional momentum of the "wow" moment. `[NOTE FOR PM: no defined performance target yet — revisit with engineering]`
 
+#### FR-17: Browse & Search Voyage History
+
+Any Voyager can browse a list of their own past (ended) Voyages and search it by destination name; selecting one opens its Memory Lane. Realizes UJ-4 (extended). Added via Sprint Change Proposal 2026-08-10.
+
+**Consequences (testable):**
+- A Voyager can reach a list of every ended Voyage they participated in, from their own app.
+- The list is searchable/filterable by destination name.
+- Selecting a past Voyage opens its Memory Lane (FR-15), unchanged from how it renders right after the Voyage ends.
+
+**Out of Scope:**
+- Cross-Voyager or public browsing — a Voyager only sees Voyages they personally participated in.
+
 ## 5. Product Experience & Constraints
 
 ### 5.1 Aesthetic and Tone
@@ -350,7 +362,7 @@ Voylo must feel like a game, not a utility: glamorous, clean, intuitive, and —
 
 - **Fun Fact Capture** — manual spotting logs (FR-10), automatic event detection (FR-11), in-app photo logging (FR-12). Deferred to v1.1.
 - **Onboarding Nudges** (FR-13) — deferred to v1.1; nothing to nudge toward without Fun Fact Capture live.
-- **Memory Lane** — generation, group viewing, and external sharing (FR-14, FR-15, FR-16). Deferred to v1.1.
+- **Memory Lane** — generation, group viewing, external sharing, and history browsing/search (FR-14, FR-15, FR-16, FR-17). Deferred to v1.1.
 
   `[NOTE FOR PM: Deliberate, confirmed tradeoff, not an oversight — Fun Facts and Memory Lane are Voylo's differentiator and primary growth channel per market research, so v1 launches without what makes it different or how it's meant to spread. That window isn't indefinite: Convoy Tracker already has the harder live-map/voice/replay infrastructure working and is best-positioned to add a recap layer of its own. Prioritize v1.1 accordingly.]`
 
@@ -378,7 +390,7 @@ Voylo must feel like a game, not a utility: glamorous, clean, intuitive, and —
 4. OTP delivery SLA and session-security controls (e.g. remote sign-out) — needs engineering input (§5.5).
 5. Share-asset generation performance target for Memory Lane (FR-16) — needs engineering input.
 6. Monetization strategy (§5.3) — currently assumed free-for-now; revisit once the v1 loop and v1.1 Memory Lane are proven.
-7. Where the previously-discussed Groq-powered AI content-generation agent (raised during brainstorming, not scoped into this PRD) fits on the roadmap relative to v1.1 Memory Lane — including its cost and battery implications (§5.4).
+7. ~~Where the previously-discussed Groq-powered AI content-generation agent fits on the roadmap relative to v1.1 Memory Lane.~~ **Resolved (Sprint Change Proposal 2026-08-10):** Groq-powered narration is explicitly deferred until after a deterministic (template-based) Memory Lane (FR-14, FR-17) ships and proves out — see `docs/VOYLO-LIVING-VOYLO-FEATURE-CONCEPT.md` Slice F. Cost/battery modeling still applies whenever that slice is scoped.
 8. Legal review of the police Fun Fact across target jurisdictions (§5.4) — recommended before wide release.
 9. Market sizing for Voylo's exact category is unproven (third-party estimates disagreed by an order of magnitude in market research). Research recommended a cheap demand-validation step (e.g. a landing-page/waitlist test) before heavy build-out — not yet acted on.
 10. Indefinitely-running Voyages (an Organizer who never taps End Voyage) are an accepted v1 risk, not solved upfront (FR-6) — revisit if real-world usage shows this is a real problem (e.g. battery complaints, zombie Voyages).

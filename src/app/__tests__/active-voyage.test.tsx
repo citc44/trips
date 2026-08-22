@@ -4,6 +4,7 @@ import { AccessibilityInfo, Linking, Platform } from 'react-native';
 import mockSafeAreaContext from 'react-native-safe-area-context/jest/mock';
 
 import { WayfinderColors } from '@/constants/design-tokens';
+import { journeyEventRepository } from '@/repositories/journey-event-repository';
 import { voyageRepository } from '@/repositories/voyage-repository';
 import { useActiveVoyage } from '@/shared/hooks/use-active-voyage';
 import { useAuth } from '@/shared/hooks/use-auth';
@@ -112,6 +113,10 @@ jest.mock('@/shared/services/outbox/outbox', () => ({
   outbox: { enqueue: jest.fn(), flush: jest.fn() },
 }));
 
+jest.mock('@/repositories/journey-event-repository', () => ({
+  journeyEventRepository: { createEvent: jest.fn() },
+}));
+
 const mockEndVoyage = voyageRepository.endVoyage as jest.MockedFunction<typeof voyageRepository.endVoyage>;
 const mockGetVoyageMembers = voyageRepository.getVoyageMembers as jest.MockedFunction<typeof voyageRepository.getVoyageMembers>;
 const mockGrantOrganizerStatus = voyageRepository.grantOrganizerStatus as jest.MockedFunction<typeof voyageRepository.grantOrganizerStatus>;
@@ -124,6 +129,7 @@ const mockUseLiveLocations = useLiveLocations as jest.MockedFunction<typeof useL
 const mockUsePendingEntryTransition = usePendingEntryTransition as jest.MockedFunction<typeof usePendingEntryTransition>;
 const mockOutboxEnqueue = outbox.enqueue as jest.MockedFunction<typeof outbox.enqueue>;
 const mockOutboxFlush = outbox.flush as jest.MockedFunction<typeof outbox.flush>;
+const mockCreateEvent = journeyEventRepository.createEvent as jest.MockedFunction<typeof journeyEventRepository.createEvent>;
 const mockRefetch = jest.fn<(...args: any[]) => Promise<any>>();
 const mockClearActiveVoyage = jest.fn();
 
@@ -191,6 +197,7 @@ beforeEach(() => {
   mockSetTravelRole.mockResolvedValue({ error: null });
   mockOutboxEnqueue.mockResolvedValue(undefined);
   mockOutboxFlush.mockResolvedValue({ succeeded: [], conflicts: [] });
+  mockCreateEvent.mockResolvedValue({ data: null, error: null });
   mockUseAuth.mockReturnValue({
     session: { user: { id: 'user-1' } } as any,
     isLoading: false,
@@ -198,7 +205,7 @@ beforeEach(() => {
     verifyCode: jest.fn<(...args: any[]) => Promise<any>>(),
     signOut: jest.fn<(...args: any[]) => Promise<any>>(),
   });
-  mockUseLiveLocations.mockReturnValue({ locations: locationsFixture, trails: {}, isLoading: false, hasError: false, isConnected: true, rosterRevision: 0 });
+  mockUseLiveLocations.mockReturnValue({ locations: locationsFixture, trails: {}, isLoading: false, hasError: false, isConnected: true, rosterRevision: 0, journeyEvents: [] });
   // Default: not a fresh "cut to gameplay" arrival -- individual tests below
   // override this to exercise the transition itself.
   mockUsePendingEntryTransition.mockReturnValue({
@@ -244,6 +251,7 @@ test('the voyager-count badge counts markers.length (live locations), not member
     hasError: false,
     isConnected: true,
     rosterRevision: 0,
+    journeyEvents: [],
   });
 
   const { getByTestId } = await render(<ActiveVoyageScreen />);
@@ -595,6 +603,7 @@ test('refreshes the roster and renders a newly joined Voyager when their first l
     hasError: false,
     isConnected: true,
     rosterRevision: 0,
+    journeyEvents: [],
   });
   await act(async () => {
     rerender(<ActiveVoyageScreen />);
@@ -618,6 +627,7 @@ test('a realtime roster revision removes a departed Voyager without remounting t
     hasError: false,
     isConnected: true,
     rosterRevision: 1,
+    journeyEvents: [],
   });
   await act(async () => {
     rerender(<ActiveVoyageScreen />);
@@ -643,6 +653,7 @@ test('a lifecycle signal reconciles active Voyage state so remote leave/end cann
     isConnected: true,
     rosterRevision: 0,
     lifecycleRevision: 1,
+    journeyEvents: [],
   });
   await act(async () => {
     rerender(<ActiveVoyageScreen />);
@@ -660,6 +671,7 @@ test('does not render a marker for a Voyager with no live location yet', async (
     hasError: false,
     isConnected: true,
     rosterRevision: 0,
+    journeyEvents: [],
   });
 
   const { getByTestId, queryByTestId } = await render(<ActiveVoyageScreen />);
@@ -762,6 +774,7 @@ test('marker peek card omits the "from you" stat cell when this device does not 
     hasError: false,
     isConnected: true,
     rosterRevision: 0,
+    journeyEvents: [],
   });
 
   const { getByTestId, queryByTestId } = await render(<ActiveVoyageScreen />);
@@ -1007,7 +1020,7 @@ test('your own marker always shows a "this is you" ring, even before it is tappe
 
 test('shows a subtle reconnecting note (not the error banner) when the live channel disconnects, and keeps rendering last-known markers', async () => {
   mockActiveVoyage('organizer');
-  mockUseLiveLocations.mockReturnValue({ locations: locationsFixture, trails: {}, isLoading: false, hasError: false, isConnected: false, rosterRevision: 0 });
+  mockUseLiveLocations.mockReturnValue({ locations: locationsFixture, trails: {}, isLoading: false, hasError: false, isConnected: false, rosterRevision: 0, journeyEvents: [] });
 
   const { getByTestId, queryByTestId } = await render(<ActiveVoyageScreen />);
 
@@ -1021,7 +1034,7 @@ test('shows a subtle reconnecting note (not the error banner) when the live chan
 
 test('does not show the reconnecting note while connected', async () => {
   mockActiveVoyage('organizer');
-  mockUseLiveLocations.mockReturnValue({ locations: locationsFixture, trails: {}, isLoading: false, hasError: false, isConnected: true, rosterRevision: 0 });
+  mockUseLiveLocations.mockReturnValue({ locations: locationsFixture, trails: {}, isLoading: false, hasError: false, isConnected: true, rosterRevision: 0, journeyEvents: [] });
 
   const { queryByTestId, getByTestId } = await render(<ActiveVoyageScreen />);
 
@@ -1031,7 +1044,7 @@ test('does not show the reconnecting note while connected', async () => {
 
 test('shows an inline error when live locations fail to load (code review: not indistinguishable from nobody online)', async () => {
   mockActiveVoyage('organizer');
-  mockUseLiveLocations.mockReturnValue({ locations: {}, trails: {}, isLoading: false, hasError: true, isConnected: true, rosterRevision: 0 });
+  mockUseLiveLocations.mockReturnValue({ locations: {}, trails: {}, isLoading: false, hasError: true, isConnected: true, rosterRevision: 0, journeyEvents: [] });
 
   const { getByTestId } = await render(<ActiveVoyageScreen />);
 
@@ -1052,6 +1065,7 @@ test('renders a comet-trail line for a Voyager with 2+ recent trail points (AC1)
     hasError: false,
     isConnected: true,
     rosterRevision: 0,
+    journeyEvents: [],
   });
 
   const { getByTestId } = await render(<ActiveVoyageScreen />);
@@ -1068,6 +1082,7 @@ test('does not render a trail line for a Voyager with fewer than 2 recent trail 
     hasError: false,
     isConnected: true,
     rosterRevision: 0,
+    journeyEvents: [],
   });
 
   const { getByTestId, queryByTestId } = await render(<ActiveVoyageScreen />);
@@ -1103,6 +1118,7 @@ test('recentering with only one live location moves to it directly instead of ca
     hasError: false,
     isConnected: true,
     rosterRevision: 0,
+    journeyEvents: [],
   });
 
   const { getByTestId } = await render(<ActiveVoyageScreen />);
@@ -1439,7 +1455,7 @@ test('tapping Keep going swaps back without calling endVoyage', async () => {
   expect(mockEndVoyage).not.toHaveBeenCalled();
 });
 
-test('confirming calls endVoyage, refetches, and navigates to voyage-ended with the summary data', async () => {
+test('confirming calls endVoyage, refetches, and navigates to the Memory Lane reveal for the ended Voyage (Story 6.3 -- supersedes voyage-ended)', async () => {
   mockActiveVoyage('organizer');
   mockEndVoyage.mockResolvedValue({
     data: {
@@ -1470,13 +1486,8 @@ test('confirming calls endVoyage, refetches, and navigates to voyage-ended with 
   expect(mockEndVoyage).toHaveBeenCalledWith('voyage-1');
   await waitFor(() => expect(mockRefetch).toHaveBeenCalledTimes(1));
   expect(mockPush).toHaveBeenCalledWith({
-    pathname: '/voyage-ended',
-    params: {
-      destination: 'Lake Tahoe',
-      createdAt: '2026-07-26T00:00:00Z',
-      endedAt: '2026-07-26T05:30:00Z',
-      voyagerCount: '3',
-    },
+    pathname: '/memory-lane/[voyageId]',
+    params: { voyageId: 'voyage-1' },
   });
 });
 
@@ -1538,7 +1549,7 @@ test('a thrown exception on End Voyage also queues it (not just a resolved netwo
   await waitFor(() => expect(getByTestId('end-voyage-error').props.children).toContain('Queued'));
 });
 
-test('outbox.flush is attempted on mount, and a successfully flushed end_voyage navigates to voyage-ended', async () => {
+test('outbox.flush is attempted on mount, and a successfully flushed end_voyage navigates to the Memory Lane reveal', async () => {
   mockActiveVoyage('organizer');
   // mockResolvedValueOnce, not mockResolvedValue -- isConnected starts
   // `true` by default, so both the unconditional mount-time flush and the
@@ -1560,21 +1571,21 @@ test('outbox.flush is attempted on mount, and a successfully flushed end_voyage 
   await waitFor(() => expect(mockOutboxFlush).toHaveBeenCalled());
   await waitFor(() => expect(mockRefetch).toHaveBeenCalledTimes(1));
   expect(mockPush).toHaveBeenCalledWith({
-    pathname: '/voyage-ended',
-    params: { destination: 'Lake Tahoe', createdAt: '2026-07-26T00:00:00Z', endedAt: '2026-07-26T05:30:00Z', voyagerCount: '3' },
+    pathname: '/memory-lane/[voyageId]',
+    params: { voyageId: 'voyage-1' },
   });
 });
 
 test('a reconnect (isConnected false -> true) triggers another flush attempt', async () => {
   mockActiveVoyage('organizer');
-  mockUseLiveLocations.mockReturnValue({ locations: locationsFixture, trails: {}, isLoading: false, hasError: false, isConnected: false, rosterRevision: 0 });
+  mockUseLiveLocations.mockReturnValue({ locations: locationsFixture, trails: {}, isLoading: false, hasError: false, isConnected: false, rosterRevision: 0, journeyEvents: [] });
 
   const { rerender } = await render(<ActiveVoyageScreen />);
   // Only the unconditional mount-time flush fires -- isConnected starts
   // false here, so the isConnected-keyed effect does not also fire.
   await waitFor(() => expect(mockOutboxFlush).toHaveBeenCalledTimes(1));
 
-  mockUseLiveLocations.mockReturnValue({ locations: locationsFixture, trails: {}, isLoading: false, hasError: false, isConnected: true, rosterRevision: 0 });
+  mockUseLiveLocations.mockReturnValue({ locations: locationsFixture, trails: {}, isLoading: false, hasError: false, isConnected: true, rosterRevision: 0, journeyEvents: [] });
   await act(async () => {
     rerender(<ActiveVoyageScreen />);
   });
@@ -1589,7 +1600,7 @@ test('a successfully flushed grant_organizer_status refreshes the roster and sho
   // chance to resolve and populate `members` before the flush this test
   // actually cares about ever runs -- avoids a genuine race between the two
   // independent mount-time effects (flush-on-mount vs. load-members).
-  mockUseLiveLocations.mockReturnValue({ locations: locationsFixture, trails: {}, isLoading: false, hasError: false, isConnected: false, rosterRevision: 0 });
+  mockUseLiveLocations.mockReturnValue({ locations: locationsFixture, trails: {}, isLoading: false, hasError: false, isConnected: false, rosterRevision: 0, journeyEvents: [] });
 
   const { getByTestId, rerender } = await render(<ActiveVoyageScreen />);
   await waitFor(() => expect(mockGetVoyageMembers).toHaveBeenCalledTimes(1));
@@ -1608,7 +1619,7 @@ test('a successfully flushed grant_organizer_status refreshes the roster and sho
     ],
     conflicts: [],
   });
-  mockUseLiveLocations.mockReturnValue({ locations: locationsFixture, trails: {}, isLoading: false, hasError: false, isConnected: true, rosterRevision: 0 });
+  mockUseLiveLocations.mockReturnValue({ locations: locationsFixture, trails: {}, isLoading: false, hasError: false, isConnected: true, rosterRevision: 0, journeyEvents: [] });
   await act(async () => {
     rerender(<ActiveVoyageScreen />);
   });
@@ -1617,6 +1628,36 @@ test('a successfully flushed grant_organizer_status refreshes the roster and sho
   expect(within(getByTestId('outbox-toast')).getByText('Meera is now an Organizer')).toBeTruthy();
   // Initial load + the flush-triggered refresh.
   await waitFor(() => expect(mockGetVoyageMembers).toHaveBeenCalledTimes(2));
+});
+
+test('a successfully flushed journey_event shows a confirmation toast (code review finding: this kind had no success branch, so a queued spotting log flushed silently)', async () => {
+  mockActiveVoyage('organizer');
+  mockUseLiveLocations.mockReturnValue({ locations: locationsFixture, trails: {}, isLoading: false, hasError: false, isConnected: false, rosterRevision: 0, journeyEvents: [] });
+
+  const { getByTestId, rerender } = await render(<ActiveVoyageScreen />);
+  await waitFor(() => expect(mockGetVoyageMembers).toHaveBeenCalledTimes(1));
+
+  mockOutboxFlush.mockResolvedValue({
+    succeeded: [
+      {
+        item: {
+          id: 'item-1',
+          kind: 'journey_event',
+          payload: { voyageId: 'voyage-1', eventId: 'event-1', eventType: 'police', occurredAt: '2026-08-11T00:00:00Z', metadata: {} },
+          queuedAt: '2026-08-11T00:00:00Z',
+        },
+        data: null,
+      },
+    ],
+    conflicts: [],
+  });
+  mockUseLiveLocations.mockReturnValue({ locations: locationsFixture, trails: {}, isLoading: false, hasError: false, isConnected: true, rosterRevision: 0, journeyEvents: [] });
+  await act(async () => {
+    rerender(<ActiveVoyageScreen />);
+  });
+
+  await waitFor(() => expect(getByTestId('outbox-toast')).toBeTruthy());
+  expect(within(getByTestId('outbox-toast')).getByText('A queued spotting log was saved.')).toBeTruthy();
 });
 
 test('a flush conflict shows the conflict message via the same toast mechanism, not a silent drop', async () => {
@@ -1648,7 +1689,7 @@ test('a flush pass with multiple items combines their messages into one toast in
   // mount-time flush is a no-op and the initial roster fetch resolves and
   // populates `members` before the flush this test cares about ever runs --
   // avoids a race between the two independent mount-time effects.
-  mockUseLiveLocations.mockReturnValue({ locations: locationsFixture, trails: {}, isLoading: false, hasError: false, isConnected: false, rosterRevision: 0 });
+  mockUseLiveLocations.mockReturnValue({ locations: locationsFixture, trails: {}, isLoading: false, hasError: false, isConnected: false, rosterRevision: 0, journeyEvents: [] });
 
   const { getByTestId, rerender } = await render(<ActiveVoyageScreen />);
   await waitFor(() => expect(mockGetVoyageMembers).toHaveBeenCalledTimes(1));
@@ -1677,7 +1718,7 @@ test('a flush pass with multiple items combines their messages into one toast in
       },
     ],
   });
-  mockUseLiveLocations.mockReturnValue({ locations: locationsFixture, trails: {}, isLoading: false, hasError: false, isConnected: true, rosterRevision: 0 });
+  mockUseLiveLocations.mockReturnValue({ locations: locationsFixture, trails: {}, isLoading: false, hasError: false, isConnected: true, rosterRevision: 0, journeyEvents: [] });
   await act(async () => {
     rerender(<ActiveVoyageScreen />);
   });
@@ -2103,4 +2144,100 @@ test('a network failure on Remove Voyager still enqueues even if the component u
     kind: 'remove_voyager',
     payload: { voyageId: 'voyage-1', targetUserId: 'user-2' },
   });
+});
+
+// Story 5.1 AC3/AC4: manual spotting-log controls (police/deer/construction).
+test('shows police, deer, and construction spotting controls for a Riding-role Voyager', async () => {
+  mockActiveVoyage('organizer');
+
+  const { getByTestId } = await render(<ActiveVoyageScreen />);
+
+  await waitFor(() => expect(getByTestId('spot-police-button')).toBeTruthy());
+  expect(getByTestId('spot-deer-button')).toBeTruthy();
+  expect(getByTestId('spot-construction-button')).toBeTruthy();
+});
+
+test('hides spotting controls entirely (not disabled) for a Driving-role Voyager (UX-DR25 precedent)', async () => {
+  mockActiveVoyage('organizer');
+  mockGetVoyageMembers.mockResolvedValue({
+    data: [{ ...membersFixture[0], travelRole: 'driving' }, membersFixture[1]],
+    error: null,
+  });
+
+  const { queryByTestId, getByTestId } = await render(<ActiveVoyageScreen />);
+  await waitFor(() => expect(within(getByTestId('status-pill')).getByText('Driving')).toBeTruthy());
+
+  expect(queryByTestId('spot-police-button')).toBeNull();
+  expect(queryByTestId('spot-deer-button')).toBeNull();
+  expect(queryByTestId('spot-construction-button')).toBeNull();
+});
+
+test('tapping a spotting control logs the event via journeyEventRepository and shows a confirmation toast', async () => {
+  mockActiveVoyage('organizer');
+
+  const { getByTestId } = await render(<ActiveVoyageScreen />);
+  await waitFor(() => expect(getByTestId('spot-deer-button')).toBeTruthy());
+
+  await act(async () => {
+    fireEvent.press(getByTestId('spot-deer-button'));
+  });
+
+  expect(mockCreateEvent).toHaveBeenCalledWith(
+    'voyage-1',
+    expect.objectContaining({ type: 'deer', id: expect.any(String), occurredAt: expect.any(String) }),
+  );
+  await waitFor(() => expect(getByTestId('outbox-toast')).toBeTruthy());
+});
+
+test('a rapid double-tap on a spotting control fires only one request, not two duplicate journey_events (code review finding)', async () => {
+  mockActiveVoyage('organizer');
+  let resolveCreate: (value: any) => void;
+  mockCreateEvent.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        resolveCreate = resolve;
+      }),
+  );
+
+  const { getByTestId } = await render(<ActiveVoyageScreen />);
+  await waitFor(() => expect(getByTestId('spot-police-button')).toBeTruthy());
+
+  // Two separate, individually-awaited act() calls -- same pattern as the
+  // precedent "granting Organizer status on one row does not re-enable a
+  // different row still in flight" test above, which exercises the same
+  // "second action while the first's promise is still pending" shape
+  // without triggering React's overlapping-act() warning.
+  await act(async () => {
+    fireEvent.press(getByTestId('spot-police-button'));
+  });
+  expect(getByTestId('spot-police-button').props.accessibilityState?.disabled).toBe(true);
+
+  await act(async () => {
+    fireEvent.press(getByTestId('spot-police-button'));
+  });
+
+  expect(mockCreateEvent).toHaveBeenCalledTimes(1);
+
+  await act(async () => {
+    resolveCreate!({ data: null, error: null });
+  });
+});
+
+test('a spotting log attempted offline is queued in the outbox instead of silently dropped', async () => {
+  mockActiveVoyage('organizer');
+  mockCreateEvent.mockResolvedValue({ data: null, error: { code: 'unknown', message: 'Network request failed' } });
+
+  const { getByTestId } = await render(<ActiveVoyageScreen />);
+  await waitFor(() => expect(getByTestId('spot-police-button')).toBeTruthy());
+
+  await act(async () => {
+    fireEvent.press(getByTestId('spot-police-button'));
+  });
+
+  await waitFor(() =>
+    expect(mockOutboxEnqueue).toHaveBeenCalledWith({
+      kind: 'journey_event',
+      payload: expect.objectContaining({ voyageId: 'voyage-1', eventType: 'police' }),
+    }),
+  );
 });

@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Voylo — Memory Lane Reveal, Direction B: "Player Constellation"</title>
+<style>
+/*
+  Story 6.2 discovery pass -- one of 2-3 directions rendered to react to,
+  not a locked design. Leads with the CREW rather than the road: player-color
+  dots (already the map-marker/join-invitation avatar language) become the
+  primary visual device, with comet trails borrowed directly from map-marker's
+  own trailFadeDuration/trailLength mechanic. Less "cinematic road movie,"
+  more "look at all of us, together."
+  palette: Wayfinder -- primary blue #0B6FFF, teal #00C2A8, coral #FF5A5F,
+  amber #FFB020, violet #9B6BFF, white #FFFFFF, surface-secondary #F4F6FA,
+  ink #101828, ink-secondary #667085, hairline #DCE1EA.
+  Font stand-ins (web-safe substitutions for the licensed type system):
+  display -> "Segoe UI Semibold", "Helvetica Neue", system-ui, sans-serif  (stand-in for Clash Display)
+  body    -> "Segoe UI", "Helvetica Neue", Arial, sans-serif               (stand-in for General Sans)
+*/
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #EDEFF3; color: #101828; font-family: "Segoe UI", Arial, sans-serif; padding: 32px; }
+.rationale { max-width: 980px; margin: 0 auto 32px; background: #fff; border: 1px solid #DCE1EA; border-radius: 20px; padding: 20px 24px; box-shadow: 0 2px 0 #DCE1EA; }
+.rationale h1 { font-size: 21px; font-weight: 700; margin-bottom: 8px; color: #0B6FFF; }
+.rationale p { font-size: 15px; line-height: 1.5; color: #344054; margin-bottom: 10px; }
+.rationale p:last-child { margin-bottom: 0; }
+.rationale b { color: #101828; }
+.stage { display: flex; gap: 40px; justify-content: center; flex-wrap: wrap; align-items: flex-start; }
+.frame-block { text-align: center; }
+.frame-label { color: #101828; font-weight: 700; font-size: 13px; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 14px; }
+.phone { width: 340px; height: 734px; border-radius: 40px; border: 8px solid #101828; background: #101828; position: relative; overflow: hidden; }
+.screen { position: absolute; inset: 0; border-radius: 32px; overflow: hidden; }
+
+@keyframes fadeUp { 0% { opacity: 0; transform: translateY(14px); } 100% { opacity: 1; transform: translateY(0); } }
+@keyframes orbit { from { transform: rotate(0deg) translateX(78px) rotate(0deg); } to { transform: rotate(360deg) translateX(78px) rotate(-360deg); } }
+@keyframes converge { 0% { transform: translate(var(--sx), var(--sy)) scale(0.5); opacity: 0; } 70% { opacity: 1; } 100% { transform: translate(0,0) scale(1); opacity: 1; } }
+@keyframes trailPulse { 0%,100% { opacity: 0.25; } 50% { opacity: 0.6; } }
+@keyframes burstOut { 0% { transform: scale(0); opacity: 1; } 100% { transform: scale(1); opacity: 0; } }
+@keyframes ringPulse { 0%,100% { transform: scale(1); opacity: 0.7; } 50% { transform: scale(1.08); opacity: 1; } }
+
+/* ===== Frame 1: Trigger + CTA ===== */
+.f1 { background: #F4F6FA; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; position: relative; }
+.f1-orbit-wrap { position: relative; width: 200px; height: 200px; margin-bottom: 36px; }
+.f1-center { position: absolute; left: 50%; top: 50%; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; background: #0B6FFF; box-shadow: 0 0 0 6px rgba(11,111,255,0.12); }
+.f1-orbiter { position: absolute; left: 50%; top: 50%; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 2px 6px rgba(16,24,40,0.25); animation: orbit 6s linear infinite; }
+.f1-o1 { background: #00C2A8; animation-duration: 5s; }
+.f1-o2 { background: #FF5A5F; animation-duration: 7s; animation-direction: reverse; }
+.f1-o3 { background: #FFB020; animation-duration: 8.5s; }
+.f1-headline { font-family: "Segoe UI Semibold", "Helvetica Neue", system-ui, sans-serif; font-size: 27px; font-weight: 700; line-height: 1.2; color: #101828; padding: 0 32px; animation: fadeUp 700ms 150ms ease-out both; }
+.f1-sub { margin-top: 12px; color: #667085; font-size: 14.5px; padding: 0 40px; animation: fadeUp 700ms 300ms ease-out both; }
+.f1-cta { margin-top: 32px; background: #0B6FFF; color: #fff; border-radius: 999px; padding: 18px 40px; font-size: 16.5px; font-weight: 700; box-shadow: 0 6px 0 #0653C7; animation: fadeUp 700ms 450ms ease-out both; }
+
+/* ===== Frame 2: Opening / who-joined card ===== */
+.f2 { background: #101828; display: none; }
+.f2b { background: linear-gradient(160deg, #0B6FFF 0%, #2E85FF 100%); position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; overflow: hidden; }
+.f2-dots-nav { position: absolute; top: 64px; left: 0; right: 0; display: flex; justify-content: center; gap: 8px; z-index: 3; }
+.f2-dot-nav { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,0.4); }
+.f2-dot-nav.active { background: #fff; width: 18px; border-radius: 4px; }
+.f2-trail { position: absolute; border-radius: 50%; filter: blur(0px); animation: trailPulse 2.4s ease-in-out infinite; }
+.f2-orb { position: absolute; border-radius: 50%; border: 3px solid #fff; --sx: 0px; --sy: 0px; animation: converge 900ms cubic-bezier(.2,1.4,.4,1) both; }
+.f2-content { position: relative; z-index: 3; margin-top: 90px; }
+.f2-headline { font-family: "Segoe UI Semibold", "Helvetica Neue", system-ui, sans-serif; font-size: 24px; font-weight: 700; color: #fff; padding: 0 30px; animation: fadeUp 700ms 900ms ease-out both; }
+.f2-sub { margin-top: 10px; color: rgba(255,255,255,0.9); font-size: 14px; padding: 0 40px; animation: fadeUp 700ms 1050ms ease-out both; }
+.f2-swipehint { position: absolute; bottom: 26px; left: 0; right: 0; text-align: center; color: rgba(255,255,255,0.7); font-size: 12px; font-weight: 700; letter-spacing: 0.04em; z-index: 3; }
+
+/* ===== Frame 3: Finale / closing beat ===== */
+.f3 { background: #F4F6FA; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; overflow: hidden; }
+.f3-ring { position: absolute; width: 190px; height: 190px; border-radius: 50%; border: 2px dashed #DCE1EA; animation: ringPulse 3s ease-in-out infinite; }
+.f3-dot { position: absolute; width: 16px; height: 16px; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 2px 6px rgba(16,24,40,0.25); }
+.f3-burst { position: absolute; width: 8px; height: 8px; border-radius: 50%; background: #FFB020; animation: burstOut 900ms ease-out infinite; }
+.f3-content { position: relative; z-index: 3; }
+.f3-headline { font-family: "Segoe UI Semibold", "Helvetica Neue", system-ui, sans-serif; font-size: 24px; font-weight: 700; color: #101828; animation: fadeUp 700ms 300ms ease-out both; }
+.f3-sub { margin-top: 10px; color: #667085; font-size: 14px; max-width: 250px; margin-left: auto; margin-right: auto; animation: fadeUp 700ms 450ms ease-out both; }
+.f3-btn { margin-top: 30px; background: #0B6FFF; color: #fff; border-radius: 999px; padding: 16px 36px; font-size: 15px; font-weight: 700; box-shadow: 0 6px 0 #0653C7; animation: fadeUp 700ms 600ms ease-out both; }
+</style>
+</head>
+<body>
+
+<div class="rationale">
+  <h1>Direction B — "Player Constellation"</h1>
+  <p><b>Idea:</b> instead of a road/journey motif, the crew's own player colors carry the whole deck — the same coral/teal/amber (and beyond) already tied to each Voyager everywhere else in the app. The story being told is "look who was with you," not "look where you went."</p>
+  <p><b>Trigger screen:</b> a light <code>surface-secondary</code> canvas (deliberately calmer than a full-bleed hero — this direction earns its excitement through the crew converging, not through color intensity) with three player-color dots gently orbiting a center point, like a constellation still forming.</p>
+  <p><b>Opening/who-joined card:</b> the same dots sweep in from off-screen with comet trails (reusing <code>map-marker</code>'s existing trail mechanic) and converge — literally dramatizing "everyone arrived."</p>
+  <p><b>Finale:</b> the dots settle into a ring around the closing message, with a soft amber burst (reusing <code>marker-peek-card</code>'s <code>sparkBurst</code> token) — a "group hug" read rather than Direction A's "completed road."</p>
+  <p><b>Constraint check:</b> no new hues (uses only already-approved player-color tokens), no transparency/blur, no new dark surface.</p>
+</div>
+
+<div class="stage">
+  <div class="frame-block">
+    <div class="frame-label">1 — Trigger &amp; CTA</div>
+    <div class="phone"><div class="screen f1">
+      <div class="f1-orbit-wrap">
+        <div class="f1-center"></div>
+        <div class="f1-orbiter f1-o1"></div>
+        <div class="f1-orbiter f1-o2"></div>
+        <div class="f1-orbiter f1-o3"></div>
+      </div>
+      <div class="f1-headline">Everyone's story<br>is ready.</div>
+      <div class="f1-sub">See it the way the whole crew lived it.</div>
+      <div class="f1-cta">Show me my Voylo</div>
+    </div></div>
+  </div>
+  <div class="frame-block">
+    <div class="frame-label">2 — Who-Joined Card</div>
+    <div class="phone"><div class="screen f2b">
+      <div class="f2-dots-nav"><div class="f2-dot-nav active"></div><div class="f2-dot-nav"></div><div class="f2-dot-nav"></div><div class="f2-dot-nav"></div><div class="f2-dot-nav"></div></div>
+      <div class="f2-trail" style="left:20%; top:30%; width:60px; height:60px; background:radial-gradient(circle, rgba(0,194,168,0.35) 0%, rgba(0,194,168,0) 70%);"></div>
+      <div class="f2-trail" style="left:60%; top:22%; width:50px; height:50px; background:radial-gradient(circle, rgba(255,90,95,0.35) 0%, rgba(255,90,95,0) 70%); animation-delay: 0.6s;"></div>
+      <div class="f2-trail" style="left:42%; top:44%; width:44px; height:44px; background:radial-gradient(circle, rgba(255,176,32,0.35) 0%, rgba(255,176,32,0) 70%); animation-delay: 1.2s;"></div>
+      <div class="f2-orb" style="left:44%; top:36%; width:34px; height:34px; background:#00C2A8; --sx:-120px; --sy:-60px; animation-delay:0s;"></div>
+      <div class="f2-orb" style="left:56%; top:32%; width:26px; height:26px; background:#FF5A5F; --sx:110px; --sy:-90px; animation-delay:0.3s;"></div>
+      <div class="f2-orb" style="left:50%; top:46%; width:22px; height:22px; background:#FFB020; --sx:0px; --sy:130px; animation-delay:0.6s;"></div>
+      <div class="f2-content">
+        <div class="f2-headline">Chintan showed up fashionably late — 42 minutes in.</div>
+        <div class="f2-sub">Meera and Sam were already three songs deep.</div>
+      </div>
+      <div class="f2-swipehint">← swipe to continue →</div>
+    </div></div>
+  </div>
+  <div class="frame-block">
+    <div class="frame-label">5 — Finale Card</div>
+    <div class="phone"><div class="screen f3">
+      <div class="f3-ring"></div>
+      <div class="f3-dot" style="background:#00C2A8; left:50%; top:16%; margin-left:-8px;"></div>
+      <div class="f3-dot" style="background:#FF5A5F; left:78%; top:60%; margin-left:-8px;"></div>
+      <div class="f3-dot" style="background:#FFB020; left:22%; top:60%; margin-left:-8px;"></div>
+      <div class="f3-burst" style="left:50%; top:50%; animation-delay:0s;"></div>
+      <div class="f3-burst" style="left:50%; top:50%; animation-delay:0.3s;"></div>
+      <div class="f3-burst" style="left:50%; top:50%; animation-delay:0.6s;"></div>
+      <div class="f3-content">
+        <div class="f3-headline">Until the next one, crew.</div>
+        <div class="f3-sub">Your Voylo is saved — come back anytime, or send it to them.</div>
+        <div class="f3-btn">Close</div>
+      </div>
+    </div></div>
+  </div>
+</div>
+
+</body>
+</html>

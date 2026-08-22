@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Voylo — Memory Lane Reveal, Direction A: "Road &amp; Reveal"</title>
+<style>
+/*
+  Story 6.2 discovery pass -- one of 2-3 directions rendered to react to,
+  not a locked design. Extends home-journey's exact visual grammar (road,
+  amber heartbeat glow, player-color dots, rising sparks) forward into
+  Memory Lane so the payoff visually rhymes with the promise Home already
+  makes. Closing card deliberately "completes" app-icon's Unfinished Loop
+  motif -- the one thread that gets to fully close.
+  palette: Wayfinder -- primary blue #0B6FFF, pressed #0653C7, teal #00C2A8,
+  coral #FF5A5F, amber #FFB020, white #FFFFFF, ink #101828, ink-secondary
+  #667085, on-navy secondary #A6B4CC.
+  Font stand-ins (web-safe substitutions for the licensed type system):
+  display -> "Segoe UI Semibold", "Helvetica Neue", system-ui, sans-serif  (stand-in for Clash Display)
+  body    -> "Segoe UI", "Helvetica Neue", Arial, sans-serif               (stand-in for General Sans)
+*/
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #EDEFF3; color: #101828; font-family: "Segoe UI", Arial, sans-serif; padding: 32px; }
+.rationale { max-width: 980px; margin: 0 auto 32px; background: #fff; border: 1px solid #DCE1EA; border-radius: 20px; padding: 20px 24px; box-shadow: 0 2px 0 #DCE1EA; }
+.rationale h1 { font-size: 21px; font-weight: 700; margin-bottom: 8px; color: #0B6FFF; }
+.rationale p { font-size: 15px; line-height: 1.5; color: #344054; margin-bottom: 10px; }
+.rationale p:last-child { margin-bottom: 0; }
+.rationale b { color: #101828; }
+.stage { display: flex; gap: 40px; justify-content: center; flex-wrap: wrap; align-items: flex-start; }
+.frame-block { text-align: center; }
+.frame-label { color: #101828; font-weight: 700; font-size: 13px; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 14px; }
+.phone { width: 340px; height: 734px; border-radius: 40px; border: 8px solid #101828; background: #101828; position: relative; overflow: hidden; }
+.screen { position: absolute; inset: 0; border-radius: 32px; overflow: hidden; }
+
+/* ---- shared motion primitives ---- */
+@keyframes heartbeat { 0%,100% { transform: scale(0.85); opacity: 0.5; } 45% { transform: scale(1.3); opacity: 0.9; } }
+@keyframes rise { 0% { opacity: 0; transform: translateY(0) scale(0.6); } 12% { opacity: 1; } 80% { opacity: 0.9; } 100% { opacity: 0; transform: translateY(-260px) scale(1.1); } }
+@keyframes roadDrift { from { transform: translateY(-92px); } to { transform: translateY(0); } }
+@keyframes wordGlow { 0%,100% { opacity: 0.5; transform: scale(0.94); } 50% { opacity: 1; transform: scale(1.05); } }
+@keyframes fadeUp { 0% { opacity: 0; transform: translateY(14px); } 100% { opacity: 1; transform: translateY(0); } }
+@keyframes threadDraw { from { stroke-dashoffset: 340; } to { stroke-dashoffset: 0; } }
+@keyframes dotSettle { 0% { transform: scale(0.4); opacity: 0; } 60% { transform: scale(1.15); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+
+/* ===== Frame 1: Trigger + CTA (right after Voyage Ended) ===== */
+.f1 { background: #0B6FFF; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; position: relative; }
+.f1-glow { position: absolute; left: 50%; top: 42%; width: 220px; height: 220px; margin: -110px 0 0 -110px; border-radius: 50%; background: radial-gradient(circle, rgba(255,176,32,0.55) 0%, rgba(255,176,32,0) 70%); animation: heartbeat 2.6s ease-in-out infinite; }
+.f1-spark { position: absolute; width: 6px; height: 6px; border-radius: 50%; background: #FFB020; box-shadow: 0 0 6px 1px #FFB020; opacity: 0; animation: rise 4.5s ease-in infinite; }
+.f1-eyebrow { position: relative; z-index: 2; color: #C7DEFF; font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 14px; animation: fadeUp 700ms ease-out both; }
+.f1-headline { position: relative; z-index: 2; font-family: "Segoe UI Semibold", "Helvetica Neue", system-ui, sans-serif; font-size: 30px; font-weight: 700; line-height: 1.15; color: #fff; padding: 0 34px; animation: fadeUp 700ms 150ms ease-out both; }
+.f1-cta { position: relative; z-index: 2; margin-top: 40px; background: #fff; color: #0B6FFF; border-radius: 999px; padding: 18px 40px; font-size: 16.5px; font-weight: 700; animation: fadeUp 700ms 400ms ease-out both; }
+.f1-caption { position: relative; z-index: 2; margin-top: 14px; color: #C7DEFF; font-size: 13px; animation: fadeUp 700ms 550ms ease-out both; }
+
+/* ===== Frame 2: Opening / destination card ===== */
+.f2 { background: linear-gradient(180deg, #0B6FFF 0%, #2E85FF 42%, #E8EAEE 42%, #E8EAEE 100%); position: relative; display: flex; flex-direction: column; }
+.f2-dots { position: absolute; top: 64px; left: 0; right: 0; display: flex; justify-content: center; gap: 8px; z-index: 3; }
+.f2-dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,0.4); }
+.f2-dot.active { background: #fff; width: 18px; border-radius: 4px; }
+.f2-road { position: absolute; left: 50%; bottom: 0; width: 420px; height: 62%; margin-left: -210px; background: #E8EAEE; clip-path: polygon(44% 0%, 56% 0%, 100% 100%, 0% 100%); }
+.f2-centerline { position: absolute; left: 50%; bottom: 0; width: 8px; height: 62%; margin-left: -4px; clip-path: polygon(47% 0%, 53% 0%, 60% 100%, 40% 100%); overflow: hidden; }
+.f2-dash-wrap { position: absolute; inset: 0; display: flex; flex-direction: column; animation: roadDrift 900ms linear infinite; }
+.f2-dash { height: 40px; background: #FFB020; margin-bottom: 40px; }
+.f2-sunglow { position: absolute; left: 50%; bottom: 38%; width: 90px; height: 90px; margin-left: -45px; border-radius: 50%; background: radial-gradient(circle, rgba(255,176,32,0.65) 0%, rgba(255,176,32,0) 72%); animation: heartbeat 2.6s ease-in-out infinite; }
+.f2-content { position: relative; z-index: 3; flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 0 30px; }
+.f2-eyebrow { color: rgba(255,255,255,0.85); font-size: 12.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 10px; }
+.f2-headline { font-family: "Segoe UI Semibold", "Helvetica Neue", system-ui, sans-serif; font-size: 34px; font-weight: 700; color: #fff; line-height: 1.1; text-shadow: 0 2px 14px rgba(0,0,0,0.18); }
+.f2-sub { margin-top: 12px; color: rgba(255,255,255,0.92); font-size: 15px; line-height: 1.5; max-width: 260px; }
+.f2-swipehint { position: absolute; bottom: 26px; left: 0; right: 0; text-align: center; color: rgba(16,24,40,0.55); font-size: 12px; font-weight: 700; letter-spacing: 0.04em; z-index: 3; }
+
+/* ===== Frame 3: Finale / closing beat ===== */
+.f3 { background: #101828; display: none; } /* not used -- Wayfinder forbids a third dark surface, see note below frame */
+.f3b { background: #0B6FFF; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+.f3-svg { width: 220px; height: 140px; }
+.f3-thread { fill: none; stroke: #FFB020; stroke-width: 3; stroke-linecap: round; stroke-dasharray: 340; stroke-dashoffset: 340; animation: threadDraw 2.4s 400ms ease-out forwards; }
+.f3-dot { animation: dotSettle 600ms ease-out both; }
+.f3-dot.d1 { animation-delay: 2.1s; fill: #00C2A8; }
+.f3-dot.d2 { animation-delay: 2.3s; fill: #FF5A5F; }
+.f3-dot.d3 { animation-delay: 2.5s; fill: #FFB020; }
+.f3-headline { font-family: "Segoe UI Semibold", "Helvetica Neue", system-ui, sans-serif; font-size: 26px; font-weight: 700; color: #fff; margin-top: 22px; animation: fadeUp 700ms 2.8s ease-out both; }
+.f3-sub { margin-top: 10px; color: #C7DEFF; font-size: 14.5px; max-width: 260px; animation: fadeUp 700ms 3s ease-out both; }
+.f3-btn { margin-top: 34px; background: transparent; color: #fff; border: 2px solid rgba(255,255,255,0.5); border-radius: 999px; padding: 14px 34px; font-size: 15px; font-weight: 700; animation: fadeUp 700ms 3.2s ease-out both; }
+
+.note { max-width: 340px; font-size: 12.5px; color: #667085; margin-top: 14px; line-height: 1.4; }
+</style>
+</head>
+<body>
+
+<div class="rationale">
+  <h1>Direction A — "Road &amp; Reveal"</h1>
+  <p><b>Idea:</b> Memory Lane visually rhymes with Home's own "Memory Sparks" promise instead of introducing a new visual world. Same road-and-glow grammar, same amber heartbeat, same rising sparks — Home was foreshadowing this exact moment, so paying it off in the same language should land as "the story completed itself."</p>
+  <p><b>Trigger screen:</b> full-bleed <code>accent-primary</code> (the same register Voyage Intro and Join Invitation already use for the app's biggest emotional beats), amber heartbeat glow, sparks lifting off screen-bottom, "Show me my Voylo" CTA in white.</p>
+  <p><b>Opening card:</b> the perspective road climbs into a full-bleed blue sky, destination name in <code>display-hero</code>, amber sun-glow at the vanishing point — same physical language as Home, now the hero rather than the background.</p>
+  <p><b>Finale:</b> the three player-color dots — the same ones from Splash and Home — finally connect with a fully-drawn amber thread. <code>app-icon</code>'s "Unfinished Loop" is deliberately never-quite-closed; this is the one moment in the whole app where it gets to close.</p>
+  <p><b>Constraint check:</b> stays entirely within existing tokens — no new hues, no transparency/blur, reuses <code>heartbeat</code>/<code>rise</code>/<code>roadDrift</code> keyframes and <code>sparkBurst</code>/thread motifs already in the system.</p>
+</div>
+
+<div class="stage">
+  <div class="frame-block">
+    <div class="frame-label">1 — Trigger &amp; CTA</div>
+    <div class="phone"><div class="screen f1">
+      <div class="f1-glow"></div>
+      <div class="f1-spark" style="left:38%; bottom:30%; animation-delay:0s;"></div>
+      <div class="f1-spark" style="left:58%; bottom:24%; animation-delay:1.5s;"></div>
+      <div class="f1-spark" style="left:48%; bottom:34%; animation-delay:3s;"></div>
+      <div class="f1-eyebrow">Voyage complete</div>
+      <div class="f1-headline">Time to relive<br>every mile.</div>
+      <div class="f1-cta">Show me my Voylo</div>
+      <div class="f1-caption">3 cards. 1 unforgettable trip.</div>
+    </div></div>
+  </div>
+  <div class="frame-block">
+    <div class="frame-label">2 — Opening Card</div>
+    <div class="phone"><div class="screen f2">
+      <div class="f2-dots"><div class="f2-dot active"></div><div class="f2-dot"></div><div class="f2-dot"></div><div class="f2-dot"></div><div class="f2-dot"></div></div>
+      <div class="f2-road"></div>
+      <div class="f2-centerline"><div class="f2-dash-wrap"><div class="f2-dash"></div><div class="f2-dash"></div><div class="f2-dash"></div><div class="f2-dash"></div><div class="f2-dash"></div><div class="f2-dash"></div></div></div>
+      <div class="f2-sunglow"></div>
+      <div class="f2-content">
+        <div class="f2-eyebrow">Destination</div>
+        <div class="f2-headline">Big Sur</div>
+        <div class="f2-sub">Three friends, one coastline, and the road that started it all.</div>
+      </div>
+      <div class="f2-swipehint">← swipe to continue →</div>
+    </div></div>
+  </div>
+  <div class="frame-block">
+    <div class="frame-label">5 — Finale Card</div>
+    <div class="phone"><div class="screen f3b">
+      <svg class="f3-svg" viewBox="0 0 220 140">
+        <path class="f3-thread" d="M40,90 Q70,20 110,70 T180,50" stroke-dasharray="4 10"/>
+        <circle class="f3-dot d1" cx="40" cy="90" r="10"/>
+        <circle class="f3-dot d2" cx="110" cy="70" r="8"/>
+        <circle class="f3-dot d3" cx="180" cy="50" r="7"/>
+      </svg>
+      <div class="f3-headline">Until the next road.</div>
+      <div class="f3-sub">Your Voylo is saved — come back anytime, or send it to the crew.</div>
+      <div class="f3-btn">Close</div>
+    </div></div>
+  </div>
+</div>
+
+</body>
+</html>

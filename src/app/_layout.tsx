@@ -289,6 +289,24 @@ function AppNavigator() {
           data is passed as route params instead of read from context, so this
           screen never depends on activeVoyage still being populated. */}
       <Stack.Screen name="voyage-ended" options={standardPushTransition} />
+      {/* Story 6.3: Memory Lane Reveal + Persistent Journey Screen. Same
+          unconditional-registration reasoning as voyage-ended above -- both
+          are reached right after end_voyage() clears activeVoyage, and both
+          source their data entirely by voyageId (route param), never from
+          useActiveVoyage()'s context. Neither uses standardPushTransition:
+          the deck's trigger screen fades in on its own (its own internal
+          Animated choreography, matching how active-voyage.tsx's own "cut to
+          gameplay" entry animates itself rather than via Stack.Screen
+          options), and the Journey Screen is a plain landing/revisit screen
+          with no bespoke transition spec of its own. */}
+      <Stack.Screen name="memory-lane/[voyageId]" />
+      <Stack.Screen name="journey/[voyageId]" />
+      {/* Story 6.4: Voyage History. Unlike the two screens above, this one
+          isn't reached via end_voyage() and takes no voyageId param -- it's
+          a plain Home -> browse/search screen, only reachable when there's
+          no active Voyage (Home's own reachability already guarantees
+          that), so no Stack.Protected guard or bespoke transition needed. */}
+      <Stack.Screen name="voyage-history" />
     </Stack>
   );
 }

@@ -33,6 +33,7 @@ FR-13 (v1.1): The system shows a first-time Voyager a single, dismissible contex
 FR-14 (v1.1): The system generates a Memory Lane highlight experience when a Voyage ends.
 FR-15 (v1.1): All Voyagers on a completed Voyage can view and revisit its Memory Lane.
 FR-16 (v1.1): Any Voyager can share their Voyage's Memory Lane to external platforms (gated by per-Voyager consent for content featuring them).
+FR-17 (v1.1): Any Voyager can browse a list of their own past (ended) Voyages and search it by destination name; selecting one opens its Memory Lane. Added via Sprint Change Proposal 2026-08-10.
 
 ### NonFunctional Requirements
 
@@ -136,6 +137,7 @@ FR-13: Epic 5 (v1.1) - One-time contextual nudges
 FR-14: Epic 6 (v1.1) - Generate Memory Lane
 FR-15: Epic 6 (v1.1) - View Memory Lane together
 FR-16: Epic 6 (v1.1) - Share Memory Lane externally
+FR-17: Epic 6 (v1.1) - Browse & search Voyage history
 
 ## Epic List
 
@@ -161,9 +163,11 @@ Voyagers can tap-log spottings, get automatic detection of stops and border cros
 
 **Idea captured for story detailing (not yet a story):** a new automatic Fun Fact type — "connection drops" — counting how many times a Voyager lost and regained connectivity during the Voyage (e.g. "Went off-grid 4 times"). Cheap to add: Epic 3's Story 3.5 already detects every drop/reconnect to drive the "reconnecting" HUD note; this would extend FR-11 (Automatic Event Detection) to also log that event as a bankable Fun Fact, the same way border crossings are silently banked.
 
-### Epic 6: Memory Lane (v1.1)
-When a Voyage ends, the group gets a generated highlight-reel recap they can watch together, revisit, and share externally with consent.
-**FRs covered:** FR-14, FR-15, FR-16
+**Story 5.1 pulled forward via Sprint Change Proposal 2026-08-10** (see that file), ahead of the rest of this epic, specifically to unblock Epic 6: an in-progress, uncommitted event-capture backend (`journey_events` table, coffee-stop detector) already existed outside the story process and needed reconciling with the approved AD-16 Stop Intelligence design before use.
+
+### Epic 6: Memory Lane & Voyage History (v1.1)
+When a Voyage ends, the group gets a generated highlight-reel recap they can watch together, revisit, and share externally with consent — and can browse and search their past Voyages at any time. Realizes the "Living Voylo" concept (`docs/VOYLO-LIVING-VOYLO-FEATURE-CONCEPT.md`): a versioned, deterministic (template-based) recap ships first; AI-powered narration (Groq) is a later, separate slice layered on top once the deterministic version proves out. Revised via Sprint Change Proposal 2026-08-10 to add FR-17 (history browsing/search) and to no longer strictly wait on Epic 5's full scope — Memory Lane v1 is built to produce a complete recap using data already available (route, timing, roster) even with zero Fun Facts/photos, per the Living Voylo doc's own Slice D proof criterion.
+**FRs covered:** FR-14, FR-15, FR-16, FR-17
 
 ## Epic 1: Foundation, Sign-In & Trust
 
@@ -593,3 +597,107 @@ So that I understand what Voylo is and want to tap "Start a Voyage" before I've 
 **And** this work is implemented on a dedicated feature branch, not directly on main, matching this project's established convention for UX-driven build stories
 
 *(Implements Story 4.7's spec; added via Sprint Change Proposal 2026-08-06.)*
+
+## Epic 5: Fun Fact Capture (v1.1)
+
+Voyagers can tap-log spottings, get automatic detection of stops and border crossings, attach photos, and get gently nudged toward these features the first time each becomes relevant.
+
+### Story 5.1: Journey Event Capture Foundation
+
+As a developer,
+I want the two remaining real gaps in the already-built journey-event capture backend closed — a broadcast RLS restriction and end-to-end delivery to the UI — plus a minimal manual spotting path,
+So that Epic 6's Memory Lane has trustworthy, correctly-scoped event data to draw on, with no captured event silently dropped and no client able to forge one.
+
+**Acceptance Criteria:**
+
+**Given** commits `7977d0d` (hybrid live journey architecture) and `cd74c6e` (shadow stop intelligence foundation) already landed on this branch, which fully built and wired a generic, AD-16-compliant stop-detection pipeline (`stop-detector.ts`, `stop-classifier.ts`, `stop-monitor.ts`, `stop-event-repository.ts`, called from `background-location-task.ts`'s shared `reportLocationFix` — covering both foreground and background) — **none of that is touched by this story**. Likewise, `journey_events.event_type` keeping `'coffee_stop'` alongside the generic `'stop'` type (`src/shared/types/voyage-message.ts` lines 11-13) is a deliberate, already-documented mobile-compatibility-window decision, not a defect — **do not remove it**
+**When** this story is implemented
+**Then** a new migration restricts the `realtime.messages` Broadcast write RLS policy's `WITH CHECK` (`voyage_channel_write_active_members`) to `payload ->> 'type' = 'location.updated'` only — today it has no type restriction at all, so a client can broadcast a fabricated `journey.event.created` message; all journey events must be created exclusively through the authenticated `create_journey_event` RPC (AD-14)
+**And** `onJourneyEvent` is wired end-to-end: `useLiveLocations`'s call to `subscribeToLocations` (`src/shared/hooks/use-live-locations.tsx`) still only passes 7 arguments today, omitting the 9th (`onJourneyEvent`) — add a real callback there, accumulate received events into new hook state, and return it, so `onJourneyEvent?.(...)` in `location-repository.ts` stops being a permanent no-op
+**And** a minimal manual spotting-log UI (police/deer/construction — a small set of tap controls, no nudges/onboarding/photo attachment) calls the existing `journeyEventRepository.createEvent` (`src/repositories/journey-event-repository.ts`, already implemented and already wired into the offline outbox's `journey_event` kind) — no such UI trigger exists anywhere in the app today
+**And** new/updated tests cover: the RLS type restriction and end-to-end journey-event delivery through `useLiveLocations`
+
+*(Fulfills part of FR-10; realizes AD-14. Pulled forward via Sprint Change Proposal 2026-08-10 ahead of the rest of Epic 5, to unblock Epic 6.)*
+
+## Epic 6: Memory Lane & Voyage History (v1.1)
+
+When a Voyage ends, the group gets a generated highlight-reel recap they can watch together, revisit, and share externally with consent — and can browse and search their past Voyages at any time. Realizes the "Living Voylo" concept (`docs/VOYLO-LIVING-VOYLO-FEATURE-CONCEPT.md`).
+
+**Scoping note:** this slice covers the Living Voylo doc's Slice A foundation pieces required for completed-Voyage access, plus a trimmed Slice D (Memory Lane v1 without Fun Facts). The doc's mid-trip "Live Roadbook" pull-down UI (also part of Slice A) and full Slice C (calibrated stop intelligence, group split/reunion classifiers) are intentionally deferred, not dropped — a natural next slice once this one ships.
+
+### Story 6.1: Timeline & Completed-Voyage Access Foundation
+
+As a developer,
+I want the one remaining real completed-Voyage access gap closed, plus the two new read RPCs Memory Lane and Voyage History need,
+So that they have something to query — without duplicating access-control machinery that already exists and already works.
+
+**Acceptance Criteria:**
+
+**Given** `is_voyage_participant(voyage_id, user_id)` already exists (migration `20260804020000_voyage_membership_departure.sql`) — was a non-removed member, readable once the Voyage is `'ended'` regardless of when they left, or currently active for an active Voyage — and is **already** the predicate behind `voyages_select_members` and `get_voyage_members`; this story does **not** create a new predicate
+**When** this story is implemented
+**Then** the `journey_events_select_members` policy (`supabase/migrations/20260810000000_hybrid_live_journey_bus.sql`) — the one table still gating on `is_active_voyage_member`, meaning journey events for an ended Voyage are currently unreadable to everyone — is corrected to use `is_voyage_participant`, via a new corrective migration (not editing the committed one in place)
+**And** `voyage_member_locations`'s policy is explicitly **not** touched — it deliberately stays active-only (confirmed: it only ever holds each Voyager's single *latest* position, never a history, so it has no completed-Voyage read use case)
+**And** a new RPC returns the caller's own ended Voyages (id, destination, created_at, ended_at, voyager_count — mirroring `end_voyage()`'s own existing `voyager_count` computation: `count(*) where removed_at is null`, not `is_active`, since `end_voyage()` deactivates every member on end), ordered by `ended_at desc`, keyset-paginated via `p_before timestamptz default null` + `p_limit integer default 20` (no cursor/pagination convention exists yet in this codebase — this establishes the simplest correct one, not an elaborate scheme)
+**And** a new RPC returns keyset-paginated `journey_events` for a given Voyage the caller is a participant of (via `is_voyage_participant`), via `p_before timestamptz default null` + `p_limit integer default 50`
+**And** `journey_events` gains `status` (`proposed`/`confirmed`/`suppressed`/`corrected`, default `'confirmed'`) and `source` (`server`/`automatic`/`manual`/`computed`, default `'manual'`) columns — defaults matching the only rows that exist today (all manual spotting logs from Story 5.1); sufficient for Story 6.3's composer — full `JourneyMoment` model parity (e.g. `visibility`, `classifierVersion`) is deferred until those fields have a consumer
+
+*(Realizes AD-17 Slice A foundation, scoped to completed-Voyage access; authorizes AD-17 for this specific slice per its planning gate. Added via Sprint Change Proposal 2026-08-10.)*
+
+### Story 6.2: Memory Lane & Voyage History UX
+
+As a UX Designer,
+I want a dedicated design pass for the end-of-Voyage reveal, the memory-card visual language, and the Voyage History browse/search screen,
+So that this emotionally-central feature gets the same rigor as every other major screen in this product (matching the Story 4.1/4.5/4.7 precedent) instead of being improvised during implementation.
+
+**Acceptance Criteria:**
+
+**Given** the Living Voylo doc's "End-of-Voyage reveal" and "Information architecture" sections, and PRD FR-14/FR-15/FR-17
+**When** this story is executed via a dedicated `bmad-ux` session
+**Then** `DESIGN.md` gains component specs for: the Memory Lane reveal (opening title/route/stat/finale cards), a shareable final group card, and a Voyage History list item + search field
+**And** `EXPERIENCE.md`'s Motion & Transitions section gains a dated subsection for the End Voyage → Memory Lane reveal transition, specified with the same rigor as the "cut to gameplay" and marker-peek-card precedents — this is the single most emotionally-weighted animation in the app per the brainstorming session's north star and must be spec'd, not improvised
+**And** the Voyage History screen's IA is defined: reached from Home (extending the existing `UX-DR17` "Past Voyages list" stub), search-by-destination behavior, and navigation into a selected past Voyage's Memory Lane
+**And** the reveal and card designs explicitly account for the no-Fun-Facts, no-photos case (Story 6.3 ships before Epic 5's full capture UI) — a low-content Voyage must still feel complete and intentional, not empty, per the Living Voylo doc's negative-scenario table
+**And** at least 2-3 concrete directions (copy + visual + motion) are rendered for review before any one approach is locked in, matching Story 4.7's precedent for a brand-defining moment
+**And** new mockups are produced as the pixel-exact normative reference for Stories 6.3 and 6.4
+**This story is design-only — no app code changes.**
+
+*(Extends the design system from Story 4.1; added via Sprint Change Proposal 2026-08-10.)*
+
+### Story 6.3: Build End-of-Voyage Memory Lane Reveal
+
+As a Voyager,
+I want ending a Voyage to reveal a beautiful, animated recap of the trip,
+So that finishing a Voyage feels like a reward, not just closing out a tracker.
+
+**Acceptance Criteria:**
+
+**Given** Story 6.1's data foundation and Story 6.2's approved spec and mockups
+**When** an Organizer ends the Voyage (FR-6)
+**Then** a versioned, deterministic (template-based, no AI) composer assembles the Memory Lane immediately: opening title/destination/date/participating Voyagers, Planned-vs-Actual travel time, distance and time traveled together, states/countries crossed (where already captured), and any journey events already captured by Story 5.1 (stops, spottings) — with a complete, non-empty recap even when zero Fun Facts/photos exist
+**And** the reveal plays Story 6.2's spec'd animation exactly, verified side-by-side against the mockups, not approved on "close enough"
+**And** Memory Lane generation is idempotent — re-opening or a retried assembly never produces a duplicate or a different result for the same Voyage
+**And** every participating Voyager can independently view the same Memory Lane from their own app (FR-15), and revisit it later, not just at the moment of the reveal
+**And** a solo (unjoined) Voyage still produces a complete Memory Lane
+
+*(Fulfills FR-14, FR-15; implements Story 6.2's spec. Added via Sprint Change Proposal 2026-08-10.)*
+
+### Story 6.4: Build Voyage History Browser
+
+As a Voyager,
+I want to navigate to a list of my past Voyages and search it by destination,
+So that I can revisit any trip's memories whenever I want, not just right after it ends.
+
+**Acceptance Criteria:**
+
+**Given** Story 6.1's Voyage-list RPC and Story 6.2's approved spec and mockups
+**When** I navigate to Voyage History (from Home, per Story 6.2's IA)
+**Then** I see my past (ended) Voyages I participated in, most recent first
+**And** a search field filters the list by destination name as I type
+**And** tapping a past Voyage opens its Memory Lane (Story 6.3), unchanged from how it rendered at end-of-Voyage
+**And** the screen matches Story 6.2's mockup exactly (colors, spacing, radii, motion) — verified side-by-side during code review
+
+*(Fulfills FR-17; implements Story 6.2's spec. Added via Sprint Change Proposal 2026-08-10.)*
+
+### Story 6.5: AI-Powered Narration (Groq)
+
+*(Backlog placeholder — not yet detailed. Deferred until Stories 6.3/6.4 ship and prove out, per `docs/VOYLO-LIVING-VOYLO-FEATURE-CONCEPT.md` Slice F: AI rewrites verified facts into narrative styles as a presentation layer only, cannot create canonical events, and Memory Lane generation must never block on AI availability. Resolves PRD Open Question #7. Added via Sprint Change Proposal 2026-08-10.)*

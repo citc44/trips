@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Voylo — Voyage History Screen</title>
+<style>
+/*
+  Story 6.2 discovery pass -- Voyage History screen: populated state (search
+  always visible at top, simple text list of destination + total miles) and
+  first-time empty state (warm/sensory/emotionally-triggering per user
+  decision -- this screen's job is to convert a new user, not just inform
+  them). Reached from Home, extends UX-DR17's "Past Voyages list" stub.
+  Tapping a row replays the full swipeable reveal deck from the start (per
+  decision) -- this screen is the entry point, not the deck itself.
+  In the confirmed Direction B aurora + card-panel language, but toned down
+  for a browse/utility screen (list rows are the real Wayfinder `card`
+  component on a plain surface, not full-bleed aurora -- that register is
+  reserved for the reveal itself, per DESIGN.md's existing Do/Don't:
+  "reserve Clash Display and full-bleed hero treatments for emotional-beat
+  screens," which History (a utility list) is not, except its empty state,
+  which IS an emotional-beat moment by design.
+  palette: Wayfinder -- primary blue #0B6FFF, teal #00C2A8, coral #FF5A5F,
+  amber #FFB020, white #FFFFFF, surface-secondary #F4F6FA, ink #101828,
+  ink-secondary #667085, hairline #DCE1EA.
+  Font stand-ins: display -> "Segoe UI Semibold" (Clash Display); body ->
+  "Segoe UI" (General Sans); stat -> "Consolas", monospace (Space Mono).
+*/
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #EDEFF3; color: #101828; font-family: "Segoe UI", Arial, sans-serif; padding: 32px; }
+.rationale { max-width: 1000px; margin: 0 auto 28px; background: #fff; border: 1px solid #DCE1EA; border-radius: 20px; padding: 18px 24px; box-shadow: 0 2px 0 #DCE1EA; }
+.rationale h1 { font-size: 20px; font-weight: 700; margin-bottom: 6px; color: #0B6FFF; }
+.rationale p { font-size: 14px; line-height: 1.5; color: #344054; margin-bottom: 6px; }
+.rationale p:last-child { margin-bottom: 0; }
+.stage { display: flex; gap: 26px; justify-content: center; flex-wrap: wrap; align-items: flex-start; }
+.frame-block { text-align: center; }
+.frame-label { color: #101828; font-weight: 700; font-size: 12px; letter-spacing: 1.2px; text-transform: uppercase; margin-bottom: 10px; }
+.phone { width: 320px; height: 693px; border-radius: 40px; border: 7px solid #101828; background: #101828; position: relative; overflow: hidden; box-shadow: 0 12px 28px rgba(16,24,40,0.28); }
+.screen { position: absolute; inset: 0; border-radius: 33px; overflow: hidden; background: #fff; }
+
+@keyframes fadeUp { 0% { opacity: 0; transform: translateY(14px); } 100% { opacity: 1; transform: translateY(0); } }
+@keyframes rowIn { 0% { opacity: 0; transform: translateY(10px); } 100% { opacity: 1; transform: translateY(0); } }
+@keyframes orbit { from { transform: rotate(0deg) translateX(76px) rotate(0deg); } to { transform: rotate(360deg) translateX(76px) rotate(-360deg); } }
+
+.topbar { padding: 56px 20px 14px; }
+.topbar-title { font-family: "Segoe UI Semibold", sans-serif; font-size: 21px; font-weight: 700; color: #101828; }
+.search-field { margin: 12px 20px 6px; background: #F4F6FA; border: 2px solid #DCE1EA; border-radius: 14px; height: 48px; display: flex; align-items: center; padding: 0 14px; gap: 8px; }
+.search-field svg { flex-shrink: 0; }
+.search-field span { color: #667085; font-size: 14px; }
+.list { padding: 8px 16px 16px; display: flex; flex-direction: column; gap: 10px; }
+.row { background: #FFFFFF; border: 1px solid #DCE1EA; border-radius: 18px; box-shadow: 0 2px 0 #DCE1EA; padding: 14px 16px; display: flex; align-items: center; gap: 12px; animation: rowIn 400ms both; }
+.row-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.row-main { flex: 1; text-align: left; }
+.row-dest { font-size: 15px; font-weight: 700; color: #101828; }
+.row-sub { font-size: 12px; color: #667085; margin-top: 2px; }
+.row-miles { font-family: "Consolas", "Courier New", monospace; font-weight: 700; font-size: 13px; color: #0B6FFF; }
+.row-chevron { color: #98A2B3; font-size: 16px; }
+</style>
+</head>
+<body>
+
+<div class="rationale">
+  <h1>Voyage History Screen — Populated (left) + Empty first-visit (right, scroll/look right if cut off in a short preview pane)</h1>
+  <p>Populated: always-visible search, simple destination + miles rows. Empty: borrows the emotional-beat register (warm, animated, Start-a-Voyage CTA) since its job is converting a new user. Tapping a row replays the full reveal deck from the start.</p>
+</div>
+
+<div class="stage">
+
+  <div class="frame-block"><div class="frame-label">Populated</div><div class="phone"><div class="screen">
+    <div class="topbar">
+      <div class="topbar-title" style="animation:fadeUp 500ms ease-out both;">Your Voylos</div>
+    </div>
+    <div class="search-field" role="searchbox" aria-label="Search past Voyages by destination" style="animation:fadeUp 500ms 100ms ease-out both;">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="#98A2B3" stroke-width="2.2"/><line x1="16.2" y1="16.2" x2="21" y2="21" stroke="#98A2B3" stroke-width="2.2" stroke-linecap="round"/></svg>
+      <span>Search by destination</span>
+    </div>
+    <div class="list">
+      <div class="row" style="animation-delay:150ms;"><div class="row-dot" style="background:#0B6FFF;"></div><div class="row-main"><div class="row-dest">Big Sur</div><div class="row-sub">Aug 11, 2026 · 3 voyagers</div></div><div class="row-miles">214 mi</div><div class="row-chevron">›</div></div>
+      <div class="row" style="animation-delay:230ms;"><div class="row-dot" style="background:#00C2A8;"></div><div class="row-main"><div class="row-dest">Lake Tahoe</div><div class="row-sub">Jul 28, 2026 · 4 voyagers</div></div><div class="row-miles">198 mi</div><div class="row-chevron">›</div></div>
+      <div class="row" style="animation-delay:310ms;"><div class="row-dot" style="background:#FFB020;"></div><div class="row-main"><div class="row-dest">Joshua Tree</div><div class="row-sub">Jun 14, 2026 · 2 voyagers</div></div><div class="row-miles">301 mi</div><div class="row-chevron">›</div></div>
+      <div class="row" style="animation-delay:390ms;"><div class="row-dot" style="background:#FF5A5F;"></div><div class="row-main"><div class="row-dest">Napa Valley</div><div class="row-sub">May 2, 2026 · 5 voyagers</div></div><div class="row-miles">87 mi</div><div class="row-chevron">›</div></div>
+      <div class="row" style="animation-delay:470ms;"><div class="row-dot" style="background:#9B6BFF;"></div><div class="row-main"><div class="row-dest">Yosemite</div><div class="row-sub">Apr 19, 2026 · 3 voyagers</div></div><div class="row-miles">168 mi</div><div class="row-chevron">›</div></div>
+    </div>
+  </div></div></div>
+
+  <div class="frame-block"><div class="frame-label">Empty — First Visit</div><div class="phone"><div class="screen" style="display:flex; flex-direction:column;">
+    <svg style="position:absolute; inset:0; width:100%; height:100%;" viewBox="0 0 320 693" preserveAspectRatio="xMidYMid slice">
+      <rect width="320" height="693" fill="#F4F6FA"/>
+      <circle cx="90" cy="220" r="200" fill="#00C2A8" opacity="0.2"/>
+      <circle cx="250" cy="300" r="170" fill="#FF5A5F" opacity="0.16"/>
+      <circle cx="170" cy="480" r="220" fill="#FFB020" opacity="0.18"/>
+    </svg>
+    <div class="topbar" style="position:relative; z-index:6; flex:0 0 auto;">
+      <div class="topbar-title" style="animation:fadeUp 500ms ease-out both;">Your Voylos</div>
+    </div>
+    <div style="position:relative; z-index:6; flex:1 1 auto; min-height:0; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:0 34px 28px;">
+      <div style="position:relative; width:120px; height:120px; margin-bottom:22px; flex-shrink:0;">
+        <div style="position:absolute; left:50%; top:50%; width:10px; height:10px; margin:-5px 0 0 -5px; border-radius:50%; background:#0B6FFF; box-shadow:0 0 0 6px rgba(11,111,255,0.12);"></div>
+        <div style="position:absolute; left:50%; top:50%; width:18px; height:18px; margin:-9px 0 0 -9px; border-radius:50%; border:3px solid #fff; box-shadow:0 3px 8px rgba(16,24,40,0.22); background:#00C2A8; animation:orbit 5.5s linear infinite;"></div>
+        <div style="position:absolute; left:50%; top:50%; width:18px; height:18px; margin:-9px 0 0 -9px; border-radius:50%; border:3px solid #fff; box-shadow:0 3px 8px rgba(16,24,40,0.22); background:#FF5A5F; animation:orbit 7.5s linear infinite reverse;"></div>
+        <div style="position:absolute; left:50%; top:50%; width:18px; height:18px; margin:-9px 0 0 -9px; border-radius:50%; border:3px solid #fff; box-shadow:0 3px 8px rgba(16,24,40,0.22); background:#FFB020; animation:orbit 9s linear infinite;"></div>
+      </div>
+      <div style="font-family:'Segoe UI Semibold',sans-serif; font-size:21px; font-weight:700; color:#101828; line-height:1.25; animation:fadeUp 600ms 150ms ease-out both; flex-shrink:0;">Every road you take<br>becomes a story here.</div>
+      <div style="margin-top:9px; color:#101828; font-size:13px; max-width:230px; animation:fadeUp 600ms 300ms ease-out both; flex-shrink:0;">Your first Voylo is waiting to happen. Where to?</div>
+      <div style="margin-top:22px; background:#0B6FFF; color:#fff; border-radius:999px; padding:15px 32px; font-size:14.5px; font-weight:700; box-shadow:0 6px 0 #0653C7; animation:fadeUp 600ms 450ms ease-out both; flex-shrink:0;">Start a Voyage</div>
+    </div>
+  </div></div></div>
+
+</div>
+
+</body>
+</html>

@@ -21,6 +21,7 @@ import {
   WayfinderColors,
 } from '@/constants/design-tokens';
 import { initMapbox } from '@/lib/mapbox';
+import { journeyEventRepository } from '@/repositories/journey-event-repository';
 import type { LiveLocation } from '@/repositories/location-repository';
 import { voyageRepository, type VoyageMember } from '@/repositories/voyage-repository';
 import { ActionDrawer } from '@/shared/components/action-drawer';
@@ -35,6 +36,7 @@ import { usePendingEntryTransition } from '@/shared/hooks/use-pending-entry-tran
 import { useSmoothedLocation } from '@/shared/hooks/use-smoothed-location';
 import { formatCoordinate, formatDistanceMiles, haversineMiles } from '@/shared/lib/geo';
 import { outbox } from '@/shared/services/outbox/outbox';
+import { createMessageId, type JourneyEventType } from '@/shared/types/voyage-message';
 
 const COPIED_LABEL_DURATION_MS = 1100;
 // DESIGN.md copyButton.copiedIconMorph: "~250ms crossfade".
@@ -707,6 +709,14 @@ export default function ActiveVoyageScreen() {
   const [membersError, setMembersError] = useState<string | null>(null);
   const [membersResolvedForVoyageId, setMembersResolvedForVoyageId] = useState<string | null>(null);
   const [grantingUserIds, setGrantingUserIds] = useState<Set<string>>(new Set());
+  const [loggingSpotTypes, setLoggingSpotTypes] = useState<Set<JourneyEventType>>(new Set());
+  // A rapid double-tap dispatches both press events within the same React
+  // batch, before any re-render -- the second call's handleLogSpotting
+  // closure would still read loggingSpotTypes' stale (pre-update) value if
+  // that state alone were the guard. A ref mutates synchronously and is
+  // immune to batching, so it's the actual re-entrancy guard; the state
+  // above stays in sync purely to drive the disabled/pressed styling.
+  const loggingSpotTypesRef = useRef<Set<JourneyEventType>>(new Set());
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [removeTarget, setRemoveTarget] = useState<VoyageMember | null>(null);
   const [isRemoving, setIsRemoving] = useState(false);
@@ -898,22 +908,18 @@ export default function ActiveVoyageScreen() {
       // shows one message at a time.
       const messages: string[] = [];
 
-      for (const { item, data } of result.succeeded) {
+      for (const { item } of result.succeeded) {
         if (!isMounted.current) return;
         if (item.kind === 'end_voyage') {
-          const endedData = data as { destination: string; createdAt: string; endedAt: string | null; voyagerCount: number };
           await refetch();
           if (!isMounted.current) return;
           resetDrawerState();
-          router.push({
-            pathname: '/voyage-ended',
-            params: {
-              destination: endedData.destination,
-              createdAt: endedData.createdAt,
-              endedAt: endedData.endedAt ?? '',
-              voyagerCount: String(endedData.voyagerCount),
-            },
-          });
+          // Story 6.3: supersedes the v1 '/voyage-ended' summary screen --
+          // see EXPERIENCE.md's "version seam, not a typo" note. The new
+          // screen fetches its own data by id (see memory-lane/[voyageId].tsx),
+          // so only voyageId is passed, not the full param bag voyage-ended
+          // used -- item.payload.voyageId is the reliable source here.
+          router.push({ pathname: '/memory-lane/[voyageId]', params: { voyageId: item.payload.voyageId } });
           // The Voyage session just ended and this screen is navigating
           // away -- any other queued items for it (a narrow, already-
           // disclosed duplicate-enqueue scenario) are no longer meaningful
@@ -931,6 +937,12 @@ export default function ActiveVoyageScreen() {
           messages.push('A queued Voyager removal finished.');
           if (voyageId) await loadMembers.current(voyageId);
           if (!isMounted.current) return;
+        } else if (item.kind === 'journey_event') {
+          // Code review finding (Story 5.1): this kind had no success
+          // branch at all -- the RPC still succeeded (nothing was lost),
+          // but a queued spotting log flushed with zero user-visible
+          // confirmation, unlike every other outbox kind.
+          messages.push('A queued spotting log was saved.');
         }
       }
 
@@ -1059,15 +1071,12 @@ export default function ActiveVoyageScreen() {
       // Defensive: real navigation unmounts this screen anyway, but resetting
       // the drawer's own state keeps it consistent if that ever changes.
       resetDrawerState();
-      router.push({
-        pathname: '/voyage-ended',
-        params: {
-          destination: data.destination,
-          createdAt: data.createdAt,
-          endedAt: data.endedAt ?? '',
-          voyagerCount: String(data.voyagerCount),
-        },
-      });
+      // Story 6.3: supersedes the v1 '/voyage-ended' summary screen -- see
+      // EXPERIENCE.md's "version seam, not a typo" note and the outbox
+      // flush handler's identical navigation above. The new screen fetches
+      // its own data by id (memory-lane/[voyageId].tsx), so only voyageId
+      // is passed, not the full param bag voyage-ended used.
+      router.push({ pathname: '/memory-lane/[voyageId]', params: { voyageId: data.id } });
     } catch {
       await outbox.enqueue({ kind: 'end_voyage', payload: { voyageId: activeVoyage!.voyage.id } });
       if (!isMounted.current) return;
@@ -1254,6 +1263,60 @@ export default function ActiveVoyageScreen() {
     } finally {
       if (isMounted.current) {
         setIsTogglingRole(false);
+      }
+    }
+  }
+
+  // Story 5.1 AC3: minimal manual spotting log (police/deer/construction),
+  // reusing the already-built journeyEventRepository/create_journey_event
+  // path. Same enqueue-on-network-failure discipline as
+  // handleEndVoyage/handleGrantOrganizer/handleRemoveVoyager above -- an
+  // offline tap must be queued, not silently dropped.
+  async function handleLogSpotting(eventType: JourneyEventType) {
+    // Code review finding: without this guard, a rapid double-tap fires two
+    // independent requests with two different generated ids, creating two
+    // journey_events rows for one real sighting -- same in-flight discipline
+    // handleGrantOrganizer's grantingUserIds already applies.
+    if (loggingSpotTypesRef.current.has(eventType)) return;
+    loggingSpotTypesRef.current.add(eventType);
+    setLoggingSpotTypes(new Set(loggingSpotTypesRef.current));
+
+    const id = createMessageId();
+    const occurredAt = new Date().toISOString();
+
+    try {
+      const { error: logError } = await journeyEventRepository.createEvent(activeVoyage!.voyage.id, {
+        id,
+        type: eventType,
+        occurredAt,
+      });
+      if (logError) {
+        if (isNetworkFailure(logError)) {
+          await outbox.enqueue({
+            kind: 'journey_event',
+            payload: { voyageId: activeVoyage!.voyage.id, eventId: id, eventType, occurredAt, metadata: {} },
+          });
+          if (!isMounted.current) return;
+          setToastMessage("Queued -- this will finish once you're back online.");
+          return;
+        }
+        if (!isMounted.current) return;
+        setToastMessage(logError.message);
+        return;
+      }
+      if (!isMounted.current) return;
+      setToastMessage('Logged.');
+    } catch {
+      await outbox.enqueue({
+        kind: 'journey_event',
+        payload: { voyageId: activeVoyage!.voyage.id, eventId: id, eventType, occurredAt, metadata: {} },
+      });
+      if (!isMounted.current) return;
+      setToastMessage("Queued -- this will finish once you're back online.");
+    } finally {
+      loggingSpotTypesRef.current.delete(eventType);
+      if (isMounted.current) {
+        setLoggingSpotTypes(new Set(loggingSpotTypesRef.current));
       }
     }
   }
@@ -1482,6 +1545,49 @@ export default function ActiveVoyageScreen() {
           <Text style={styles.hudBarStatLabel}>Elapsed</Text>
           <Text style={styles.hudBarStatValue}>{formatElapsed(activeVoyage.voyage.createdAt, now)}</Text>
         </View>
+        {/* Story 5.1 AC3/AC4: minimal manual spotting log. Absent (not
+            disabled) for a Driving-role Voyager, matching UX-DR25's existing
+            precedent for manual Fun Fact/photo controls -- no design pass
+            for this story, so styling deliberately mirrors recenterButton's
+            existing small-circular-icon-button treatment rather than
+            inventing a new visual language. */}
+        {myTravelRole !== 'driving' ? (
+          <View testID="spotting-controls" style={styles.spottingRow}>
+            <Pressable
+              testID="spot-police-button"
+              accessibilityRole="button"
+              accessibilityLabel="Log a police sighting"
+              accessibilityState={{ disabled: loggingSpotTypes.has('police') }}
+              disabled={loggingSpotTypes.has('police')}
+              onPress={() => handleLogSpotting('police')}
+              style={({ pressed }) => [styles.spottingButton, pressed && styles.pressedScale, loggingSpotTypes.has('police') && styles.drawerRowDisabled]}
+            >
+              <Text style={styles.spottingButtonIcon}>{'🚓'}</Text>
+            </Pressable>
+            <Pressable
+              testID="spot-deer-button"
+              accessibilityRole="button"
+              accessibilityLabel="Log a deer sighting"
+              accessibilityState={{ disabled: loggingSpotTypes.has('deer') }}
+              disabled={loggingSpotTypes.has('deer')}
+              onPress={() => handleLogSpotting('deer')}
+              style={({ pressed }) => [styles.spottingButton, pressed && styles.pressedScale, loggingSpotTypes.has('deer') && styles.drawerRowDisabled]}
+            >
+              <Text style={styles.spottingButtonIcon}>{'🦌'}</Text>
+            </Pressable>
+            <Pressable
+              testID="spot-construction-button"
+              accessibilityRole="button"
+              accessibilityLabel="Log construction"
+              accessibilityState={{ disabled: loggingSpotTypes.has('construction') }}
+              disabled={loggingSpotTypes.has('construction')}
+              onPress={() => handleLogSpotting('construction')}
+              style={({ pressed }) => [styles.spottingButton, pressed && styles.pressedScale, loggingSpotTypes.has('construction') && styles.drawerRowDisabled]}
+            >
+              <Text style={styles.spottingButtonIcon}>{'🚧'}</Text>
+            </Pressable>
+          </View>
+        ) : null}
         <Pressable
           testID="recenter-button"
           accessibilityRole="button"
@@ -2150,6 +2256,24 @@ const styles = StyleSheet.create({
   },
   recenterButtonIcon: {
     color: '#FFFFFF',
+    fontSize: 22,
+  },
+  spottingRow: {
+    flexDirection: 'row',
+    gap: Spacing['2'],
+  },
+  // NFR7: manual Fun Fact-family capture controls need a >=60pt/dp tap
+  // target (stricter than the general 44pt/48dp floor) -- sized explicitly
+  // rather than reusing recenterButton's 56x56.
+  spottingButton: {
+    width: 60,
+    height: 60,
+    borderRadius: 16,
+    backgroundColor: HudBar.recenterBackground,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  spottingButtonIcon: {
     fontSize: 22,
   },
   markerHitRegion: {

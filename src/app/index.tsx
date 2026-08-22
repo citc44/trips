@@ -242,9 +242,20 @@ export default function HomeScreen() {
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.topRow}>
           <Wordmark />
-          <Link testID="settings-link" href="/settings">
-            <Text style={styles.settingsLabel}>Settings</Text>
-          </Link>
+          {/* "Past Voyages" (Story 6.4) -- same plain-text visual treatment
+              as the existing Settings link, placed alongside it. Home's own
+              mockup (Story 4.8) predates Story 6.2's later Voyage History
+              spec and never depicted this entry point; this is the smallest,
+              most convention-consistent way to add it (see that story's
+              Dev Notes "Home entry-point gap"). */}
+          <View style={styles.topLinks}>
+            <Link testID="voyage-history-link" href="/voyage-history">
+              <Text style={styles.settingsLabel}>Past Voyages</Text>
+            </Link>
+            <Link testID="settings-link" href="/settings">
+              <Text style={styles.settingsLabel}>Settings</Text>
+            </Link>
+          </View>
         </View>
         <View style={styles.mid}>
           <Text style={styles.tagline}>{HomeJourneyMotion.tagline}</Text>
@@ -350,6 +361,11 @@ const styles = StyleSheet.create({
     fontFamily: Typography.body.fontFamily,
     fontSize: 13.5,
     textAlign: 'center',
+  },
+  topLinks: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing['4'],
   },
   settingsLabel: {
     color: WayfinderColors.inkSecondary,

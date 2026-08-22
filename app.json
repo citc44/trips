@@ -51,7 +51,8 @@
         {
           "RNMapboxMapsVersion": "11.23.1"
         }
-      ]
+      ],
+      "expo-sharing"
     ],
     "experiments": {
       "typedRoutes": true,

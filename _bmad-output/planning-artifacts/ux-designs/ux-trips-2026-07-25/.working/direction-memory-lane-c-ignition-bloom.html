@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Voylo — Memory Lane Reveal, Direction C: "Ignition Bloom"</title>
+<style>
+/*
+  Story 6.2 discovery pass -- one of 2-3 directions rendered to react to,
+  not a locked design. The most maximalist of the three: leans hardest into
+  Wayfinder's existing "biggest emotional beat" full-bleed accent-primary
+  treatment (Voyage Intro, Join Invitation) and punctuates every card
+  transition with an amber celebratory burst -- a bigger, more theatrical
+  cousin of marker-peek-card's existing sparkBurst micro-interaction.
+  palette: Wayfinder -- primary blue #0B6FFF, pressed #0653C7, amber #FFB020,
+  white #FFFFFF, ink #101828.
+  Font stand-ins (web-safe substitutions for the licensed type system):
+  display -> "Segoe UI Semibold", "Helvetica Neue", system-ui, sans-serif  (stand-in for Clash Display)
+  body    -> "Segoe UI", "Helvetica Neue", Arial, sans-serif               (stand-in for General Sans)
+*/
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #EDEFF3; color: #101828; font-family: "Segoe UI", Arial, sans-serif; padding: 32px; }
+.rationale { max-width: 980px; margin: 0 auto 32px; background: #fff; border: 1px solid #DCE1EA; border-radius: 20px; padding: 20px 24px; box-shadow: 0 2px 0 #DCE1EA; }
+.rationale h1 { font-size: 21px; font-weight: 700; margin-bottom: 8px; color: #0B6FFF; }
+.rationale p { font-size: 15px; line-height: 1.5; color: #344054; margin-bottom: 10px; }
+.rationale p:last-child { margin-bottom: 0; }
+.rationale b { color: #101828; }
+.stage { display: flex; gap: 40px; justify-content: center; flex-wrap: wrap; align-items: flex-start; }
+.frame-block { text-align: center; }
+.frame-label { color: #101828; font-weight: 700; font-size: 13px; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 14px; }
+.phone { width: 340px; height: 734px; border-radius: 40px; border: 8px solid #101828; background: #101828; position: relative; overflow: hidden; }
+.screen { position: absolute; inset: 0; border-radius: 32px; overflow: hidden; }
+
+@keyframes fadeUp { 0% { opacity: 0; transform: translateY(14px); } 100% { opacity: 1; transform: translateY(0); } }
+@keyframes ignitionPulse { 0% { transform: scale(0.4); opacity: 0.9; } 70% { opacity: 0.15; } 100% { transform: scale(2.6); opacity: 0; } }
+@keyframes ignitionCore { 0%,100% { transform: scale(1); } 50% { transform: scale(1.15); } }
+@keyframes sparkFly { 0% { transform: translate(0,0) scale(1); opacity: 1; } 100% { transform: translate(var(--dx), var(--dy)) scale(0.3); opacity: 0; } }
+@keyframes bloomWash { 0% { opacity: 0; } 30% { opacity: 0.55; } 100% { opacity: 0; } }
+
+/* ===== Frame 1: Trigger + CTA ===== */
+.f1 { background: #0B6FFF; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; position: relative; overflow: hidden; }
+.f1-ring { position: absolute; left: 50%; top: 38%; width: 90px; height: 90px; margin: -45px 0 0 -45px; border-radius: 50%; border: 3px solid #FFB020; animation: ignitionPulse 2.6s ease-out infinite; }
+.f1-ring2 { animation-delay: 1.3s; }
+.f1-core { position: absolute; left: 50%; top: 38%; width: 46px; height: 46px; margin: -23px 0 0 -23px; border-radius: 50%; background: #FFB020; box-shadow: 0 0 28px 6px rgba(255,176,32,0.7); animation: ignitionCore 1.8s ease-in-out infinite; }
+.f1-eyebrow { position: relative; z-index: 2; margin-top: 210px; color: #C7DEFF; font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; animation: fadeUp 700ms ease-out both; }
+.f1-headline { position: relative; z-index: 2; font-family: "Segoe UI Semibold", "Helvetica Neue", system-ui, sans-serif; font-size: 30px; font-weight: 700; line-height: 1.15; color: #fff; padding: 10px 30px 0; animation: fadeUp 700ms 150ms ease-out both; }
+.f1-cta { position: relative; z-index: 2; margin-top: 36px; background: #FFB020; color: #101828; border-radius: 999px; padding: 18px 40px; font-size: 16.5px; font-weight: 700; box-shadow: 0 6px 0 #C98613; animation: fadeUp 700ms 400ms ease-out both; }
+
+/* ===== Frame 2: Opening / destination card ===== */
+.f2 { background: #0B6FFF; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; overflow: hidden; }
+.f2-dots { position: absolute; top: 64px; left: 0; right: 0; display: flex; justify-content: center; gap: 8px; z-index: 3; }
+.f2-dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,0.4); }
+.f2-dot.active { background: #FFB020; width: 18px; border-radius: 4px; }
+.f2-spark { position: absolute; left: 50%; top: 46%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: #FFB020; animation: sparkFly 1.1s ease-out both; }
+.f2-content { position: relative; z-index: 3; padding: 0 30px; }
+.f2-eyebrow { color: #C7DEFF; font-size: 12.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 10px; animation: fadeUp 700ms 900ms ease-out both; }
+.f2-headline { font-family: "Segoe UI Semibold", "Helvetica Neue", system-ui, sans-serif; font-size: 36px; font-weight: 700; color: #fff; line-height: 1.05; animation: fadeUp 700ms 1050ms ease-out both; }
+.f2-sub { margin-top: 14px; color: rgba(255,255,255,0.9); font-size: 15px; max-width: 250px; margin-left: auto; margin-right: auto; animation: fadeUp 700ms 1200ms ease-out both; }
+.f2-swipehint { position: absolute; bottom: 26px; left: 0; right: 0; text-align: center; color: rgba(255,255,255,0.7); font-size: 12px; font-weight: 700; letter-spacing: 0.04em; z-index: 3; }
+
+/* ===== Frame 3: Finale / closing beat ===== */
+.f3 { background: #0B6FFF; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; overflow: hidden; }
+.f3-wash { position: absolute; inset: 0; background: #FFB020; animation: bloomWash 2.4s ease-out both; }
+.f3-content { position: relative; z-index: 3; }
+.f3-headline { font-family: "Segoe UI Semibold", "Helvetica Neue", system-ui, sans-serif; font-size: 27px; font-weight: 700; color: #fff; animation: fadeUp 700ms 700ms ease-out both; }
+.f3-sub { margin-top: 12px; color: #C7DEFF; font-size: 14.5px; max-width: 250px; margin-left: auto; margin-right: auto; animation: fadeUp 700ms 850ms ease-out both; }
+.f3-btn { margin-top: 32px; background: transparent; color: #fff; border: 2px solid rgba(255,255,255,0.5); border-radius: 999px; padding: 14px 34px; font-size: 15px; font-weight: 700; animation: fadeUp 700ms 1000ms ease-out both; }
+</style>
+</head>
+<body>
+
+<div class="rationale">
+  <h1>Direction C — "Ignition Bloom"</h1>
+  <p><b>Idea:</b> the most maximalist of the three. Leans hardest into Wayfinder's existing full-bleed <code>accent-primary</code> "biggest emotional beat" treatment (same register as Voyage Intro/Join Invitation) and punctuates every transition with a theatrical amber burst — a bigger cousin of <code>marker-peek-card</code>'s existing spark-burst micro-interaction, scaled up to be the star rather than a garnish.</p>
+  <p><b>Trigger screen:</b> a pulsing amber "ignition" core at center — literally the button-ignition idea (press → physical response) turned into ambient motion, building anticipation before the tap.</p>
+  <p><b>Opening card:</b> the tap itself triggers an amber spark-burst radiating outward as the destination name resolves into view — cause and effect, not just decoration.</p>
+  <p><b>Finale:</b> a brief warm amber wash crosses the whole screen like a camera flash/bloom before settling on the closing message — the most "look what we made" theatrical of the three, closest to a highlight-reel sting.</p>
+  <p><b>Constraint check:</b> reuses only <code>accent-primary</code>/<code>accent-amber</code> (no new hues), no transparency/blur, no new dark surface — the wash is a solid color at partial keyframe opacity, not a persistent translucent layer.</p>
+</div>
+
+<div class="stage">
+  <div class="frame-block">
+    <div class="frame-label">1 — Trigger &amp; CTA</div>
+    <div class="phone"><div class="screen f1">
+      <div class="f1-ring"></div>
+      <div class="f1-ring f1-ring2"></div>
+      <div class="f1-core"></div>
+      <div class="f1-eyebrow">Voyage complete</div>
+      <div class="f1-headline">Your Voylo<br>is ready to ignite.</div>
+      <div class="f1-cta">Show me my Voylo</div>
+    </div></div>
+  </div>
+  <div class="frame-block">
+    <div class="frame-label">2 — Opening Card</div>
+    <div class="phone"><div class="screen f2">
+      <div class="f2-dots"><div class="f2-dot active"></div><div class="f2-dot"></div><div class="f2-dot"></div><div class="f2-dot"></div><div class="f2-dot"></div></div>
+      <div class="f2-spark" style="--dx:-90px; --dy:-60px; animation-delay:0s;"></div>
+      <div class="f2-spark" style="--dx:100px; --dy:-40px; animation-delay:0.05s;"></div>
+      <div class="f2-spark" style="--dx:-60px; --dy:80px; animation-delay:0.1s;"></div>
+      <div class="f2-spark" style="--dx:80px; --dy:70px; animation-delay:0.15s;"></div>
+      <div class="f2-spark" style="--dx:0px; --dy:-110px; animation-delay:0.2s;"></div>
+      <div class="f2-spark" style="--dx:0px; --dy:110px; animation-delay:0.25s;"></div>
+      <div class="f2-content">
+        <div class="f2-eyebrow">Destination</div>
+        <div class="f2-headline">Big Sur</div>
+        <div class="f2-sub">Three friends, one coastline, and the road that started it all.</div>
+      </div>
+      <div class="f2-swipehint">← swipe to continue →</div>
+    </div></div>
+  </div>
+  <div class="frame-block">
+    <div class="frame-label">5 — Finale Card</div>
+    <div class="phone"><div class="screen f3">
+      <div class="f3-wash"></div>
+      <div class="f3-content">
+        <div class="f3-headline">Until the next ignition.</div>
+        <div class="f3-sub">Your Voylo is saved — come back anytime, or send it to the crew.</div>
+        <div class="f3-btn">Close</div>
+      </div>
+    </div></div>
+  </div>
+</div>
+
+</body>
+</html>

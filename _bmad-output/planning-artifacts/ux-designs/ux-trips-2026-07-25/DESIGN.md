@@ -1,13 +1,15 @@
 ---
 status: final
 created: 2026-07-25
-updated: 2026-08-06
+updated: 2026-08-11
 sources:
   - _bmad-output/planning-artifacts/prds/prd-trips-2026-07-25/prd.md
   - _bmad-output/brainstorming/brainstorm-group-road-trip-tracker-2026-07-21/brainstorm.html
   - _bmad-output/planning-artifacts/research/market-group-road-trip-coordination-and-travel-social-app-market-voylo-research-2026-07-24.md
   - _bmad-output/planning-artifacts/sprint-change-proposal-2026-08-02.md
   - _bmad-output/planning-artifacts/sprint-change-proposal-2026-08-06.md
+  - _bmad-output/planning-artifacts/sprint-change-proposal-2026-08-10.md
+  - docs/VOYLO-LIVING-VOYLO-FEATURE-CONCEPT.md
 ---
 
 name: Voylo
@@ -372,6 +374,134 @@ components:
     taglineColor: '{colors.ink-secondary}'
     totalDuration: '~2.6s to idle hold'
     reducedMotion: 'settled end-state, single crossfade, no draw/pop/ripple'
+  # memory-lane-aurora — NEW 2026-08-11 (Story 6.2, Sprint Change Proposal
+  # 2026-08-10 / "Player Constellation"). The full-bleed background system
+  # behind every Memory Lane reveal card, the shareable group card, and
+  # Voyage History's empty state: 3-4 large soft radial washes of the
+  # player-color tokens overlapping on a surface-secondary field, reaching
+  # every edge (no plain leftover area -- a hard requirement after an
+  # earlier direction shipped with color only in the top portion of the
+  # frame). Two directions were explored and rejected: "Road & Reveal"
+  # (extended home-journey's road/glow motif) and "Ignition Bloom" (full-
+  # bleed accent-primary + theatrical amber bursts) -- both archived in
+  # .working/ for reference, neither carried forward. Distinct per screen
+  # via which 3-4 aurora blob positions/colors are used, not a fixed asset.
+  # `[NOTE 2026-08-11, accessibility review]` Purely decorative -- exclude
+  # from the accessibility tree (aria-hidden / accessibilityElementsHidden)
+  # on every screen it appears on, same as horizon-strip/home-journey.
+  # Documented contrast floor: in multi-blob overlap zones (3-4 blobs
+  # stacking, e.g. the reveal trigger screen), ink-secondary text can drop
+  # to ~2.67:1, under the 4.5:1 AA floor -- ink-primary stays safe (~9.5:1+)
+  # even in worst-case overlap. Body/caption-weight text therefore must
+  # either sit inside a memory-lane-card panel (safe, opaque white) or use
+  # ink-primary, never ink-secondary/ink-disabled directly on raw aurora.
+  memory-lane-aurora:
+    baseSurface: '{colors.surface-secondary}'
+    blobColors: ['{colors.player-teal}', '{colors.player-coral}', '{colors.player-amber}']
+    blobOpacity: '0.14-0.24 depending on blob size (larger blob, lower opacity)'
+    blobCount: '3-4 per screen, positions vary by card -- not a fixed asset'
+    textOnAuroraRule: 'ink-primary only, or move the text into a memory-lane-card panel -- ink-secondary/ink-disabled directly on raw aurora fails AA in overlap zones'
+  # memory-lane-card — the floating content panel used on every reveal card
+  # that carries readable data (who-joined, stops, superlatives, finale) or
+  # copy over the memory-lane-aurora background. Reuses the existing `card`
+  # token's visual language (white, hairline border, flat offset shadow) at
+  # a larger radius, so data stays legible without breaking the full-bleed
+  # background rule -- opening/destination-style cards with just a headline
+  # sit directly on the aurora with no panel.
+  memory-lane-card:
+    background: '{colors.surface-primary}'
+    border: '1px solid {colors.border-hairline}'
+    radius: '{rounded.xl}'
+    shadow: '0 3px 0 {colors.border-hairline}'
+    padding: '{spacing.5}'
+    openDuration: 550ms
+    openEasing: 'cubic-bezier(.22,1,.36,1)'
+    openTransform: 'translateY(18px) scale(0.97) -> translateY(0) scale(1), opacity 0 -> 1'
+  # memory-lane-deck — the swipeable full-screen reveal itself. 7 screens in
+  # sequence: trigger/CTA, 5 content cards, closing beat. Progress dots
+  # (Stories-style) map only to the 5 content cards, hidden on the trigger
+  # and closing screens. Swipe is bidirectional (forward and back).
+  memory-lane-deck:
+    cardCount: 5
+    progressDots:
+      inactiveColor: '{colors.player-teal}, opacity reduced (rgba equivalent ~0.16-0.4 depending on background)'
+      activeColor: '{colors.accent-primary}'
+      activeShape: 'pill, widens from a dot on activation'
+      accessibility: 'decorative visually, but the position they represent is announced via VoiceOver/TalkBack as "card N of 5" on each card -- see EXPERIENCE.md Accessibility Floor'
+    swipeDirection: 'bidirectional'
+    # `[NOTE 2026-08-11, accessibility review]` WCAG 2.5.1: a path-based
+    # gesture must have a non-gesture equivalent. Swipe is the primary
+    # interaction, but left/right tap zones (roughly the outer ~20% of the
+    # screen width each) advance/retreat the deck identically -- not a
+    # visible chevron/button (keeps the full-bleed cards uninterrupted),
+    # but a real, always-present tap target satisfying the same 44pt/48dp
+    # floor as everything else in the system.
+    navigation: 'swipe (primary) or tap the left/right ~20% edge zones (non-gestural fallback, always present, 44pt/48dp minimum) -- never swipe-only'
+    contentEntrance: 'staggered per-element: dots/badges pop in (dotPop, 500ms cubic-bezier(.34,1.56,.64,1)), destination-card dots converge inward (converge, 800ms cubic-bezier(.2,1.4,.4,1)), text/panels fade up (fadeUp, ~600ms ease-out), stat bars fill (fillBar, 900ms cubic-bezier(.22,1,.36,1)), the superlatives card\'s crown drops in (crownDrop, 500ms cubic-bezier(.3,1.6,.4,1)) -- see EXPERIENCE.md Motion & Transitions "End Voyage -> Memory Lane Reveal" for exact timings; any other card-specific entrance animation not named here is covered by this same umbrella pattern'
+    reducedMotion: 'cards still swipe/tap-advance (the navigation itself is not decorative), but per-element entrance choreography (pop/fade/fill/converge/crownDrop staggers) is skipped -- each card\'s content appears in its settled state immediately, matching the same reduced-motion floor as home-journey below'
+    focusOnActivate: 'keyboard/switch-control focus moves to the newly active card\'s heading when it becomes active -- not just an announcement while focus stays put'
+  # memory-lane-share-card — the single external artifact, distinct from
+  # the 5-card personal deck above. The only Memory Lane surface carrying a
+  # Voylo wordmark, since it's the one thing that leaves the app (the
+  # Living Voylo doc's "Send me your Voylo" acquisition loop). Confirmed
+  # direction: quote-led (the trip's emotional quote as the hero element,
+  # not the crew avatars -- a crew-led alternate was explored and archived
+  # in .working/). Portrait 9:16, matching common story/status share
+  # formats. mockups/key-memory-lane-share-card.html is the reference.
+  memory-lane-share-card:
+    aspectRatio: '9:16'
+    background: '{components.memory-lane-aurora}'
+    wordmark: 'small, top-left -- three player-color dots + "Voylo" wordmark text, {typography.label}-tier size'
+    heroContent: 'the trip\'s closing quote (see Voice and Tone), destination headline, avatar-stack + voyager count, stat pair in a memory-lane-card panel'
+    statCaptionColor: '{colors.ink-secondary} -- not ink-disabled, which fails AA (~2.58:1) on the white memory-lane-card panel at caption size'
+    consentException: 'exempt from the per-person external-share consent gate (see EXPERIENCE.md Trust, Privacy & Consent) -- shows only names/avatars/aggregate stats, the same information already visible to every Voyager on Live Map throughout the trip, not tagged individual content like a photo. Re-evaluate this exception if/when this card ever gains individual photos.'
+  # voyage-history-row — a list row in the Voyage History screen. Reuses
+  # the existing `card` token (not memory-lane-aurora -- History is a
+  # utility browse/search screen, deliberately restrained next to the
+  # reveal's full-bleed drama, per the established "reserve Clash Display/
+  # full-bleed hero treatments for emotional-beat screens" rule).
+  voyage-history-row:
+    background: '{colors.surface-primary}'
+    border: '1px solid {colors.border-hairline}'
+    radius: '{rounded.lg}'
+    shadow: '0 2px 0 {colors.border-hairline}'
+    leadDot: 'destination-color-coded dot, {rounded.full}, not a player color -- distinguishes trips from Voyagers'
+    content: 'destination name ({typography.headline}), date + voyager count ({typography.caption}), total miles ({typography.stat-numeral-sm}), chevron'
+    tap: 'replays the full memory-lane-deck reveal from the start -- see EXPERIENCE.md State Patterns'
+    entrance: 'rows fade/slide up in a staggered list-load sequence (rowIn, ~400ms, staggered ~80ms apart) -- disabled under Reduce Motion, rows simply appear'
+    accessibility: 'each row announces as "{destination}, {total miles} miles, {date}, {voyager count} voyagers, button" -- see EXPERIENCE.md Accessibility Floor'
+  # search-field — NEW 2026-08-11 (Story 6.2). Voyage History's
+  # always-visible destination search. No prior token existed for a search
+  # input anywhere in the system.
+  search-field:
+    background: '{colors.surface-secondary}'
+    border: '2px solid {colors.border-hairline}'
+    radius: '{rounded.md}'
+    minHeight: 48px
+    placeholderColor: '{colors.ink-secondary} -- not ink-disabled, which both fails AA (~2.4:1) and visually implies the field is disabled when it\'s fully active'
+    accessibleLabel: 'a persistent "Search past Voyages by destination" label, not the placeholder text alone (placeholders are not a substitute for an accessible label)'
+  # voyage-history-empty — the first-visit empty state. The one place this
+  # otherwise-utility screen borrows the memory-lane-aurora/emotional-beat
+  # register: its job is converting a new voyager, not just informing them.
+  voyage-history-empty:
+    background: '{components.memory-lane-aurora}'
+    heroMotif: 'the three orbiting player-color dots from the trigger screen (memory-lane-deck), reused here as a "your story is still ahead of you" echo -- continuous orbit loop, disabled under Reduce Motion (freezes to a static frame, same fallback pattern as memory-lane-deck\'s trigger screen)'
+    cta: '{components.button-ignition}, "Start a Voyage"'
+  # journey-screen — the persistent per-Voyage screen. Landed on when the
+  # reveal deck closes; reached again by tapping a voyage-history-row (which
+  # replays the deck, closing back to this same screen); the actual entry
+  # point for both share formats. Calmer register than the reveal itself --
+  # this is a page a Voyager returns to, not an entrance moment, so it
+  # sits on plain surface-secondary with a low-opacity memory-lane-aurora
+  # wash rather than the reveal's full-intensity background.
+  journey-screen:
+    background: '{colors.surface-secondary}'
+    auroraOpacity: 'reduced ~40% from memory-lane-aurora\'s reveal-deck intensity'
+    replayHero: 'a memory-lane-card-style panel with a play-icon thumbnail, "Watch your Voylo again," card count + running time -- tap replays memory-lane-deck from the start. The play-icon\'s ambient shimmer loop (opacity pulse, 2.4s) is disabled under Reduce Motion.'
+    statSummary: 'duration / distance / stop count, {typography.stat-numeral-sm} triplet in a memory-lane-card panel'
+    statCaptionColor: '{colors.ink-secondary} -- not ink-disabled, same AA fix as memory-lane-share-card above'
+    shareRow: 'two controls side by side -- "Share the card" ({components.button-ignition}) and "Share the video" (secondary/outline variant) -- see EXPERIENCE.md Component Patterns "Shareable Group Card" for what each produces, and State Patterns for the generation-in-progress/failure state'
+    navControls: 'back and overflow icon buttons render at a 34px visual size but must carry a 44pt/48dp minimum hit region via invisible hit-slop padding -- same visual-vs-hit-region split already established for map-marker (40px visual / 48px hit region)'
   # home-journey — NEW 2026-08-06 (Sprint Change Proposal 2026-08-06,
   # Story 4.7, "Memory Sparks"). Full description lives once in Screens
   # below (Home entry) and EXPERIENCE.md's Motion & Transitions "Home
@@ -482,6 +612,14 @@ Map markers stay circles (a Voyager's avatar in a colored ring), never pins — 
 
 **Voyage Ended** *(Ships: v1 — this is v1's actual terminal state)* [mockup](mockups/key-voyage-ended.html) — Deliberately understated next to Voyage Intro/Join Invitation, unchanged in intent from v1: `surface-secondary` fog canvas, one `card` summary panel (destination, duration, Voyager count in `stat-numeral`), one `button-secondary` back to Home.
 
+**Memory Lane Reveal** *(Ships: v1.1)* [mockup](mockups/key-memory-lane-reveal.html) — "Player Constellation." Fires at End Voyage completion (superseding Voyage Ended above once v1.1 ships) and again on demand from Voyage History. A full-screen, swipeable, 7-screen sequence built on `memory-lane-deck`/`memory-lane-aurora`/`memory-lane-card`: a trigger screen with orbiting player-color dots and a "Show me my Voylo" CTA; five content cards (destination, who-joined, stops, superlatives, finale) each full-bleed `memory-lane-aurora` with data in a floating `memory-lane-card` panel; a closing beat (dashed ring, player-color dots, amber burst, "Until the next one, crew."). Navigation is swipe *or* tap the left/right edge zones — never swipe-only, per `memory-lane-deck.navigation`. `memory-lane-aurora`'s blobs, the orbiting/progress dots, and the spark/burst effects are all purely decorative — excluded from the accessibility tree — while VoiceOver/TalkBack announces each card's actual content and position ("card N of 5") on activation. Two other directions were explored and explicitly rejected — "Road & Reveal" (extended `home-journey`'s road/glow grammar) and "Ignition Bloom" (full-bleed `accent-primary` + theatrical amber bursts) — both archived in `.working/` for reference. Cards 3-4 (stops/superlatives) ship v1.1 with Story 5.1 spotting-tap data (a tally + a "most spots logged" superlative); they upgrade in place to richer coffee-champion/rest-stop content once stop intelligence (a separate initiative) clears its precision gates — same deck slots, no rework of the rest of the deck.
+
+**Shareable Group Card** *(Ships: v1.1)* [mockup](mockups/key-memory-lane-share-card.html) — `memory-lane-share-card` token. The single external artifact distinct from the personal reveal deck — the only Memory Lane surface carrying a Voylo wordmark, since it's the one thing that leaves the app. Quote-led: the trip's closing quote as the hero element, destination headline, avatar-stack + voyager count, a stat pair. Offered alongside a stitched video (all 5 reveal cards with transitions) as a second share format — both remain available, neither replaces the other.
+
+**Voyage History** *(Ships: v1.1)* [mockup](mockups/key-voyage-history.html) — Reached from Home, extending the Past Voyages list stub. Deliberately restrained next to the reveal's drama: always-visible search field, a simple `voyage-history-row` list (destination + total miles), no `memory-lane-aurora` background. Tapping a row replays the full `memory-lane-deck` from the start. The one exception to the restrained register is the first-visit empty state (`voyage-history-empty`) — it borrows the full emotional-beat treatment (aurora, orbiting dots, warm copy, Start-a-Voyage CTA) since converting a new voyager is this state's actual job.
+
+**Persistent Journey Screen** *(Ships: v1.1)* [mockup](mockups/key-journey-screen.html) — `journey-screen` token. Landed on when the reveal deck closes; reached again by tapping a `voyage-history-row` (which replays the deck, closing back here). The real entry point for sharing: destination, crew avatar stack, a "Watch your Voylo again" replay hero, a stat-summary panel, and both share controls (card / video) side by side. Calmer register than the reveal itself — a revisit page, not an entrance moment — so its `memory-lane-aurora` runs at reduced opacity on a plain `surface-secondary` base.
+
 ### Components
 
 **App icon** *(Ships: v1)* [mockup](mockups/key-app-icon.html) — "The Unfinished Loop." `app-icon` token. Three player-color dots (teal/coral/amber) held apart on an `accent-primary` field, joined by a white dashed thread that almost closes but doesn't — apart-but-connected, and the story isn't finished yet. Dash rhythm deliberately echoes `map-road-centerline`. Replaces the Expo-default placeholder icon; resolves the assumption flagged in Brand & Style. Verify legibility at sub-40px sizes before final export — the dash detail softens at favicon/notification scale (see mockup's size-check row).
@@ -501,6 +639,12 @@ Map markers stay circles (a Voyager's avatar in a colored ring), never pins — 
 **Join-code card** *(Ships: v1)* — `join-code-card` token: unchanged in purpose from v1 (a keepsake-feeling object for the shareable code, not a plain string), re-skinned from a violet-glowing gradient to a white card with an `accent-primary` border — no glow.
 
 **Manual Fun Fact log control / Fun Fact badge / Nudge toast** *(Ships: v1.1, not yet built)* — Tokens re-specced (`fun-fact-badge`, `nudge-toast`) against the new palette so v1.1 development starts from Wayfinder values, not Night Drive ones, but these components have no v1 mock — treat the frontmatter tokens as provisional until a dedicated pass when v1.1 is scoped.
+
+**Memory Lane aurora / card panel** *(Ships: v1.1)* [mockup](mockups/key-memory-lane-reveal.html) — `memory-lane-aurora` / `memory-lane-card` tokens. The full-bleed background system (3-4 large soft player-color radial washes, reaching every edge — a hard requirement after an earlier direction shipped with color only in the top portion of a card) and its companion floating white content panel (reuses `card`'s visual language at `rounded.xl`), used together across every Memory Lane surface: the reveal deck, the shareable group card, Voyage History's empty state, and the persistent journey screen (at reduced opacity there — see Screens above). No new hues — only the existing `player-teal`/`player-coral`/`player-amber` tokens.
+
+**Voyage History row** *(Ships: v1.1)* [mockup](mockups/key-voyage-history.html) — `voyage-history-row` token. Reuses the plain `card` token, not `memory-lane-aurora` — History's list is a utility browse/search surface, deliberately restrained next to the reveal's full-bleed drama. Destination-color-coded lead dot (not a player color — distinguishes trips from Voyagers), destination name, date + voyager count, total miles in `stat-numeral-sm`, chevron.
+
+**Search field** *(Ships: v1.1)* [mockup](mockups/key-voyage-history.html) — `search-field` token. Voyage History's always-visible destination search — the first search input anywhere in the system, so this is a new token, not a re-skin. Placeholder text uses `ink-secondary`, not `ink-disabled` (which both fails AA contrast and misreads as a disabled field); carries a persistent accessible label beyond the placeholder.
 
 ## Do's and Don'ts
 

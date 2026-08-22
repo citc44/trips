@@ -20,6 +20,16 @@ test('renders a link to Settings', async () => {
   expect(getByTestId('settings-link').props.href).toBe('/settings');
 });
 
+test('renders a link to Voyage History, alongside the existing Settings link', async () => {
+  const { getByTestId, getByText } = await render(<HomeScreen />);
+
+  expect(getByTestId('voyage-history-link').props.href).toBe('/voyage-history');
+  expect(getByText('Past Voyages')).toBeTruthy();
+  // Settings link still renders correctly alongside the new one -- no regression.
+  expect(getByTestId('settings-link').props.href).toBe('/settings');
+  expect(getByText('Settings')).toBeTruthy();
+});
+
 test('renders the Home Journey tagline', async () => {
   const { getByText } = await render(<HomeScreen />);
 

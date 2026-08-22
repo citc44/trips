@@ -60,6 +60,8 @@ type EndedVoyageRow = VoyageRow & { voyager_count: number };
 
 type EndedVoyageResult = { data: EndedVoyage | null; error: RepositoryError | null };
 
+type VoyageHistoryResult = { data: EndedVoyage[] | null; error: RepositoryError | null };
+
 export type PlayerColor = 'coral' | 'teal' | 'violet' | 'gold' | 'sky' | 'lime' | 'pink' | 'slate';
 
 // 'organizer' | 'voyager' -- the Voyage *membership* role (Epic 2). Not to be
@@ -343,6 +345,44 @@ async function acknowledgeRemoval(voyageId: string): Promise<{ error: Repository
   return { error: null };
 }
 
+// Story 6.1 AC2: lists the caller's own ended Voyages, most recent first.
+// get_voyage_history() is table-returning (set-returning), same PostgREST
+// array shape as get_voyage_members() -- an empty array is a valid "no
+// completed Voyages yet" result, not an error. Established this codebase's
+// first pagination convention: a nullable timestamptz cursor (p_before) plus
+// a server-clamped p_limit, since no existing RPC needed one before this.
+async function getVoyageHistory(before?: string, beforeId?: string, limit = 20): Promise<VoyageHistoryResult> {
+  const { data, error } = await supabase.rpc('get_voyage_history', {
+    p_before: before ?? null,
+    p_before_id: beforeId ?? null,
+    p_limit: limit,
+  });
+
+  if (error) {
+    return { data: null, error: toRepositoryError(error) };
+  }
+
+  const rows = (data as EndedVoyageRow[] | null) ?? [];
+  return { data: rows.map((row) => ({ ...toVoyage(row), voyagerCount: Number(row.voyager_count) })), error: null };
+}
+
+// Story 6.3 AC1/AC4: a single-Voyage-by-id read for the Memory Lane
+// composer/deck, reachable directly by voyageId rather than paginated like
+// getVoyageHistory above. Not a new RPC -- voyages_select_members already
+// uses is_voyage_participant (migration 20260728000000_end_voyage.sql), so a
+// direct table read is already correctly scoped, same pattern as
+// profile-repository.ts's getProfile. maybeSingle (not single): a missing or
+// not-yet-authorized row is a valid "no data" result, not an error.
+async function getVoyage(voyageId: string): Promise<VoyageResult> {
+  const { data, error } = await supabase.from('voyages').select('*').eq('id', voyageId).maybeSingle();
+
+  if (error) {
+    return { data: null, error: toRepositoryError(error) };
+  }
+
+  return { data: data ? toVoyage(data as VoyageRow) : null, error: null };
+}
+
 // set_travel_role() enforces active-membership authorization server-side --
 // see its migration for the full rationale. Serves both the first-landing
 // role prompt's choice and every later status-pill tap; no meaningful data
@@ -371,4 +411,6 @@ export const voyageRepository = {
   getRemovalNotice,
   acknowledgeRemoval,
   setTravelRole,
+  getVoyageHistory,
+  getVoyage,
 };

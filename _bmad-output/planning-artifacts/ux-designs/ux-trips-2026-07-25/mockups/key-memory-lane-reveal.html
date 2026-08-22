@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Voylo — Memory Lane, Direction B v2: "Player Constellation"</title>
+<style>
+/*
+  Story 6.2 discovery pass -- v2 rebuild after user feedback: v1's white
+  canvas with a small centered cluster read as sparse/unfinished, not full
+  screen. Now a full-bleed layered "aurora" of the three player colors (soft,
+  large-radius radial washes reaching every edge) anchors every card, with
+  readable content in a floating white `card` panel on top.
+  palette: Wayfinder -- primary blue #0B6FFF, teal #00C2A8, coral #FF5A5F,
+  amber #FFB020, white #FFFFFF, surface-secondary #F4F6FA, ink #101828,
+  ink-secondary #667085, hairline #DCE1EA.
+  Font stand-ins: display -> "Segoe UI Semibold" (Clash Display); body ->
+  "Segoe UI" (General Sans); stat -> "Consolas", monospace (Space Mono).
+*/
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #EDEFF3; color: #101828; font-family: "Segoe UI", Arial, sans-serif; padding: 32px; }
+.rationale { max-width: 1000px; margin: 0 auto 28px; background: #fff; border: 1px solid #DCE1EA; border-radius: 20px; padding: 18px 24px; box-shadow: 0 2px 0 #DCE1EA; }
+.rationale h1 { font-size: 20px; font-weight: 700; margin-bottom: 6px; color: #0B6FFF; }
+.rationale p { font-size: 14px; line-height: 1.5; color: #344054; margin-bottom: 6px; }
+.rationale p:last-child { margin-bottom: 0; }
+.stage { display: flex; gap: 26px; justify-content: center; flex-wrap: wrap; align-items: flex-start; }
+.frame-block { text-align: center; }
+.frame-label { color: #101828; font-weight: 700; font-size: 12px; letter-spacing: 1.2px; text-transform: uppercase; margin-bottom: 10px; }
+.phone { width: 300px; height: 649px; border-radius: 38px; border: 7px solid #101828; background: #101828; position: relative; overflow: hidden; box-shadow: 0 12px 28px rgba(16,24,40,0.28); }
+.screen { position: absolute; inset: 0; border-radius: 31px; overflow: hidden; background: #FAFBFD; }
+.aurora { position: absolute; inset: -10%; }
+
+@keyframes fadeUp { 0% { opacity: 0; transform: translateY(14px); } 100% { opacity: 1; transform: translateY(0); } }
+@keyframes orbit { from { transform: rotate(0deg) translateX(84px) rotate(0deg); } to { transform: rotate(360deg) translateX(84px) rotate(-360deg); } }
+@keyframes converge { 0% { transform: translate(var(--sx), var(--sy)) scale(0.5); opacity: 0; } 70% { opacity: 1; } 100% { transform: translate(0,0) scale(1); opacity: 1; } }
+@keyframes drift { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(12px,-14px) scale(1.06); } }
+@keyframes burstOut { 0% { transform: scale(0); opacity: 1; } 100% { transform: scale(1); opacity: 0; } }
+@keyframes ringPulse { 0%,100% { transform: scale(1); opacity: 0.6; } 50% { transform: scale(1.06); opacity: 1; } }
+@keyframes dotPop { 0% { transform: scale(0); } 70% { transform: scale(1.2); } 100% { transform: scale(1); } }
+@keyframes crownDrop { 0% { transform: translateY(-14px) scale(0.6); opacity: 0; } 100% { transform: translateY(0) scale(1); opacity: 1; } }
+@keyframes fillBar { from { width: 0; } to { width: var(--w); } }
+@keyframes cardIn { 0% { opacity: 0; transform: translateY(18px) scale(0.97); } 100% { opacity: 1; transform: translateY(0) scale(1); } }
+
+.dots-nav { position: absolute; top: 46px; left: 0; right: 0; display: flex; justify-content: center; gap: 6px; z-index: 6; }
+.dot-nav { width: 5px; height: 5px; border-radius: 50%; background: rgba(16,24,40,0.18); }
+.dot-nav.active { background: #0B6FFF; width: 15px; border-radius: 3px; }
+.dot-nav.onwhite { background: rgba(16,24,40,0.14); }
+.dot-nav.onwhite.active { background: #0B6FFF; }
+.swipehint { position: absolute; bottom: 18px; left: 0; right: 0; text-align: center; color: #101828; font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; z-index: 6; }
+.stat-num { font-family: "Consolas", "Courier New", monospace; font-weight: 700; }
+.headline { font-family: "Segoe UI Semibold", "Helvetica Neue", system-ui, sans-serif; font-weight: 700; color: #101828; line-height: 1.15; }
+.content-panel { position: relative; z-index: 6; background: #FFFFFF; border: 1px solid #DCE1EA; border-radius: 24px; box-shadow: 0 3px 0 #DCE1EA; padding: 22px; animation: cardIn 550ms 150ms cubic-bezier(.22,1,.36,1) both; }
+</style>
+</head>
+<body>
+
+<div class="rationale">
+  <h1>Direction B v2 — "Player Constellation" (full-bleed rebuild)</h1>
+  <p>Fixes from v1: replaced the sparse white canvas + tiny centered cluster with a full-bleed "aurora" of the three player colors — large, soft, overlapping color fields that reach every edge of the frame. Data-heavy cards use a floating white <code>card</code> panel over the aurora, same pattern as Direction A.</p>
+</div>
+
+<div class="stage">
+
+  <div class="frame-block"><div class="frame-label">0 — Trigger</div><div class="phone"><div class="screen">
+    <svg class="aurora" viewBox="0 0 300 649" preserveAspectRatio="xMidYMid slice">
+      <rect width="300" height="649" fill="#F4F6FA"/>
+      <circle cx="70" cy="180" r="180" fill="#00C2A8" opacity="0.22"/>
+      <circle cx="260" cy="140" r="160" fill="#FF5A5F" opacity="0.18"/>
+      <circle cx="180" cy="480" r="200" fill="#FFB020" opacity="0.2"/>
+      <circle cx="20" cy="560" r="150" fill="#0B6FFF" opacity="0.12"/>
+    </svg>
+    <div style="position:relative; z-index:6; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:0 30px;">
+      <div style="position:relative; width:170px; height:170px; margin-bottom:30px;">
+        <div style="position:absolute; left:50%; top:50%; width:14px; height:14px; margin:-7px 0 0 -7px; border-radius:50%; background:#0B6FFF; box-shadow:0 0 0 8px rgba(11,111,255,0.14);"></div>
+        <div style="position:absolute; left:50%; top:50%; width:22px; height:22px; margin:-11px 0 0 -11px; border-radius:50%; border:3px solid #fff; box-shadow:0 3px 8px rgba(16,24,40,0.22); background:#00C2A8; animation:orbit 5.5s linear infinite;"></div>
+        <div style="position:absolute; left:50%; top:50%; width:22px; height:22px; margin:-11px 0 0 -11px; border-radius:50%; border:3px solid #fff; box-shadow:0 3px 8px rgba(16,24,40,0.22); background:#FF5A5F; animation:orbit 7.5s linear infinite reverse;"></div>
+        <div style="position:absolute; left:50%; top:50%; width:22px; height:22px; margin:-11px 0 0 -11px; border-radius:50%; border:3px solid #fff; box-shadow:0 3px 8px rgba(16,24,40,0.22); background:#FFB020; animation:orbit 9s linear infinite;"></div>
+      </div>
+      <div class="headline" style="font-size:26px; animation:fadeUp 700ms 150ms ease-out both;">Everyone's story<br>is ready.</div>
+      <div style="margin-top:10px; color:#101828; font-size:13.5px; animation:fadeUp 700ms 300ms ease-out both;">See it the way the whole crew lived it.</div>
+      <div style="margin-top:28px; background:#0B6FFF; color:#fff; border-radius:999px; padding:16px 34px; font-size:15px; font-weight:700; box-shadow:0 6px 0 #0653C7; animation:fadeUp 700ms 450ms ease-out both;">Show me my Voylo</div>
+    </div>
+  </div></div></div>
+
+  <div class="frame-block"><div class="frame-label">1 — Destination</div><div class="phone"><div class="screen">
+    <svg class="aurora" viewBox="0 0 300 649" preserveAspectRatio="xMidYMid slice">
+      <rect width="300" height="649" fill="#F4F6FA"/>
+      <circle cx="90" cy="220" r="170" fill="#00C2A8" opacity="0.24"><animate attributeName="cy" values="220;235;220" dur="4s" repeatCount="indefinite"/></circle>
+      <circle cx="230" cy="300" r="150" fill="#FF5A5F" opacity="0.2"><animate attributeName="cy" values="300;285;300" dur="4.5s" repeatCount="indefinite"/></circle>
+      <circle cx="160" cy="420" r="190" fill="#FFB020" opacity="0.2"><animate attributeName="cy" values="420;435;420" dur="5s" repeatCount="indefinite"/></circle>
+    </svg>
+    <div class="dots-nav"><div class="dot-nav active"></div><div class="dot-nav"></div><div class="dot-nav"></div><div class="dot-nav"></div><div class="dot-nav"></div></div>
+    <div style="position:relative; z-index:6; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:0 26px;">
+      <div style="width:26px; height:26px; margin-left:-40px; border-radius:50%; background:#00C2A8; border:3px solid #fff; box-shadow:0 3px 8px rgba(16,24,40,0.22); --sx:-100px; --sy:-70px; animation:converge 800ms cubic-bezier(.2,1.4,.4,1) both;"></div>
+      <div style="width:22px; height:22px; margin-left:32px; margin-top:-10px; border-radius:50%; background:#FF5A5F; border:3px solid #fff; box-shadow:0 3px 8px rgba(16,24,40,0.22); --sx:100px; --sy:-50px; animation:converge 800ms 0.15s cubic-bezier(.2,1.4,.4,1) both;"></div>
+      <div style="width:18px; height:18px; margin-top:-6px; border-radius:50%; background:#FFB020; border:3px solid #fff; box-shadow:0 3px 8px rgba(16,24,40,0.22); --sx:0px; --sy:90px; animation:converge 800ms 0.3s cubic-bezier(.2,1.4,.4,1) both;"></div>
+      <div style="font-size:11px; color:#101828; text-transform:uppercase; letter-spacing:0.08em; margin-top:20px; font-weight:700;">Destination</div>
+      <div class="headline" style="font-size:32px; margin-top:2px;">Big Sur</div>
+      <div style="margin-top:9px; color:#101828; font-size:13px; max-width:220px;">Three friends, one coastline, and the road that started it all.</div>
+    </div>
+    <div class="swipehint">← swipe →</div>
+  </div></div></div>
+
+  <div class="frame-block"><div class="frame-label">2 — Who Joined</div><div class="phone"><div class="screen">
+    <svg class="aurora" viewBox="0 0 300 649" preserveAspectRatio="xMidYMid slice">
+      <rect width="300" height="649" fill="#F4F6FA"/>
+      <circle cx="110" cy="260" r="170" fill="#00C2A8" opacity="0.22"/>
+      <circle cx="210" cy="220" r="140" fill="#FFB020" opacity="0.22"/>
+      <circle cx="160" cy="360" r="150" fill="#FF5A5F" opacity="0.2"/>
+    </svg>
+    <div class="dots-nav"><div class="dot-nav"></div><div class="dot-nav active"></div><div class="dot-nav"></div><div class="dot-nav"></div><div class="dot-nav"></div></div>
+    <div style="position:relative; z-index:6; height:280px; margin-top:80px;">
+      <div style="position:absolute; left:34%; top:34%; width:32px; height:32px; margin-left:-16px; border-radius:50%; background:#00C2A8; border:3px solid #fff; box-shadow:0 3px 8px rgba(16,24,40,0.22); animation:dotPop 500ms 200ms ease-out both;"></div>
+      <div style="position:absolute; left:64%; top:26%; width:27px; height:27px; margin-left:-13px; border-radius:50%; background:#FFB020; border:3px solid #fff; box-shadow:0 3px 8px rgba(16,24,40,0.22); animation:dotPop 500ms 500ms ease-out both;"></div>
+      <div style="position:absolute; left:50%; top:48%; width:26px; height:26px; margin-left:-13px; border-radius:50%; background:#FF5A5F; border:3px solid #fff; box-shadow:0 0 0 10px rgba(255,90,95,0.16); animation:dotPop 500ms 1100ms cubic-bezier(.3,1.6,.4,1) both;"></div>
+    </div>
+    <div style="position:relative; z-index:6; padding:0 24px;">
+      <div class="content-panel">
+        <div class="headline" style="font-size:19px;">Sam showed up fashionably late — 42 minutes in.</div>
+        <div style="margin-top:7px; color:#667085; font-size:13px;">Meera and Chintan were already three songs deep.</div>
+      </div>
+    </div>
+    <div class="swipehint">← swipe →</div>
+  </div></div></div>
+
+  <div class="frame-block"><div class="frame-label">3 — Stops</div><div class="phone"><div class="screen">
+    <svg class="aurora" viewBox="0 0 300 649" preserveAspectRatio="xMidYMid slice">
+      <rect width="300" height="649" fill="#F4F6FA"/>
+      <circle cx="70" cy="160" r="170" fill="#00C2A8" opacity="0.18"/>
+      <circle cx="250" cy="500" r="200" fill="#FF5A5F" opacity="0.16"/>
+      <circle cx="150" cy="600" r="170" fill="#FFB020" opacity="0.18"/>
+    </svg>
+    <div class="dots-nav"><div class="dot-nav"></div><div class="dot-nav"></div><div class="dot-nav active"></div><div class="dot-nav"></div><div class="dot-nav"></div></div>
+    <div style="position:relative; z-index:6; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:0 26px;">
+      <div class="content-panel" style="width:100%;">
+        <div style="font-size:11px; color:#667085; text-transform:uppercase; letter-spacing:0.08em; font-weight:700; margin-bottom:12px; text-align:center;">Stops by crew member</div>
+        <div style="display:flex; flex-direction:column; gap:11px;">
+          <div style="display:flex; align-items:center; gap:8px;"><div style="width:10px; height:10px; border-radius:50%; background:#00C2A8; flex-shrink:0;"></div><div style="font-size:12.5px; font-weight:700; width:52px; text-align:left;">Meera</div><div style="flex:1; height:9px; background:#EDEFF3; border-radius:5px; overflow:hidden;"><div style="height:100%; background:#00C2A8; border-radius:5px; --w:80%; animation:fillBar 900ms 300ms ease-out both;"></div></div><div class="stat-num" style="font-size:13px; width:16px;">3</div></div>
+          <div style="display:flex; align-items:center; gap:8px;"><div style="width:10px; height:10px; border-radius:50%; background:#FF5A5F; flex-shrink:0;"></div><div style="font-size:12.5px; font-weight:700; width:52px; text-align:left;">Chintan</div><div style="flex:1; height:9px; background:#EDEFF3; border-radius:5px; overflow:hidden;"><div style="height:100%; background:#FF5A5F; border-radius:5px; --w:55%; animation:fillBar 900ms 500ms ease-out both;"></div></div><div class="stat-num" style="font-size:13px; width:16px;">2</div></div>
+          <div style="display:flex; align-items:center; gap:8px;"><div style="width:10px; height:10px; border-radius:50%; background:#FFB020; flex-shrink:0;"></div><div style="font-size:12.5px; font-weight:700; width:52px; text-align:left;">Sam</div><div style="flex:1; height:9px; background:#EDEFF3; border-radius:5px; overflow:hidden;"><div style="height:100%; background:#FFB020; border-radius:5px; --w:30%; animation:fillBar 900ms 700ms ease-out both;"></div></div><div class="stat-num" style="font-size:13px; width:16px;">1</div></div>
+        </div>
+        <div style="font-size:12.5px; color:#667085; text-align:center; margin-top:12px;">6 stops. 6 reasons to remember the ride.</div>
+      </div>
+    </div>
+    <div class="swipehint">← swipe →</div>
+  </div></div></div>
+
+  <div class="frame-block"><div class="frame-label">4 — Superlatives</div><div class="phone"><div class="screen">
+    <svg class="aurora" viewBox="0 0 300 649" preserveAspectRatio="xMidYMid slice">
+      <rect width="300" height="649" fill="#F4F6FA"/>
+      <circle cx="200" cy="180" r="190" fill="#FFB020" opacity="0.22"/>
+      <circle cx="80" cy="470" r="160" fill="#00C2A8" opacity="0.16"/>
+    </svg>
+    <div class="dots-nav"><div class="dot-nav"></div><div class="dot-nav"></div><div class="dot-nav"></div><div class="dot-nav active"></div><div class="dot-nav"></div></div>
+    <div style="position:relative; z-index:6; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:0 26px;">
+      <div class="content-panel" style="text-align:center; width:100%; display:flex; flex-direction:column; align-items:center; gap:16px;">
+        <div>
+          <div style="position:relative; width:68px; height:68px; margin:0 auto;">
+            <div style="position:absolute; left:50%; top:-22px; transform:translateX(-50%); font-size:18px; animation:crownDrop 500ms 300ms cubic-bezier(.3,1.6,.4,1) both;">👑</div>
+            <div style="width:68px; height:68px; border-radius:50%; background:#FFB020; border:4px solid #fff; box-shadow:0 4px 14px rgba(0,0,0,0.15); animation:dotPop 500ms 200ms ease-out both;"></div>
+          </div>
+          <div style="font-size:10.5px; color:#667085; text-transform:uppercase; letter-spacing:0.08em; margin-top:8px; font-weight:700;">Coffee Champion</div>
+          <div class="headline" style="font-size:19px; margin-top:2px;">Sam</div>
+        </div>
+        <div style="height:1px; background:#DCE1EA; width:80%;"></div>
+        <div>
+          <div style="width:52px; height:52px; border-radius:50%; background:#00C2A8; border:4px solid #fff; box-shadow:0 4px 14px rgba(0,0,0,0.15); margin:0 auto; animation:dotPop 500ms 700ms ease-out both;"></div>
+          <div style="font-size:10.5px; color:#667085; text-transform:uppercase; letter-spacing:0.08em; margin-top:8px; font-weight:700;">Longest Rest Stop</div>
+          <div class="headline" style="font-size:16px; margin-top:2px;">Chintan — 24 min</div>
+        </div>
+      </div>
+    </div>
+    <div class="swipehint">← swipe →</div>
+  </div></div></div>
+
+  <div class="frame-block"><div class="frame-label">5 — Finale</div><div class="phone"><div class="screen">
+    <svg class="aurora" viewBox="0 0 300 649" preserveAspectRatio="xMidYMid slice">
+      <rect width="300" height="649" fill="#F4F6FA"/>
+      <circle cx="90" cy="200" r="180" fill="#00C2A8" opacity="0.2"/>
+      <circle cx="230" cy="260" r="160" fill="#FF5A5F" opacity="0.18"/>
+      <circle cx="150" cy="440" r="200" fill="#FFB020" opacity="0.2"/>
+    </svg>
+    <div class="dots-nav"><div class="dot-nav"></div><div class="dot-nav"></div><div class="dot-nav"></div><div class="dot-nav"></div><div class="dot-nav active"></div></div>
+    <div style="position:absolute; left:26%; top:22%; width:15px; height:15px; border-radius:50%; background:#00C2A8; border:2px solid #fff; z-index:5; animation:dotPop 500ms 200ms ease-out both;"></div>
+    <div style="position:absolute; left:70%; top:26%; width:13px; height:13px; border-radius:50%; background:#FF5A5F; border:2px solid #fff; z-index:5; animation:dotPop 500ms 400ms ease-out both;"></div>
+    <div style="position:absolute; left:50%; top:16%; width:12px; height:12px; border-radius:50%; background:#FFB020; border:2px solid #fff; z-index:5; animation:dotPop 500ms 600ms ease-out both;"></div>
+    <div style="position:relative; z-index:6; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; padding:0 26px 60px;">
+      <div class="content-panel" style="text-align:center; width:100%;">
+        <div style="display:flex; gap:20px; justify-content:center; margin-bottom:12px;">
+          <div><div class="stat-num" style="font-size:26px; color:#0B6FFF;">6h 42m</div><div style="font-size:9.5px; color:#667085; text-transform:uppercase; letter-spacing:0.06em;">Duration</div></div>
+          <div><div class="stat-num" style="font-size:26px; color:#0B6FFF;">214mi</div><div style="font-size:9.5px; color:#667085; text-transform:uppercase; letter-spacing:0.06em;">Distance</div></div>
+        </div>
+        <div style="font-family:'Segoe UI Semibold',sans-serif; font-size:15px; font-style:italic; color:#101828; line-height:1.4;">"The map said five hours.<br>The memories took twelve."</div>
+      </div>
+    </div>
+    <div class="swipehint">tap to finish →</div>
+  </div></div></div>
+
+  <div class="frame-block"><div class="frame-label">6 — Closing Beat</div><div class="phone"><div class="screen">
+    <svg class="aurora" viewBox="0 0 300 649" preserveAspectRatio="xMidYMid slice">
+      <rect width="300" height="649" fill="#F4F6FA"/>
+      <circle cx="150" cy="300" r="220" fill="#00C2A8" opacity="0.12"/>
+      <circle cx="150" cy="300" r="220" fill="#FF5A5F" opacity="0.08"/>
+      <circle cx="150" cy="300" r="220" fill="#FFB020" opacity="0.08"/>
+    </svg>
+    <div style="position:absolute; left:50%; top:44%; width:190px; height:190px; margin:-95px 0 0 -95px; border-radius:50%; border:2px dashed #DCE1EA; animation:ringPulse 3s ease-in-out infinite; z-index:5;"></div>
+    <div style="position:absolute; width:14px; height:14px; border-radius:50%; border:3px solid #fff; box-shadow:0 3px 8px rgba(16,24,40,0.2); background:#00C2A8; left:50%; top:28%; margin-left:-7px; z-index:5;"></div>
+    <div style="position:absolute; width:14px; height:14px; border-radius:50%; border:3px solid #fff; box-shadow:0 3px 8px rgba(16,24,40,0.2); background:#FF5A5F; left:73%; top:60%; margin-left:-7px; z-index:5;"></div>
+    <div style="position:absolute; width:14px; height:14px; border-radius:50%; border:3px solid #fff; box-shadow:0 3px 8px rgba(16,24,40,0.2); background:#FFB020; left:27%; top:60%; margin-left:-7px; z-index:5;"></div>
+    <div style="position:absolute; left:50%; top:44%; width:7px; height:7px; margin:-3.5px 0 0 -3.5px; border-radius:50%; background:#FFB020; z-index:5; animation:burstOut 900ms ease-out infinite;"></div>
+    <div style="position:absolute; left:50%; top:44%; width:7px; height:7px; margin:-3.5px 0 0 -3.5px; border-radius:50%; background:#FFB020; z-index:5; animation:burstOut 900ms 0.3s ease-out infinite;"></div>
+    <div style="position:relative; z-index:6; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; text-align:center; padding-bottom:70px;">
+      <div class="headline" style="font-size:21px; animation:fadeUp 700ms 300ms ease-out both;">Until the next one, crew.</div>
+      <div style="margin-top:8px; color:#101828; font-size:13px; max-width:220px; animation:fadeUp 700ms 450ms ease-out both;">Your Voylo is saved — come back anytime, or send it to them.</div>
+      <div style="margin-top:24px; background:#0B6FFF; color:#fff; border-radius:999px; padding:14px 32px; font-size:14px; font-weight:700; box-shadow:0 6px 0 #0653C7; animation:fadeUp 700ms 600ms ease-out both;">Close</div>
+    </div>
+  </div></div></div>
+
+</div>
+
+</body>
+</html>

@@ -653,3 +653,133 @@ export const HomeJourneyMotion = {
   wordmarkGlowOpacityStops: [0.5, 1, 0.5] as const,
   tagline: 'Every journey tells a story.',
 } as const;
+
+/**
+ * memory-lane-aurora / memory-lane-card / memory-lane-deck component specs
+ * (DESIGN.md#components, Story 6.2/6.3). The full-bleed "Player
+ * Constellation" background behind the Memory Lane reveal deck and the
+ * Persistent Journey Screen (at reduced opacity there). Blob positions/radii/
+ * opacities per card are transcribed directly from
+ * mockups/key-memory-lane-reveal.html's real per-frame SVG circles -- not
+ * randomly generated, so this mock stays the pixel-exact reference AC2
+ * requires. `dots-nav`'s progress-dot styling and `content-panel` (the
+ * floating white data panel) are shared across every card that needs one.
+ *
+ * Implementation note (this story): react-native-reanimated/
+ * react-native-gesture-handler are both present in package.json but, verified
+ * during this story, are not actually used anywhere else in this codebase --
+ * every other Motion & Transitions entry (Pop & Bounce, cut-to-gameplay,
+ * Home Journey, Splash Thread) is built on React Native core's own `Animated`
+ * API. This story follows that same established convention for entrance
+ * choreography (`Animated.Value` + `.interpolate()`), and uses core
+ * `PanResponder` (also core RN, no new library) for the deck's swipe gesture,
+ * rather than introducing Reanimated's separate worklet-based animation
+ * model for this one screen.
+ */
+export const MemoryLaneAurora = {
+  baseSurface: '#F4F6FA',
+  // Per-card blob layout [cx, cy, r, color, opacity], transcribed from the
+  // mockup's own per-frame <svg> (viewBox 0 0 300 649). Card indices: 0 =
+  // trigger, 1-5 = the five content cards, 6 = closing beat.
+  blobsByCard: [
+    [
+      [70, 180, 180, PlayerColors.teal, 0.22],
+      [260, 140, 160, PlayerColors.coral, 0.18],
+      [180, 480, 200, PlayerColors.gold, 0.2],
+      [20, 560, 150, WayfinderColors.accentPrimary, 0.12],
+    ],
+    [
+      [90, 220, 170, PlayerColors.teal, 0.24],
+      [230, 300, 150, PlayerColors.coral, 0.2],
+      [160, 420, 190, PlayerColors.gold, 0.2],
+    ],
+    [
+      [110, 260, 170, PlayerColors.teal, 0.22],
+      [210, 220, 140, PlayerColors.gold, 0.22],
+      [160, 360, 150, PlayerColors.coral, 0.2],
+    ],
+    [
+      [70, 160, 170, PlayerColors.teal, 0.18],
+      [250, 500, 200, PlayerColors.coral, 0.16],
+      [150, 600, 170, PlayerColors.gold, 0.18],
+    ],
+    [
+      [200, 180, 190, PlayerColors.gold, 0.22],
+      [80, 470, 160, PlayerColors.teal, 0.16],
+    ],
+    [
+      [90, 200, 180, PlayerColors.teal, 0.2],
+      [230, 260, 160, PlayerColors.coral, 0.18],
+      [150, 440, 200, PlayerColors.gold, 0.2],
+    ],
+    [
+      [150, 300, 220, PlayerColors.teal, 0.12],
+      [150, 300, 220, PlayerColors.coral, 0.08],
+      [150, 300, 220, PlayerColors.gold, 0.08],
+    ],
+  ] as const,
+  viewBoxWidth: 300,
+  viewBoxHeight: 649,
+} as const;
+
+export const MemoryLaneCard = {
+  background: WayfinderColors.surfacePrimary,
+  borderColor: WayfinderColors.borderHairline,
+  radius: Rounded.xl,
+  shadowColor: WayfinderColors.borderHairline,
+  shadowOffset: 3,
+  padding: Spacing['5'],
+  openDurationMs: 550,
+  openEasing: [0.22, 1, 0.36, 1] as const,
+};
+
+export const MemoryLaneDeck = {
+  cardCount: 5,
+  progressDotInactive: 'rgba(16,24,40,0.18)',
+  progressDotActive: WayfinderColors.accentPrimary,
+  // WCAG 2.5.1: swipe is the primary interaction, but a path-based gesture
+  // must have a non-gesture equivalent -- left/right edge tap zones,
+  // matching this fraction of the screen width each, always advance/retreat
+  // the deck identically. Not a visible chevron/button (keeps the full-bleed
+  // cards uninterrupted) but a real, always-present 44pt/48dp+ tap target.
+  edgeTapZoneWidthFraction: 0.2,
+  // dotPop (badges/dots), converge (destination card's dots flying inward),
+  // fadeUp (text/panels), fillBar (stops card's bars), crownDrop (superlatives
+  // card's crown) -- exact curves transcribed from EXPERIENCE.md's Motion &
+  // Transitions "End Voyage -> Memory Lane Reveal" / the mockup's own
+  // @keyframes.
+  dotPopDurationMs: 500,
+  dotPopEasing: [0.34, 1.56, 0.64, 1] as const,
+  convergeDurationMs: 800,
+  convergeEasing: [0.2, 1.4, 0.4, 1] as const,
+  fadeUpDurationMs: 700,
+  fadeUpEasing: [0.25, 0.1, 0.25, 1] as const, // CSS ease-out equivalent, same convention as this file's other *Easing fields.
+  fadeUpTranslateY: 14,
+  fillBarDurationMs: 900,
+  fillBarEasing: [0.22, 1, 0.36, 1] as const,
+  crownDropDurationMs: 500,
+  crownDropEasing: [0.3, 1.6, 0.4, 1] as const,
+  // Closing beat.
+  ringPulseDurationMs: 3000,
+  burstOutDurationMs: 900,
+  // Swipe/tap-advance transition (deck between cards) -- not itself named in
+  // EXPERIENCE.md as a card-content animation, so it reuses fadeUp's own
+  // restrained timing/easing family rather than inventing a new one.
+  cardTransitionDurationMs: 360,
+  cardTransitionEasing: [0.22, 0.85, 0.35, 1] as const,
+} as const;
+
+// voyage-history-row's destination-color-coded lead dot (Story 6.4, DESIGN.md
+// #voyage-history-row) -- "not a player color," so it needs its own palette,
+// genuinely distinct from every PlayerColors hex (not a reuse under a
+// different key, which was this story's own first, colliding attempt: 4 of
+// its 5 colors turned out byte-identical to real PlayerColors values,
+// defeating the whole point of the rule -- code review finding, 2026-08-22).
+export const VoyageHistoryRowDotColors = [
+  '#0B6FFF', // same as WayfinderColors.accentPrimary -- no PlayerColors entry shares this hex, so it's already safe to reuse directly.
+  '#4C5FD5', // indigo
+  '#2F9E6E', // forest green
+  '#C2478E', // berry
+  '#A9672F', // rust
+] as const;
+
